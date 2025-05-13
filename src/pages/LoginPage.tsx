@@ -2,7 +2,6 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LoginForm from '../components/auth/LoginForm';
-import { Database } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const { user } = useAuth();
@@ -15,9 +14,6 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen flex flex-col md:flex-row">
       <div className="bg-[#509fe0] text-white md:w-1/2 p-8 flex flex-col justify-center items-center">
         <div className="max-w-md text-center">
-          <div className="mb-6 flex justify-center">
-            <Database className="w-16 h-16" />
-          </div>
           <span className="text-4xl font-yeseva mb-6 block">boost</span>
           <p className="text-xl mb-8">
             The intelligent audience platform for data-driven marketing campaigns
