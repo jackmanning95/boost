@@ -45,8 +45,6 @@ function extractCategoryInfo(dataSupplier: string | null): [string, string] {
 }
 
 function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
-  console.log('Transforming row:', row);
-  
   const [category, subcategory] = extractCategoryInfo(row.data_supplier);
   const tags = extractTags(row.segment_description);
   
@@ -61,17 +59,15 @@ function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
     cpm: row.boost_cpm || undefined
   };
   
-  console.log('Transformed audience:', audience);
   return audience;
 }
 
-export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
+export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchAudiences() {
-      console.log('Fetching audiences...');
       try {
         const { data, error } = await supabase
           .from('boost_taxo')
@@ -79,14 +75,12 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
           .order('segment_name');
 
         if (error) {
-          console.error('Supabase error:', error);
+          console.error('Error fetching audiences:', error);
           throw error;
         }
 
-        console.log('Received data:', data);
         if (data) {
           const formattedAudiences = data.map(transformBoostTaxoToAudience);
-          console.log('Formatted audiences:', formattedAudiences);
           setAudiences(formattedAudiences);
         }
       } catch (error) {
@@ -101,14 +95,11 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
-    console.log('Searching audiences with query:', query);
-    const lowerQuery = query.toLowerCase().trim();
-
-    if (!lowerQuery) {
-      console.log('Empty query, returning all audiences');
+    if (!query.trim()) {
       return audiences;
     }
 
+    const lowerQuery = query.toLowerCase();
     return audiences.filter(audience => 
       audience.name.toLowerCase().includes(lowerQuery) ||
       audience.description.toLowerCase().includes(lowerQuery) ||
@@ -158,7 +149,7 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
     });
     
     return scoredCandidates
-      .sort((a, b) => b.score - a.score || (b.audience.reach || 0) - (a.audience.reach || 0))
+      .sort((a, b) => b.score - a.score)
       .slice(0, count)
       .map(({ audience }) => audience);
   };
@@ -176,9 +167,9 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
       {children}
     </TaxonomyContext.Provider>
   );
-}
+};
 
-export function useTaxonomy() {
+export function useTaxonomy(): TaxonomyContextType {
   const context = useContext(TaxonomyContext);
   if (!context) {
     throw new Error('useTaxonomy must be used within a TaxonomyProvider');

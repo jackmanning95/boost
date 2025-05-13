@@ -16,40 +16,25 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
 
   useEffect(() => {
     if (!loading && audiences.length > 0) {
-      console.log('Initial audiences:', audiences);
       const uniqueCategories = Array.from(
         new Set(audiences.map(audience => audience.category))
       ).sort();
       setCategories(uniqueCategories);
-      handleSearch();
+      onSearchResults(audiences);
     }
-  }, [loading, audiences]);
-
-  const handleSearch = () => {
-    console.log('Handling search with query:', searchQuery);
-    const results = searchAudiences(searchQuery);
-    console.log('Search results before filtering:', results);
-    
-    let filteredResults = results;
-    if (selectedCategory) {
-      filteredResults = results.filter(audience => audience.category === selectedCategory);
-    }
-    
-    console.log('Final filtered results:', filteredResults);
-    onSearchResults(filteredResults);
-  };
+  }, [loading, audiences, onSearchResults]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      handleSearch();
+      const results = searchAudiences(searchQuery);
+      const filteredResults = selectedCategory
+        ? results.filter(audience => audience.category === selectedCategory)
+        : results;
+      onSearchResults(filteredResults);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedCategory]);
-
-  const handleCategorySelect = (category: string) => {
-    setSelectedCategory(category === selectedCategory ? '' : category);
-  };
+  }, [searchQuery, selectedCategory, searchAudiences, onSearchResults]);
 
   return (
     <div className="space-y-4">
@@ -73,7 +58,7 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
               ? 'bg-[#509fe0]/10 text-[#509fe0] font-medium' 
               : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
           }`}
-          onClick={() => handleCategorySelect('')}
+          onClick={() => setSelectedCategory('')}
         >
           All Categories
         </button>
@@ -86,7 +71,7 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
                 ? 'bg-[#509fe0]/10 text-[#509fe0] font-medium' 
                 : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
             }`}
-            onClick={() => handleCategorySelect(category)}
+            onClick={() => setSelectedCategory(category)}
           >
             {category}
           </button>
@@ -95,5 +80,3 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
     </div>
   );
 };
-
-export default AudienceSearch;
