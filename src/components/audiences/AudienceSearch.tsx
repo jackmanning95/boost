@@ -80,3 +80,5 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
     </div>
   );
 };
+
+export default AudienceSearch
