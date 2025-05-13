@@ -13,12 +13,12 @@ const LoginPage: React.FC = () => {
   
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <div className="bg-[#0d5cdf] text-white md:w-1/2 p-8 flex flex-col justify-center items-center">
+      <div className="bg-[#509fe0] text-white md:w-1/2 p-8 flex flex-col justify-center items-center">
         <div className="max-w-md text-center">
           <div className="mb-6 flex justify-center">
             <Database className="w-16 h-16" />
           </div>
-          <h1 className="text-4xl font-bold mb-6">Boost Data</h1>
+          <span className="text-4xl font-yeseva mb-6 block">boost</span>
           <p className="text-xl mb-8">
             The intelligent audience platform for data-driven marketing campaigns
           </p>
