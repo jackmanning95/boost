@@ -95,18 +95,19 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
-    if (!query.trim()) {
-      return audiences;
-    }
+    const lowerQuery = query.toLowerCase().trim();
 
-    const lowerQuery = query.toLowerCase();
-    return audiences.filter(audience => 
-      audience.name.toLowerCase().includes(lowerQuery) ||
-      audience.description.toLowerCase().includes(lowerQuery) ||
-      audience.category.toLowerCase().includes(lowerQuery) ||
-      audience.subcategory.toLowerCase().includes(lowerQuery) ||
-      audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
-    );
+    if (!lowerQuery) return audiences;
+
+    return audiences.filter((audience) => {
+      return (
+        audience.name.toLowerCase().includes(lowerQuery) ||
+        audience.description.toLowerCase().includes(lowerQuery) ||
+        audience.category.toLowerCase().includes(lowerQuery) ||
+        audience.subcategory.toLowerCase().includes(lowerQuery) ||
+        audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
+      );
+    });
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
