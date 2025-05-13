@@ -78,6 +78,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [error, setError] = useState<Error | null>(null);
 
   const fetchAudiences = async () => {
+    console.log('Fetching audiences...');
     setLoading(true);
     setError(null);
     
@@ -88,16 +89,22 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .order('segment_name');
 
       if (supabaseError) {
+        console.error('Supabase error:', supabaseError);
         throw supabaseError;
       }
 
       if (!data) {
+        console.error('No data received from Supabase');
         throw new Error('No data received from Supabase');
       }
+
+      console.log('Raw data from Supabase:', data);
 
       const formattedAudiences = data
         .map(transformBoostTaxoToAudience)
         .filter((audience): audience is AudienceSegment => audience !== null);
+
+      console.log('Transformed audiences:', formattedAudiences);
 
       setAudiences(formattedAudiences);
       setError(null);
@@ -115,13 +122,16 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
+    console.log('Searching audiences with query:', query);
+    console.log('Current audiences:', audiences);
+
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
       return audiences;
     }
 
-    return audiences.filter((audience) => {
+    const results = audiences.filter((audience) => {
       const searchableText = [
         audience.name,
         audience.description,
@@ -132,6 +142,9 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return searchableText.includes(lowerQuery);
     });
+
+    console.log('Search results:', results);
+    return results;
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
