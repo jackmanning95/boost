@@ -68,8 +68,11 @@ function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchAudiences() {
       console.log('Fetching audiences...');
       try {
@@ -79,26 +82,34 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .order('segment_name');
 
         if (error) {
-          console.error('Error fetching audiences:', error);
+          console.error('Supabase error:', error);
           throw error;
         }
 
         console.log('Raw data from Supabase:', data);
 
-        if (data) {
+        if (data && isMounted) {
           const formattedAudiences = data.map(transformBoostTaxoToAudience);
           console.log('Formatted audiences:', formattedAudiences);
           setAudiences(formattedAudiences);
+          setError(null);
         }
-      } catch (error) {
-        console.error('Error in fetchAudiences:', error);
+      } catch (err) {
+        console.error('Error in fetchAudiences:', err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
         setAudiences([]);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchAudiences();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
