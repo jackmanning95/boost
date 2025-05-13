@@ -9,26 +9,32 @@ import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
-import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, RefreshCw } from 'lucide-react';
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 
 const AudiencesPage: React.FC = () => {
-  const { audiences, loading } = useTaxonomy();
+  const { audiences, loading, error, refreshAudiences } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign } = useCampaign();
   const { isAdmin } = useAuth();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(20);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const handleSearchResults = (results: AudienceSegment[]) => {
     setSearchResults(results);
-    setCurrentPage(1); // Reset to first page when search results change
+    setCurrentPage(1);
+  };
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshAudiences();
+    setIsRefreshing(false);
   };
   
   const selectedAudiences = activeCampaign?.audiences || [];
   
-  // Pagination calculations
   const totalPages = Math.ceil(searchResults.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -40,7 +46,7 @@ const AudiencesPage: React.FC = () => {
   
   const handlePageSizeChange = (newSize: typeof PAGE_SIZE_OPTIONS[number]) => {
     setPageSize(newSize);
-    setCurrentPage(1); // Reset to first page when changing page size
+    setCurrentPage(1);
   };
   
   return (
@@ -88,6 +94,18 @@ const AudiencesPage: React.FC = () => {
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#509fe0]"></div>
         </div>
+      ) : error ? (
+        <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
+          <p className="text-red-600 mb-4">{error.message}</p>
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? 'Refreshing...' : 'Try Again'}
+          </Button>
+        </div>
       ) : currentAudiences.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -101,6 +119,16 @@ const AudiencesPage: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                icon={<RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />}
+                disabled={isRefreshing}
+              >
+                Refresh
+              </Button>
+              
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">Show:</span>
                 <select
@@ -161,7 +189,15 @@ const AudiencesPage: React.FC = () => {
         </div>
       ) : (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <p className="text-gray-500">No audience segments found matching your search criteria.</p>
+          <p className="text-gray-500 mb-4">No audience segments found matching your search criteria.</p>
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+          </Button>
         </div>
       )}
     </Layout>

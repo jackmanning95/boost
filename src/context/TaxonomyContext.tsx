@@ -8,11 +8,13 @@ type BoostTaxo = Database['public']['Tables']['boost_taxo']['Row'];
 interface TaxonomyContextType {
   audiences: AudienceSegment[];
   loading: boolean;
+  error: Error | null;
   searchAudiences: (query: string) => AudienceSegment[];
   getAudiencesByCategory: (category: string) => AudienceSegment[];
   getAudienceById: (id: string) => AudienceSegment | undefined;
   addAudience: (audience: Omit<AudienceSegment, 'id'>) => void;
   getRecommendedAudiences: (baseAudiences: AudienceSegment[], count?: number) => AudienceSegment[];
+  refreshAudiences: () => Promise<void>;
 }
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
@@ -44,25 +46,30 @@ function extractCategoryInfo(dataSupplier: string | null): [string, string] {
   ];
 }
 
-function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
-  console.log('Transforming row:', row);
-  
-  const [category, subcategory] = extractCategoryInfo(row.data_supplier);
-  const tags = extractTags(row.segment_description);
-  
-  const audience: AudienceSegment = {
-    id: row.segment_name,
-    name: row.segment_name,
-    description: row.segment_description || '',
-    category,
-    subcategory,
-    tags,
-    reach: row.estimated_volumes || undefined,
-    cpm: row.boost_cpm || undefined
-  };
-  
-  console.log('Transformed audience:', audience);
-  return audience;
+function transformBoostTaxoToAudience(row: BoostTaxo | null): AudienceSegment | null {
+  if (!row || !row.segment_name) {
+    console.warn('Invalid row data:', row);
+    return null;
+  }
+
+  try {
+    const [category, subcategory] = extractCategoryInfo(row.data_supplier);
+    const tags = extractTags(row.segment_description);
+    
+    return {
+      id: row.segment_name,
+      name: row.segment_name,
+      description: row.segment_description || '',
+      category,
+      subcategory,
+      tags,
+      reach: row.estimated_volumes || undefined,
+      cpm: row.boost_cpm || undefined
+    };
+  } catch (error) {
+    console.error('Error transforming row:', error, row);
+    return null;
+  }
 }
 
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -70,76 +77,61 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchAudiences = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('boost_taxo')
+        .select('*')
+        .order('segment_name');
 
-    async function fetchAudiences() {
-      console.log('Fetching audiences...');
-      try {
-        const { data, error } = await supabase
-          .from('boost_taxo')
-          .select('*')
-          .order('segment_name');
-
-        if (error) {
-          console.error('Supabase error:', error);
-          throw error;
-        }
-
-        console.log('Raw data from Supabase:', data);
-
-        if (data && isMounted) {
-          const formattedAudiences = data.map(transformBoostTaxoToAudience);
-          console.log('Formatted audiences:', formattedAudiences);
-          setAudiences(formattedAudiences);
-          setError(null);
-        }
-      } catch (err) {
-        console.error('Error in fetchAudiences:', err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
-        setAudiences([]);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+      if (supabaseError) {
+        throw supabaseError;
       }
+
+      if (!data) {
+        throw new Error('No data received from Supabase');
+      }
+
+      const formattedAudiences = data
+        .map(transformBoostTaxoToAudience)
+        .filter((audience): audience is AudienceSegment => audience !== null);
+
+      setAudiences(formattedAudiences);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching audiences:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
+      setAudiences([]);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     fetchAudiences();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
-    console.log('Searching audiences with query:', query);
-    console.log('Current audiences:', audiences);
-    
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
-      console.log('Empty query, returning all audiences');
       return audiences;
     }
 
-    const results = audiences.filter((audience) => {
-      const matches = 
-        audience.name.toLowerCase().includes(lowerQuery) ||
-        audience.description.toLowerCase().includes(lowerQuery) ||
-        audience.category.toLowerCase().includes(lowerQuery) ||
-        audience.subcategory.toLowerCase().includes(lowerQuery) ||
-        audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery));
-      
-      if (matches) {
-        console.log('Matched audience:', audience);
-      }
-      
-      return matches;
-    });
+    return audiences.filter((audience) => {
+      const searchableText = [
+        audience.name,
+        audience.description,
+        audience.category,
+        audience.subcategory,
+        ...audience.tags
+      ].join(' ').toLowerCase();
 
-    console.log('Search results:', results);
-    return results;
+      return searchableText.includes(lowerQuery);
+    });
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
@@ -191,11 +183,13 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <TaxonomyContext.Provider value={{
       audiences,
       loading,
+      error,
       searchAudiences,
       getAudiencesByCategory,
       getAudienceById,
       addAudience,
-      getRecommendedAudiences
+      getRecommendedAudiences,
+      refreshAudiences: fetchAudiences
     }}>
       {children}
     </TaxonomyContext.Provider>
