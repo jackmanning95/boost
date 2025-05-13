@@ -3,7 +3,6 @@ import { AudienceSegment } from '../../types';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 import { Search } from 'lucide-react';
 import Input from '../ui/Input';
-import Button from '../ui/Button';
 
 interface AudienceSearchProps {
   onSearchResults: (results: AudienceSegment[]) => void;
@@ -14,37 +13,30 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
-      handleSearch();
-      
+    if (!loading && audiences.length > 0) {
+      console.log('Initial audiences:', audiences);
       const uniqueCategories = Array.from(
         new Set(audiences.map(audience => audience.category))
       ).sort();
       setCategories(uniqueCategories);
+      handleSearch();
     }
   }, [loading, audiences]);
 
-  const handleSearch = async () => {
-    setIsSearching(true);
+  const handleSearch = () => {
+    console.log('Handling search with query:', searchQuery);
+    const results = searchAudiences(searchQuery);
+    console.log('Search results before filtering:', results);
     
-    try {
-      const results = await searchAudiences(searchQuery);
-      
-      let filteredResults = results;
-      if (selectedCategory) {
-        filteredResults = results.filter(audience => audience.category === selectedCategory);
-      }
-      
-      onSearchResults(filteredResults);
-    } catch (error) {
-      console.error('Search error:', error);
-      onSearchResults([]);
-    } finally {
-      setIsSearching(false);
+    let filteredResults = results;
+    if (selectedCategory) {
+      filteredResults = results.filter(audience => audience.category === selectedCategory);
     }
+    
+    console.log('Final filtered results:', filteredResults);
+    onSearchResults(filteredResults);
   };
 
   useEffect(() => {
@@ -61,19 +53,17 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={20} className="text-gray-400" />
-          </div>
-          <Input
-            type="text"
-            placeholder="Search audiences by name, description, or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search size={20} className="text-gray-400" />
         </div>
+        <Input
+          type="text"
+          placeholder="Search audiences by name, description, or category..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
       </div>
       
       <div className="flex flex-wrap gap-2">
@@ -106,4 +96,4 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
   );
 };
 
-export default AudienceSearch
+export default AudienceSearch;

@@ -8,7 +8,7 @@ type BoostTaxo = Database['public']['Tables']['boost_taxo']['Row'];
 interface TaxonomyContextType {
   audiences: AudienceSegment[];
   loading: boolean;
-  searchAudiences: (query: string) => Promise<AudienceSegment[]>;
+  searchAudiences: (query: string) => AudienceSegment[];
   getAudiencesByCategory: (category: string) => AudienceSegment[];
   getAudienceById: (id: string) => AudienceSegment | undefined;
   addAudience: (audience: Omit<AudienceSegment, 'id'>) => void;
@@ -100,7 +100,7 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
     fetchAudiences();
   }, []);
 
-  const searchAudiences = async (query: string): Promise<AudienceSegment[]> => {
+  const searchAudiences = (query: string): AudienceSegment[] => {
     console.log('Searching audiences with query:', query);
     const lowerQuery = query.toLowerCase().trim();
 
@@ -109,24 +109,13 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
       return audiences;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('boost_taxo')
-        .select('*')
-        .or(`segment_name.ilike.%${lowerQuery}%,segment_description.ilike.%${lowerQuery}%,data_supplier.ilike.%${lowerQuery}%`)
-        .order('segment_name');
-
-      if (error) {
-        console.error('Error searching audiences:', error);
-        return [];
-      }
-
-      console.log('Search results:', data);
-      return data ? data.map(transformBoostTaxoToAudience) : [];
-    } catch (error) {
-      console.error('Error in searchAudiences:', error);
-      return [];
-    }
+    return audiences.filter(audience => 
+      audience.name.toLowerCase().includes(lowerQuery) ||
+      audience.description.toLowerCase().includes(lowerQuery) ||
+      audience.category.toLowerCase().includes(lowerQuery) ||
+      audience.subcategory.toLowerCase().includes(lowerQuery) ||
+      audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
+    );
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
