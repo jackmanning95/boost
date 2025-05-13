@@ -45,6 +45,8 @@ function extractCategoryInfo(dataSupplier: string | null): [string, string] {
 }
 
 function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
+  console.log('Transforming row:', row);
+  
   const [category, subcategory] = extractCategoryInfo(row.data_supplier);
   const tags = extractTags(row.segment_description);
   
@@ -59,6 +61,7 @@ function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
     cpm: row.boost_cpm || undefined
   };
   
+  console.log('Transformed audience:', audience);
   return audience;
 }
 
@@ -68,6 +71,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     async function fetchAudiences() {
+      console.log('Fetching audiences...');
       try {
         const { data, error } = await supabase
           .from('boost_taxo')
@@ -79,8 +83,11 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw error;
         }
 
+        console.log('Raw data from Supabase:', data);
+
         if (data) {
           const formattedAudiences = data.map(transformBoostTaxoToAudience);
+          console.log('Formatted audiences:', formattedAudiences);
           setAudiences(formattedAudiences);
         }
       } catch (error) {
@@ -95,19 +102,33 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
+    console.log('Searching audiences with query:', query);
+    console.log('Current audiences:', audiences);
+    
     const lowerQuery = query.toLowerCase().trim();
 
-    if (!lowerQuery) return audiences;
+    if (!lowerQuery) {
+      console.log('Empty query, returning all audiences');
+      return audiences;
+    }
 
-    return audiences.filter((audience) => {
-      return (
+    const results = audiences.filter((audience) => {
+      const matches = 
         audience.name.toLowerCase().includes(lowerQuery) ||
         audience.description.toLowerCase().includes(lowerQuery) ||
         audience.category.toLowerCase().includes(lowerQuery) ||
         audience.subcategory.toLowerCase().includes(lowerQuery) ||
-        audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
-      );
+        audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery));
+      
+      if (matches) {
+        console.log('Matched audience:', audience);
+      }
+      
+      return matches;
     });
+
+    console.log('Search results:', results);
+    return results;
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {

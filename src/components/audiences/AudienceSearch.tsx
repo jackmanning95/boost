@@ -16,9 +16,11 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
 
   useEffect(() => {
     if (!loading && audiences.length > 0) {
+      console.log('Initial audiences load:', audiences);
       const uniqueCategories = Array.from(
         new Set(audiences.map(audience => audience.category))
       ).sort();
+      console.log('Unique categories:', uniqueCategories);
       setCategories(uniqueCategories);
       onSearchResults(audiences);
     }
@@ -26,10 +28,17 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
+      console.log('Search query:', searchQuery);
+      console.log('Selected category:', selectedCategory);
+      
       const results = searchAudiences(searchQuery);
+      console.log('Search results before category filter:', results);
+      
       const filteredResults = selectedCategory
         ? results.filter(audience => audience.category === selectedCategory)
         : results;
+      
+      console.log('Final filtered results:', filteredResults);
       onSearchResults(filteredResults);
     }, 300);
 
@@ -81,4 +90,4 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
   );
 };
 
-export default AudienceSearch
+export default AudienceSearch;
