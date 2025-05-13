@@ -13,11 +13,10 @@ const LoginPage: React.FC = () => {
   
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      {/* Left side - Branding */}
-      <div className="bg-blue-600 text-white md:w-1/2 p-8 flex flex-col justify-center items-center">
+      <div className="bg-[#0d5cdf] text-white md:w-1/2 p-8 flex flex-col justify-center items-center">
         <div className="max-w-md text-center">
           <div className="mb-6 flex justify-center">
-            <Database size={64} />
+            <Database className="w-16 h-16" />
           </div>
           <h1 className="text-4xl font-bold mb-6">Boost Data</h1>
           <p className="text-xl mb-8">
@@ -47,7 +46,6 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Right side - Login form */}
       <div className="bg-white md:w-1/2 p-8 flex items-center justify-center">
         <div className="w-full max-w-md">
           <LoginForm />

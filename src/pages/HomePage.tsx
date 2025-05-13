@@ -27,8 +27,8 @@ const HomePage: React.FC = () => {
               </p>
               <Link to="/login">
                 <Button 
-                  size="lg" 
-                  className="bg-white text-[#509fe0] hover:bg-blue-50"
+                  variant="primary"
+                  size="lg"
                   icon={<ArrowRight size={20} />}
                 >
                   Get Started
