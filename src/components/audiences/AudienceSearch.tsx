@@ -18,29 +18,24 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
 
   useEffect(() => {
     if (!loading) {
-      // Load initial data
       handleSearch();
       
-      // Set up categories
       const uniqueCategories = Array.from(
         new Set(audiences.map(audience => audience.category))
       ).sort();
       setCategories(uniqueCategories);
     }
-  }, [loading]);
+  }, [loading, audiences]);
 
   const handleSearch = async () => {
-    console.log('Searching with query:', searchQuery);
     setIsSearching(true);
     
     try {
       const results = await searchAudiences(searchQuery);
-      console.log('Search results:', results);
       
       let filteredResults = results;
       if (selectedCategory) {
         filteredResults = results.filter(audience => audience.category === selectedCategory);
-        console.log('Filtered by category:', selectedCategory, filteredResults);
       }
       
       onSearchResults(filteredResults);
@@ -52,16 +47,16 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  useEffect(() => {
+    const timer = setTimeout(() => {
       handleSearch();
-    }
-  };
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedCategory]);
 
   const handleCategorySelect = (category: string) => {
-    const newCategory = category === selectedCategory ? '' : category;
-    setSelectedCategory(newCategory);
-    handleSearch();
+    setSelectedCategory(category === selectedCategory ? '' : category);
   };
 
   return (
@@ -76,17 +71,9 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
             placeholder="Search audiences by name, description, or category..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
             className="pl-10"
           />
         </div>
-        <Button
-          variant="primary"
-          onClick={handleSearch}
-          isLoading={isSearching}
-        >
-          Search
-        </Button>
       </div>
       
       <div className="flex flex-wrap gap-2">

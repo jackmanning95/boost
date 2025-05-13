@@ -45,7 +45,6 @@ function extractCategoryInfo(dataSupplier: string | null): [string, string] {
 }
 
 function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
-  console.log('Transforming row:', row);
   const [category, subcategory] = extractCategoryInfo(row.data_supplier);
   const tags = extractTags(row.segment_description);
   
@@ -60,7 +59,6 @@ function transformBoostTaxoToAudience(row: BoostTaxo): AudienceSegment {
     cpm: row.boost_cpm || undefined
   };
   
-  console.log('Transformed to:', audience);
   return audience;
 }
 
@@ -71,26 +69,22 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function fetchAudiences() {
       try {
-        console.log('Fetching audiences...');
         const { data, error } = await supabase
           .from('boost_taxo')
           .select('*')
-          .limit(100)
           .order('segment_name');
 
         if (error) {
-          console.error('Supabase error:', error);
+          console.error('Error fetching audiences:', error);
           throw error;
         }
 
-        console.log('Received data:', data);
         if (data) {
           const formattedAudiences = data.map(transformBoostTaxoToAudience);
-          console.log('Formatted audiences:', formattedAudiences);
           setAudiences(formattedAudiences);
         }
       } catch (error) {
-        console.error('Error fetching audiences:', error);
+        console.error('Error in fetchAudiences:', error);
         setAudiences([]);
       } finally {
         setLoading(false);
@@ -101,20 +95,29 @@ export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const searchAudiences = async (query: string): Promise<AudienceSegment[]> => {
-    console.log('Searching audiences with query:', query);
     const lowerQuery = query.toLowerCase().trim();
 
-    if (!lowerQuery) return audiences;
+    if (!lowerQuery) {
+      return audiences;
+    }
 
-    return audiences.filter((audience) => {
-      return (
-        audience.name.toLowerCase().includes(lowerQuery) ||
-        audience.description.toLowerCase().includes(lowerQuery) ||
-        audience.category.toLowerCase().includes(lowerQuery) ||
-        audience.subcategory.toLowerCase().includes(lowerQuery) ||
-        audience.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
-      );
-    });
+    try {
+      const { data, error } = await supabase
+        .from('boost_taxo')
+        .select('*')
+        .or(`segment_name.ilike.%${lowerQuery}%,segment_description.ilike.%${lowerQuery}%,data_supplier.ilike.%${lowerQuery}%`)
+        .order('segment_name');
+
+      if (error) {
+        console.error('Error searching audiences:', error);
+        return [];
+      }
+
+      return data ? data.map(transformBoostTaxoToAudience) : [];
+    } catch (error) {
+      console.error('Error in searchAudiences:', error);
+      return [];
+    }
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
