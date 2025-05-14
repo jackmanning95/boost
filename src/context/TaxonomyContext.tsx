@@ -56,7 +56,7 @@ function transformBoostTaxoToAudience(row: BoostTaxo | null): AudienceSegment | 
     const [category, subcategory] = extractCategoryInfo(row.data_supplier);
     const tags = extractTags(row.segment_description);
     
-    return {
+    const audience: AudienceSegment = {
       id: row.segment_name,
       name: row.segment_name,
       description: row.segment_description || '',
@@ -66,6 +66,9 @@ function transformBoostTaxoToAudience(row: BoostTaxo | null): AudienceSegment | 
       reach: row.estimated_volumes || undefined,
       cpm: row.boost_cpm || undefined
     };
+    
+    console.log('Transformed audience:', audience);
+    return audience;
   } catch (error) {
     console.error('Error transforming row:', error, row);
     return null;
@@ -105,8 +108,10 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .filter((audience): audience is AudienceSegment => audience !== null);
 
       console.log('Transformed audiences:', formattedAudiences);
+      console.log(`Successfully transformed ${formattedAudiences.length} audiences`);
 
       setAudiences(formattedAudiences);
+      console.log('Audiences set in state:', formattedAudiences);
       setError(null);
     } catch (err) {
       console.error('Error fetching audiences:', err);
@@ -114,20 +119,23 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setAudiences([]);
     } finally {
       setLoading(false);
+      console.log('Fetch complete, loading set to false');
     }
   };
 
   useEffect(() => {
+    console.log('TaxonomyProvider mounted, initiating fetch');
     fetchAudiences();
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
     console.log('Searching audiences with query:', query);
-    console.log('Current audiences:', audiences);
+    console.log('Current audiences in state:', audiences);
 
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
+      console.log('Empty query, returning all audiences:', audiences);
       return audiences;
     }
 
