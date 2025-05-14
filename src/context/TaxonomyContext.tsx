@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AudienceSegment } from '../types';
 
 interface TaxonomyContextType {
@@ -11,23 +11,48 @@ interface TaxonomyContextType {
   addAudience: (audience: Omit<AudienceSegment, 'id'>) => void;
   getRecommendedAudiences: (baseAudiences: AudienceSegment[], count?: number) => AudienceSegment[];
   refreshAudiences: () => Promise<void>;
-  setAudiences: React.Dispatch<React.SetStateAction<AudienceSegment[]>>;
+  updateAudiences: (newAudiences: AudienceSegment[]) => void;
 }
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
 
-const ITEMS_PER_PAGE = 50; // Limit items per page for better performance
+const BATCH_SIZE = 1000;
+const SEARCH_LIMIT = 100;
 
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const searchAudiences = (query: string): AudienceSegment[] => {
+  const updateAudiences = useCallback((newAudiences: AudienceSegment[]) => {
+    setLoading(true);
+    
+    // Process audiences in batches
+    const processBatch = (startIndex: number) => {
+      if (startIndex >= newAudiences.length) {
+        setLoading(false);
+        return;
+      }
+
+      const batch = newAudiences.slice(startIndex, startIndex + BATCH_SIZE);
+      
+      setAudiences(prevAudiences => {
+        const updatedAudiences = startIndex === 0 ? [] : prevAudiences;
+        return [...updatedAudiences, ...batch];
+      });
+
+      // Schedule next batch
+      setTimeout(() => processBatch(startIndex + BATCH_SIZE), 0);
+    };
+
+    processBatch(0);
+  }, []);
+
+  const searchAudiences = useCallback((query: string): AudienceSegment[] => {
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
-      return audiences.slice(0, ITEMS_PER_PAGE); // Return first page only
+      return audiences.slice(0, SEARCH_LIMIT);
     }
 
     return audiences
@@ -42,32 +67,32 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         return searchableText.includes(lowerQuery);
       })
-      .slice(0, ITEMS_PER_PAGE); // Limit search results
-  };
+      .slice(0, SEARCH_LIMIT);
+  }, [audiences]);
 
-  const getAudiencesByCategory = (category: string): AudienceSegment[] => {
+  const getAudiencesByCategory = useCallback((category: string): AudienceSegment[] => {
     const lowerCategory = category.toLowerCase();
     return audiences
       .filter(audience => 
         audience.category.toLowerCase() === lowerCategory ||
         audience.subcategory.toLowerCase() === lowerCategory
       )
-      .slice(0, ITEMS_PER_PAGE);
-  };
+      .slice(0, SEARCH_LIMIT);
+  }, [audiences]);
 
-  const getAudienceById = (id: string): AudienceSegment | undefined => {
+  const getAudienceById = useCallback((id: string): AudienceSegment | undefined => {
     return audiences.find(audience => audience.id === id);
-  };
+  }, [audiences]);
 
-  const addAudience = (audience: Omit<AudienceSegment, 'id'>) => {
+  const addAudience = useCallback((audience: Omit<AudienceSegment, 'id'>) => {
     const newAudience = {
       ...audience,
       id: `audience-${Date.now()}`
     };
     setAudiences(prev => [...prev, newAudience]);
-  };
+  }, []);
 
-  const getRecommendedAudiences = (baseAudiences: AudienceSegment[], count = 3): AudienceSegment[] => {
+  const getRecommendedAudiences = useCallback((baseAudiences: AudienceSegment[], count = 3): AudienceSegment[] => {
     if (baseAudiences.length === 0) return [];
     
     const selectedIds = new Set(baseAudiences.map(a => a.id));
@@ -86,21 +111,20 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .sort((a, b) => b.score - a.score)
       .slice(0, count)
       .map(({ audience }) => audience);
-  };
+  }, [audiences]);
 
-  const refreshAudiences = async () => {
+  const refreshAudiences = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Reset to empty state
       setAudiences([]);
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error refreshing audiences:', err);
       setError(err instanceof Error ? err : new Error('An error occurred'));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   return (
     <TaxonomyContext.Provider value={{
@@ -113,7 +137,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       addAudience,
       getRecommendedAudiences,
       refreshAudiences,
-      setAudiences
+      updateAudiences
     }}>
       {children}
     </TaxonomyContext.Provider>

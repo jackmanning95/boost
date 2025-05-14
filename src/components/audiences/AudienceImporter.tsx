@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { importExcelAudiences } from '../../lib/excelImporter';
-import { AudienceSegment } from '../../types';
+import { useTaxonomy } from '../../context/TaxonomyContext';
 import Button from '../ui/Button';
 import { FileUp, Loader } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface AudienceImporterProps {
 const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const { updateAudiences } = useTaxonomy();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -19,6 +20,7 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
     setIsImporting(true);
     try {
       const audiences = await importExcelAudiences(file);
+      updateAudiences(audiences);
       onImport(audiences);
     } catch (error) {
       console.error('Import failed:', error);
