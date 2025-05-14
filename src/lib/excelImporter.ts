@@ -1,7 +1,10 @@
 import { read, utils } from 'xlsx';
 import { AudienceSegment } from '../types';
 
+const CHUNK_SIZE = 1000; // Process 1000 rows at a time
+
 function extractTags(description: string): string[] {
+  if (!description) return [];
   const stopWords = new Set(['and', 'the', 'with', 'for', 'who', 'are', 'have']);
   return Array.from(new Set(
     description
@@ -12,38 +15,61 @@ function extractTags(description: string): string[] {
   ));
 }
 
+function mapExcelRowToAudience(row: any, index: number): AudienceSegment {
+  return {
+    id: `audience-${index + 1}`,
+    name: row['Segment Name'] || '',
+    description: row['Segment Description'] || '',
+    category: (row['Data Supplier'] || '').split('/')[0] || 'Other',
+    subcategory: (row['Data Supplier'] || '').split('/')[1] || 'General',
+    tags: extractTags(row['Segment Description'] || ''),
+    reach: Number(row['Estimated Volumes']) || undefined,
+    cpm: Number(row['Boost CPM']) || undefined
+  };
+}
+
 export async function importExcelAudiences(file: File): Promise<AudienceSegment[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        console.log('Starting Excel import...');
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = read(data, { type: 'array' });
         
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = utils.sheet_to_json(worksheet);
         
-        const audiences: AudienceSegment[] = jsonData.map((row: any, index) => ({
-          id: `audience-${index + 1}`,
-          name: row.name || row.Name || row.segment_name || row.Segment,
-          description: row.description || row.Description || '',
-          category: row.category || row.Category || 'Other',
-          subcategory: row.subcategory || row.Subcategory || row.category || 'General',
-          tags: extractTags(row.description || row.Description || ''),
-          reach: Number(row.reach || row.Reach || 0) || undefined,
-          cpm: Number(row.cpm || row.CPM || 0) || undefined
-        }));
+        console.log(`Processing ${jsonData.length} rows...`);
         
-        console.log('Imported audiences:', audiences);
+        const audiences: AudienceSegment[] = [];
+        
+        // Process data in chunks
+        for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
+          const chunk = jsonData.slice(i, i + CHUNK_SIZE);
+          const chunkAudiences = chunk.map((row, index) => 
+            mapExcelRowToAudience(row, i + index)
+          );
+          audiences.push(...chunkAudiences);
+          
+          // Allow UI to update between chunks
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        
+        console.log(`Successfully imported ${audiences.length} audiences`);
         resolve(audiences);
       } catch (error) {
         console.error('Error importing Excel file:', error);
-        reject(error);
+        reject(new Error('Failed to import Excel file. Please check the format and try again.'));
       }
     };
     
-    reader.onerror = (error) => reject(error);
+    reader.onerror = (error) => {
+      console.error('FileReader error:', error);
+      reject(new Error('Failed to read the Excel file.'));
+    };
+    
     reader.readAsArrayBuffer(file);
   });
 }

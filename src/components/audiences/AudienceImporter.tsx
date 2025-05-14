@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { importExcelAudiences } from '../../lib/excelImporter';
+import { AudienceSegment } from '../../types';
 import Button from '../ui/Button';
-import { FileUp } from 'lucide-react';
+import { FileUp, Loader } from 'lucide-react';
 
 interface AudienceImporterProps {
   onImport: (audiences: AudienceSegment[]) => void;
@@ -9,17 +10,24 @@ interface AudienceImporterProps {
 
 const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsImporting(true);
     try {
       const audiences = await importExcelAudiences(file);
       onImport(audiences);
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Failed to import Excel file. Please check the format and try again.');
+      alert(error instanceof Error ? error.message : 'Import failed. Please try again.');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -35,9 +43,10 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
       <Button
         variant="outline"
         onClick={() => fileInputRef.current?.click()}
-        icon={<FileUp size={16} />}
+        icon={isImporting ? <Loader className="animate-spin" size={16} /> : <FileUp size={16} />}
+        disabled={isImporting}
       >
-        Import Excel
+        {isImporting ? 'Importing...' : 'Import Excel'}
       </Button>
     </div>
   );
