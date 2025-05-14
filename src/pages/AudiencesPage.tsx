@@ -3,6 +3,7 @@ import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
 import AudienceCard from '../components/audiences/AudienceCard';
 import AudienceRecommendations from '../components/audiences/AudienceRecommendations';
+import AudienceImporter from '../components/audiences/AudienceImporter';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useCampaign } from '../context/CampaignContext';
 import { AudienceSegment } from '../types';
@@ -32,6 +33,11 @@ const AudiencesPage: React.FC = () => {
     await refreshAudiences();
     setIsRefreshing(false);
   };
+
+  const handleImport = (importedAudiences: AudienceSegment[]) => {
+    setSearchResults(importedAudiences);
+    setCurrentPage(1);
+  };
   
   const selectedAudiences = activeCampaign?.audiences || [];
   
@@ -57,33 +63,37 @@ const AudiencesPage: React.FC = () => {
           <p className="text-gray-600 mt-1">Browse and select audience segments for your campaigns</p>
         </div>
         
-        {!isAdmin && activeCampaign && (
-          <div className="flex items-center">
-            <div className="mr-4 text-right hidden md:block">
-              <p className="text-sm text-gray-600">Current Campaign</p>
-              <p className="font-medium">{activeCampaign.name}</p>
+        <div className="flex items-center gap-4">
+          <AudienceImporter onImport={handleImport} />
+          
+          {!isAdmin && activeCampaign && (
+            <div className="flex items-center">
+              <div className="mr-4 text-right hidden md:block">
+                <p className="text-sm text-gray-600">Current Campaign</p>
+                <p className="font-medium">{activeCampaign.name}</p>
+              </div>
+              <Link to="/campaign/build">
+                <Button 
+                  variant="primary"
+                  icon={<ShoppingCart size={18} />}
+                >
+                  Selected Audiences ({selectedAudiences.length})
+                </Button>
+              </Link>
             </div>
-            <Link to="/campaign/build">
+          )}
+          
+          {!isAdmin && !activeCampaign && (
+            <Link to="/campaigns/new">
               <Button 
                 variant="primary"
-                icon={<ShoppingCart size={18} />}
+                icon={<PlusCircle size={18} />}
               >
-                Selected Audiences ({selectedAudiences.length})
+                Create New Campaign
               </Button>
             </Link>
-          </div>
-        )}
-        
-        {!isAdmin && !activeCampaign && (
-          <Link to="/campaigns/new">
-            <Button 
-              variant="primary"
-              icon={<PlusCircle size={18} />}
-            >
-              Create New Campaign
-            </Button>
-          </Link>
-        )}
+          )}
+        </div>
       </div>
       
       <div className="mb-8">
