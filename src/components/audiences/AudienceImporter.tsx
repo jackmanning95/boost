@@ -32,16 +32,22 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
     setImportProgress(0);
     
     try {
-      const importedAudiences = await importExcelAudiences(file, setImportProgress);
+      const importedAudiences = await importExcelAudiences(file, (progress) => {
+        setImportProgress(progress);
+        console.log('Import progress:', progress);
+      });
+      
+      console.log('Imported audiences:', importedAudiences.length);
       
       if (isRefreshMode) {
-        // Complete refresh - replace all segments
+        console.log('Refresh mode - replacing all audiences');
         updateAudiences(importedAudiences);
         onImport(importedAudiences);
       } else {
-        // Add new segments - merge with existing
+        console.log('Add mode - merging with existing audiences');
         const existingIds = new Set(audiences.map(a => a.id));
         const newAudiences = importedAudiences.filter(a => !existingIds.has(a.id));
+        console.log('New audiences to add:', newAudiences.length);
         const mergedAudiences = [...audiences, ...newAudiences];
         updateAudiences(mergedAudiences);
         onImport(mergedAudiences);

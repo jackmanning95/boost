@@ -1,7 +1,7 @@
 import { read, utils } from 'xlsx';
 import { AudienceSegment } from '../types';
 
-const CHUNK_SIZE = 100; // Process 100 rows at a time
+const CHUNK_SIZE = 50; // Reduced chunk size for smoother processing
 
 function extractTags(description: string): string[] {
   if (!description) return [];
@@ -16,17 +16,21 @@ function extractTags(description: string): string[] {
 }
 
 function mapExcelRowToAudience(row: any, index: number): AudienceSegment {
-  const [category, subcategory] = (row['Data Supplier'] || '').split('/');
+  // Ensure all required fields are present
+  const segmentName = row['Segment Name'] || `Segment ${index + 1}`;
+  const dataSupplier = row['Data Supplier'] || 'Unknown';
+  const [category = 'Other', subcategory = 'General'] = dataSupplier.split('/').map(s => s.trim());
+
   return {
-    id: `audience-${index + 1}`,
-    name: row['Segment Name'] || '',
+    id: `audience-${Date.now()}-${index}`, // Ensure unique IDs
+    name: segmentName,
     description: row['Segment Description'] || '',
-    category: category || 'Other',
-    subcategory: subcategory || 'General',
-    dataSupplier: row['Data Supplier'] || '',
+    category: category,
+    subcategory: subcategory,
+    dataSupplier: dataSupplier,
     tags: extractTags(row['Segment Description'] || ''),
-    reach: Number(row['Estimated Volumes']) || undefined,
-    cpm: Number(row['Boost CPM']) || undefined
+    reach: parseInt(row['Estimated Volumes']) || undefined,
+    cpm: parseFloat(row['Boost CPM']) || undefined
   };
 }
 
@@ -49,21 +53,29 @@ export async function importExcelAudiences(
         console.log(`Processing ${jsonData.length} rows...`);
         
         const audiences: AudienceSegment[] = [];
+        let lastProgressUpdate = Date.now();
         
-        // Process data in chunks
+        // Process data in chunks with progress updates
         for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
           const chunk = jsonData.slice(i, i + CHUNK_SIZE);
+          
+          // Process each row in the chunk
           const chunkAudiences = chunk.map((row, index) => 
             mapExcelRowToAudience(row, i + index)
           );
+          
           audiences.push(...chunkAudiences);
           
-          // Update progress
-          const progress = Math.min(100, Math.round((i + CHUNK_SIZE) / jsonData.length * 100));
-          onProgress?.(progress);
-          
-          // Allow UI to update between chunks
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // Update progress at most every 100ms
+          const now = Date.now();
+          if (now - lastProgressUpdate >= 100) {
+            const progress = Math.min(100, Math.round((i + CHUNK_SIZE) / jsonData.length * 100));
+            onProgress?.(progress);
+            lastProgressUpdate = now;
+            
+            // Allow UI to update
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
         }
         
         console.log(`Successfully imported ${audiences.length} audiences`);
