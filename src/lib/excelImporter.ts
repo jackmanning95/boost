@@ -1,7 +1,7 @@
 import { read, utils } from 'xlsx';
 import { AudienceSegment } from '../types';
 
-const CHUNK_SIZE = 1000; // Process 1000 rows at a time
+const CHUNK_SIZE = 100; // Process 100 rows at a time
 
 function extractTags(description: string): string[] {
   if (!description) return [];
@@ -16,19 +16,24 @@ function extractTags(description: string): string[] {
 }
 
 function mapExcelRowToAudience(row: any, index: number): AudienceSegment {
+  const [category, subcategory] = (row['Data Supplier'] || '').split('/');
   return {
     id: `audience-${index + 1}`,
     name: row['Segment Name'] || '',
     description: row['Segment Description'] || '',
-    category: (row['Data Supplier'] || '').split('/')[0] || 'Other',
-    subcategory: (row['Data Supplier'] || '').split('/')[1] || 'General',
+    category: category || 'Other',
+    subcategory: subcategory || 'General',
+    dataSupplier: row['Data Supplier'] || '',
     tags: extractTags(row['Segment Description'] || ''),
     reach: Number(row['Estimated Volumes']) || undefined,
     cpm: Number(row['Boost CPM']) || undefined
   };
 }
 
-export async function importExcelAudiences(file: File): Promise<AudienceSegment[]> {
+export async function importExcelAudiences(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<AudienceSegment[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -53,11 +58,16 @@ export async function importExcelAudiences(file: File): Promise<AudienceSegment[
           );
           audiences.push(...chunkAudiences);
           
+          // Update progress
+          const progress = Math.min(100, Math.round((i + CHUNK_SIZE) / jsonData.length * 100));
+          onProgress?.(progress);
+          
           // Allow UI to update between chunks
-          await new Promise(resolve => setTimeout(resolve, 0));
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         console.log(`Successfully imported ${audiences.length} audiences`);
+        onProgress?.(100);
         resolve(audiences);
       } catch (error) {
         console.error('Error importing Excel file:', error);

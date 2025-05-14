@@ -15,6 +15,7 @@ export interface AudienceSegment {
   description: string;
   category: string;
   subcategory: string;
+  dataSupplier?: string;
   tags: string[];
   reach?: number;
   cpm?: number;

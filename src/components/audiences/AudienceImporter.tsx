@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { importExcelAudiences } from '../../lib/excelImporter';
 import { useTaxonomy } from '../../context/TaxonomyContext';
+import { useAuth } from '../../context/AuthContext';
 import { AudienceSegment } from '../../types';
 import Button from '../ui/Button';
+import ProgressBar from '../ui/ProgressBar';
 import { FileUp, Loader, RefreshCw, Plus } from 'lucide-react';
 
 interface AudienceImporterProps {
@@ -10,18 +12,27 @@ interface AudienceImporterProps {
 }
 
 const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
+  const { isAdmin } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
   const [isRefreshMode, setIsRefreshMode] = useState(true);
   const { updateAudiences, audiences } = useTaxonomy();
+
+  // Only render for admin users
+  if (!isAdmin) {
+    return null;
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
+    setImportProgress(0);
+    
     try {
-      const importedAudiences = await importExcelAudiences(file);
+      const importedAudiences = await importExcelAudiences(file, setImportProgress);
       
       if (isRefreshMode) {
         // Complete refresh - replace all segments
@@ -40,6 +51,7 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
       alert(error instanceof Error ? error.message : 'Import failed. Please try again.');
     } finally {
       setIsImporting(false);
+      setImportProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -47,7 +59,7 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2">
       <input
         type="file"
         ref={fileInputRef}
@@ -55,38 +67,47 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
         accept=".xlsx,.xls"
         className="hidden"
       />
-      <div className="flex items-center bg-white border rounded-md p-1">
-        <button
-          className={`px-3 py-1 rounded text-sm transition-colors ${
-            isRefreshMode 
-              ? 'bg-blue-50 text-blue-700 font-medium' 
-              : 'text-gray-600 hover:bg-gray-50'
-          }`}
-          onClick={() => setIsRefreshMode(true)}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center bg-white border rounded-md p-1">
+          <button
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              isRefreshMode 
+                ? 'bg-blue-50 text-blue-700 font-medium' 
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+            onClick={() => setIsRefreshMode(true)}
+          >
+            <RefreshCw size={14} className="inline mr-1" />
+            Refresh All
+          </button>
+          <button
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              !isRefreshMode 
+                ? 'bg-blue-50 text-blue-700 font-medium' 
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+            onClick={() => setIsRefreshMode(false)}
+          >
+            <Plus size={14} className="inline mr-1" />
+            Add New
+          </button>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          icon={isImporting ? <Loader className="animate-spin" size={16} /> : <FileUp size={16} />}
+          disabled={isImporting}
         >
-          <RefreshCw size={14} className="inline mr-1" />
-          Refresh All
-        </button>
-        <button
-          className={`px-3 py-1 rounded text-sm transition-colors ${
-            !isRefreshMode 
-              ? 'bg-blue-50 text-blue-700 font-medium' 
-              : 'text-gray-600 hover:bg-gray-50'
-          }`}
-          onClick={() => setIsRefreshMode(false)}
-        >
-          <Plus size={14} className="inline mr-1" />
-          Add New
-        </button>
+          {isImporting ? 'Importing...' : 'Import Excel'}
+        </Button>
       </div>
-      <Button
-        variant="outline"
-        onClick={() => fileInputRef.current?.click()}
-        icon={isImporting ? <Loader className="animate-spin" size={16} /> : <FileUp size={16} />}
-        disabled={isImporting}
-      >
-        {isImporting ? 'Importing...' : 'Import Excel'}
-      </Button>
+      
+      {isImporting && (
+        <div className="flex items-center gap-2">
+          <ProgressBar progress={importProgress} className="flex-1" />
+          <span className="text-sm text-gray-600">{importProgress}%</span>
+        </div>
+      )}
     </div>
   );
 };
