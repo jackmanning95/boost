@@ -3,7 +3,7 @@ import { importExcelAudiences } from '../../lib/excelImporter';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 import { AudienceSegment } from '../../types';
 import Button from '../ui/Button';
-import { FileUp, Loader, RefreshCw } from 'lucide-react';
+import { FileUp, Loader, RefreshCw, Plus } from 'lucide-react';
 
 interface AudienceImporterProps {
   onImport: (audiences: AudienceSegment[]) => void;
