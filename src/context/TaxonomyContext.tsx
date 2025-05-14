@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AudienceSegment } from '../types';
-import { supabase } from '../lib/supabase';
-import type { Database } from '../lib/database.types';
-
-type BoostTaxo = Database['public']['Tables']['boost_taxo']['Row'];
+import { mockAudiences } from '../lib/mockData';
 
 interface TaxonomyContextType {
   audiences: AudienceSegment[];
@@ -19,123 +16,45 @@ interface TaxonomyContextType {
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
 
-function extractTags(description: string | null): string[] {
-  if (!description) return [];
-  
-  const stopWords = new Set(['and', 'the', 'with', 'for', 'who', 'are', 'have']);
-  
-  return Array.from(new Set(
-    description
-      .toLowerCase()
-      .split(/[,\s]+/)
-      .filter(word => word.length > 3 && !stopWords.has(word))
-      .slice(0, 5)
-  ));
-}
-
-function extractCategoryInfo(dataSupplier: string | null): [string, string] {
-  if (!dataSupplier) return ['Other', 'General'];
-  
-  const parts = dataSupplier.split('/').map(part => part.trim());
-  const mainCategory = parts[0] || 'Other';
-  const subCategory = parts[1] || mainCategory;
-  
-  return [
-    mainCategory.charAt(0).toUpperCase() + mainCategory.slice(1),
-    subCategory.charAt(0).toUpperCase() + subCategory.slice(1)
-  ];
-}
-
-function transformBoostTaxoToAudience(row: BoostTaxo | null): AudienceSegment | null {
-  if (!row || !row.segment_name) {
-    console.warn('Invalid row data:', row);
-    return null;
-  }
-
-  try {
-    const [category, subcategory] = extractCategoryInfo(row.data_supplier);
-    const tags = extractTags(row.segment_description);
-    
-    const audience: AudienceSegment = {
-      id: row.segment_name,
-      name: row.segment_name,
-      description: row.segment_description || '',
-      category,
-      subcategory,
-      tags,
-      reach: row.estimated_volumes || undefined,
-      cpm: row.boost_cpm || undefined
-    };
-    
-    console.log('Transformed audience:', audience);
-    return audience;
-  } catch (error) {
-    console.error('Error transforming row:', error, row);
-    return null;
-  }
-}
-
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchAudiences = async () => {
-    console.log('Fetching audiences...');
+    console.log('Fetching mock audiences...');
     setLoading(true);
     setError(null);
     
     try {
-      const { data, error: supabaseError } = await supabase
-        .from('boost_taxo')
-        .select('*')
-        .order('segment_name');
-
-      if (supabaseError) {
-        console.error('Supabase error:', supabaseError);
-        throw supabaseError;
-      }
-
-      if (!data) {
-        console.error('No data received from Supabase');
-        throw new Error('No data received from Supabase');
-      }
-
-      console.log('Raw data from Supabase:', data);
-
-      const formattedAudiences = data
-        .map(transformBoostTaxoToAudience)
-        .filter((audience): audience is AudienceSegment => audience !== null);
-
-      console.log('Transformed audiences:', formattedAudiences);
-      console.log(`Successfully transformed ${formattedAudiences.length} audiences`);
-
-      setAudiences(formattedAudiences);
-      console.log('Audiences set in state:', formattedAudiences);
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Mock audiences loaded:', mockAudiences);
+      setAudiences(mockAudiences);
       setError(null);
     } catch (err) {
-      console.error('Error fetching audiences:', err);
-      setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
+      console.error('Error loading mock audiences:', err);
+      setError(err instanceof Error ? err : new Error('Failed to load audiences'));
       setAudiences([]);
     } finally {
       setLoading(false);
-      console.log('Fetch complete, loading set to false');
+      console.log('Mock data fetch complete');
     }
   };
 
   useEffect(() => {
-    console.log('TaxonomyProvider mounted, initiating fetch');
+    console.log('TaxonomyProvider mounted');
     fetchAudiences();
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
     console.log('Searching audiences with query:', query);
-    console.log('Current audiences in state:', audiences);
+    console.log('Current audiences:', audiences);
 
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
-      console.log('Empty query, returning all audiences:', audiences);
       return audiences;
     }
 
