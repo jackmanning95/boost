@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AudienceSegment } from '../types';
-import { mockAudiences } from '../lib/mockData';
 
 interface TaxonomyContextType {
   audiences: AudienceSegment[];
@@ -18,47 +17,38 @@ const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined
 
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchAudiences = async () => {
-    console.log('Fetching mock audiences...');
     setLoading(true);
     setError(null);
     
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      console.log('Mock audiences loaded:', mockAudiences);
-      setAudiences(mockAudiences);
+      // No initial data fetch needed - data will come from Excel import
+      setAudiences([]);
       setError(null);
     } catch (err) {
-      console.error('Error loading mock audiences:', err);
-      setError(err instanceof Error ? err : new Error('Failed to load audiences'));
+      console.error('Error:', err);
+      setError(err instanceof Error ? err : new Error('An error occurred'));
       setAudiences([]);
     } finally {
       setLoading(false);
-      console.log('Mock data fetch complete');
     }
   };
 
   useEffect(() => {
-    console.log('TaxonomyProvider mounted');
     fetchAudiences();
   }, []);
 
   const searchAudiences = (query: string): AudienceSegment[] => {
-    console.log('Searching audiences with query:', query);
-    console.log('Current audiences:', audiences);
-
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
       return audiences;
     }
 
-    const results = audiences.filter((audience) => {
+    return audiences.filter((audience) => {
       const searchableText = [
         audience.name,
         audience.description,
@@ -69,9 +59,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return searchableText.includes(lowerQuery);
     });
-
-    console.log('Search results:', results);
-    return results;
   };
 
   const getAudiencesByCategory = (category: string): AudienceSegment[] => {
