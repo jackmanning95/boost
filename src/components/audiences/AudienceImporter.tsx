@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { importExcelAudiences } from '../../lib/excelImporter';
 import { useTaxonomy } from '../../context/TaxonomyContext';
+import { AudienceSegment } from '../../types';
 import Button from '../ui/Button';
-import { FileUp, Loader } from 'lucide-react';
+import { FileUp, Loader, RefreshCw } from 'lucide-react';
 
 interface AudienceImporterProps {
   onImport: (audiences: AudienceSegment[]) => void;
@@ -11,7 +12,8 @@ interface AudienceImporterProps {
 const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const { updateAudiences } = useTaxonomy();
+  const [isRefreshMode, setIsRefreshMode] = useState(true);
+  const { updateAudiences, audiences } = useTaxonomy();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -19,9 +21,20 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
 
     setIsImporting(true);
     try {
-      const audiences = await importExcelAudiences(file);
-      updateAudiences(audiences);
-      onImport(audiences);
+      const importedAudiences = await importExcelAudiences(file);
+      
+      if (isRefreshMode) {
+        // Complete refresh - replace all segments
+        updateAudiences(importedAudiences);
+        onImport(importedAudiences);
+      } else {
+        // Add new segments - merge with existing
+        const existingIds = new Set(audiences.map(a => a.id));
+        const newAudiences = importedAudiences.filter(a => !existingIds.has(a.id));
+        const mergedAudiences = [...audiences, ...newAudiences];
+        updateAudiences(mergedAudiences);
+        onImport(mergedAudiences);
+      }
     } catch (error) {
       console.error('Import failed:', error);
       alert(error instanceof Error ? error.message : 'Import failed. Please try again.');
@@ -34,7 +47,7 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
   };
 
   return (
-    <div>
+    <div className="flex items-center gap-2">
       <input
         type="file"
         ref={fileInputRef}
@@ -42,6 +55,30 @@ const AudienceImporter: React.FC<AudienceImporterProps> = ({ onImport }) => {
         accept=".xlsx,.xls"
         className="hidden"
       />
+      <div className="flex items-center bg-white border rounded-md p-1">
+        <button
+          className={`px-3 py-1 rounded text-sm transition-colors ${
+            isRefreshMode 
+              ? 'bg-blue-50 text-blue-700 font-medium' 
+              : 'text-gray-600 hover:bg-gray-50'
+          }`}
+          onClick={() => setIsRefreshMode(true)}
+        >
+          <RefreshCw size={14} className="inline mr-1" />
+          Refresh All
+        </button>
+        <button
+          className={`px-3 py-1 rounded text-sm transition-colors ${
+            !isRefreshMode 
+              ? 'bg-blue-50 text-blue-700 font-medium' 
+              : 'text-gray-600 hover:bg-gray-50'
+          }`}
+          onClick={() => setIsRefreshMode(false)}
+        >
+          <Plus size={14} className="inline mr-1" />
+          Add New
+        </button>
+      </div>
       <Button
         variant="outline"
         onClick={() => fileInputRef.current?.click()}
