@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
 import AudienceCard from '../components/audiences/AudienceCard';
@@ -8,26 +9,20 @@ import { useTaxonomy } from '../context/TaxonomyContext';
 import { useCampaign } from '../context/CampaignContext';
 import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import ReactPaginate from 'react-paginate';
 import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, RefreshCw } from 'lucide-react';
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, refreshAudiences } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign } = useCampaign();
   const { isAdmin } = useAuth();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(20);
+  const [currentPage, setCurrentPage] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  const handleSearchResults = (results: AudienceSegment[]) => {
-    setSearchResults(results);
-    setCurrentPage(1);
-  };
-  
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshAudiences();
@@ -36,25 +31,24 @@ const AudiencesPage: React.FC = () => {
 
   const handleImport = (importedAudiences: AudienceSegment[]) => {
     setSearchResults(importedAudiences);
-    setCurrentPage(1);
+    setCurrentPage(0);
   };
-  
+
+  const handleSearchResults = (results: AudienceSegment[]) => {
+    setSearchResults(results);
+    setCurrentPage(0);
+  };
+
   const selectedAudiences = activeCampaign?.audiences || [];
-  
-  const totalPages = Math.ceil(searchResults.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const currentAudiences = searchResults.slice(startIndex, endIndex);
-  
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(Math.max(1, Math.min(newPage, totalPages)));
+  const pageCount = Math.ceil(searchResults.length / PAGE_SIZE);
+  const offset = currentPage * PAGE_SIZE;
+  const currentAudiences = searchResults.slice(offset, offset + PAGE_SIZE);
+
+  const handlePageChange = ({ selected }: { selected: number }) => {
+    setCurrentPage(selected);
+    window.scrollTo(0, 0);
   };
-  
-  const handlePageSizeChange = (newSize: typeof PAGE_SIZE_OPTIONS[number]) => {
-    setPageSize(newSize);
-    setCurrentPage(1);
-  };
-  
+
   return (
     <Layout>
       <div className="flex items-center justify-between mb-6">
@@ -62,10 +56,10 @@ const AudiencesPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Audience Taxonomy</h1>
           <p className="text-gray-600 mt-1">Browse and select audience segments for your campaigns</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
-          <AudienceImporter onImport={handleImport} />
-          
+          {isAdmin && <AudienceImporter onImport={handleImport} />}
+
           {!isAdmin && activeCampaign && (
             <div className="flex items-center">
               <div className="mr-4 text-right hidden md:block">
@@ -82,7 +76,7 @@ const AudiencesPage: React.FC = () => {
               </Link>
             </div>
           )}
-          
+
           {!isAdmin && !activeCampaign && (
             <Link to="/campaigns/new">
               <Button 
@@ -95,11 +89,11 @@ const AudiencesPage: React.FC = () => {
           )}
         </div>
       </div>
-      
+
       <div className="mb-8">
         <AudienceSearch onSearchResults={handleSearchResults} />
       </div>
-      
+
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#509fe0]"></div>
@@ -127,7 +121,7 @@ const AudiencesPage: React.FC = () => {
                   : `Search Results (${searchResults.length})`}
               </h2>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <Button
                 variant="outline"
@@ -138,47 +132,10 @@ const AudiencesPage: React.FC = () => {
               >
                 Refresh
               </Button>
-              
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">Show:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => handlePageSizeChange(Number(e.target.value) as typeof PAGE_SIZE_OPTIONS[number])}
-                  className="rounded-md border-gray-300 text-sm"
-                >
-                  {PAGE_SIZE_OPTIONS.map(size => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  icon={<ChevronLeft size={16} />}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  icon={<ChevronRight size={16} />}
-                >
-                  Next
-                </Button>
-              </div>
             </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {currentAudiences.map(audience => (
               <AudienceCard
                 key={audience.id}
@@ -189,7 +146,32 @@ const AudiencesPage: React.FC = () => {
               />
             ))}
           </div>
-          
+
+          {pageCount > 1 && (
+            <div className="flex justify-center mt-8">
+              <ReactPaginate
+                previousLabel={<ChevronLeft size={16} />}
+                nextLabel={<ChevronRight size={16} />}
+                breakLabel="..."
+                pageCount={pageCount}
+                marginPagesDisplayed={2}
+                pageRangeDisplayed={5}
+                onPageChange={handlePageChange}
+                containerClassName="flex items-center gap-2"
+                pageClassName="flex"
+                pageLinkClassName="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+                activeClassName="!border-blue-600 bg-blue-50 text-blue-600"
+                previousClassName="flex"
+                nextClassName="flex"
+                previousLinkClassName="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50"
+                nextLinkClassName="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50"
+                breakClassName="flex items-center"
+                breakLinkClassName="text-gray-400"
+                disabledClassName="opacity-50 cursor-not-allowed"
+              />
+            </div>
+          )}
+
           {!isAdmin && (
             <AudienceRecommendations
               selectedAudiences={selectedAudiences}
