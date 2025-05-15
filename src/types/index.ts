@@ -4,7 +4,7 @@ export interface User {
   name: string;
   role: 'admin' | 'client';
   platformIds: {
-    [key: string]: string; // e.g., { meta: '123456', programmatic: '789012' }
+    [key: string]: string;
   };
   companyName?: string;
 }
@@ -14,9 +14,7 @@ export interface AudienceSegment {
   name: string;
   description: string;
   category: string;
-  subcategory: string;
   dataSupplier?: string;
-  tags: string[];
   reach?: number;
   cpm?: number;
 }
