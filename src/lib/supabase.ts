@@ -5,14 +5,9 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables:', {
-    url: !!supabaseUrl,
-    key: !!supabaseAnonKey
-  });
+  console.error('Missing Supabase environment variables');
   throw new Error('Missing required Supabase configuration');
 }
-
-console.log('Initializing Supabase client with URL:', supabaseUrl);
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -21,14 +16,14 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Test the connection
+// Initialize connection
 supabase
-  .from('boost_taxo')
-  .select('count')
-  .then(({ data, error }) => {
+  .from('15 may')
+  .select('count', { count: 'exact', head: true })
+  .then(({ error }) => {
     if (error) {
-      console.error('Supabase connection test failed:', error);
+      console.error('Supabase connection error:', error);
     } else {
-      console.log('Supabase connection test successful');
+      console.log('Supabase connection established successfully');
     }
   });
