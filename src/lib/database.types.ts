@@ -9,27 +9,77 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      boost_taxo: {
+      users: {
         Row: {
-          segment_name: string
-          data_supplier: string | null
-          estimated_volumes: number | null
-          boost_cpm: number | null
-          segment_description: string | null
+          id: string
+          email: string
+          name: string
+          role: string
+          company_name: string | null
+          platform_ids: Json
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          segment_name: string
-          data_supplier?: string | null
-          estimated_volumes?: number | null
-          boost_cpm?: number | null
-          segment_description?: string | null
+          id?: string
+          email: string
+          name: string
+          role?: string
+          company_name?: string | null
+          platform_ids?: Json
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          segment_name?: string
+          id?: string
+          email?: string
+          name?: string
+          role?: string
+          company_name?: string | null
+          platform_ids?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      audiences: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          category: string
+          subcategory: string | null
+          data_supplier: string | null
+          tags: string[]
+          reach: number | null
+          cpm: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          category: string
+          subcategory?: string | null
           data_supplier?: string | null
-          estimated_volumes?: number | null
-          boost_cpm?: number | null
-          segment_description?: string | null
+          tags?: string[]
+          reach?: number | null
+          cpm?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          category?: string
+          subcategory?: string | null
+          data_supplier?: string | null
+          tags?: string[]
+          reach?: number | null
+          cpm?: number | null
+          created_at?: string
+          updated_at?: string
         }
       }
     }

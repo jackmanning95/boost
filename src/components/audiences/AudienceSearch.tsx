@@ -3,51 +3,43 @@ import { AudienceSegment } from '../../types';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 import { Search } from 'lucide-react';
 import Input from '../ui/Input';
+import ReactPaginate from 'react-paginate';
 
 interface AudienceSearchProps {
   onSearchResults: (results: AudienceSegment[]) => void;
+  onPageChange: (page: number) => void;
+  currentPage: number;
+  totalPages: number;
 }
 
-const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
-  const { audiences, searchAudiences, loading } = useTaxonomy();
+const AudienceSearch: React.FC<AudienceSearchProps> = ({
+  onSearchResults,
+  onPageChange,
+  currentPage,
+  totalPages
+}) => {
+  const { searchAudiences, loading } = useTaxonomy();
   const [searchQuery, setSearchQuery] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   useEffect(() => {
-    if (!loading && audiences.length > 0) {
-      console.log('Initial audiences load in AudienceSearch:', audiences);
-      const uniqueCategories = Array.from(
-        new Set(audiences.map(audience => audience.category))
-      ).sort();
-      console.log('Unique categories:', uniqueCategories);
-      setCategories(uniqueCategories);
-      
-      console.log('Sending initial audiences to parent component');
-      onSearchResults(audiences);
-    }
-  }, [loading, audiences, onSearchResults]);
+    const fetchResults = async () => {
+      try {
+        const results = await searchAudiences(searchQuery, currentPage);
+        onSearchResults(results);
+      } catch (error) {
+        console.error('Error fetching search results:', error);
+      }
+    };
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log('Search query:', searchQuery);
-      console.log('Selected category:', selectedCategory);
-      console.log('Current audiences:', audiences);
-      
-      const results = searchAudiences(searchQuery);
-      console.log('Search results before category filter:', results);
-      
-      const filteredResults = selectedCategory
-        ? results.filter(audience => audience.category === selectedCategory)
-        : results;
-      
-      console.log('Final filtered results:', filteredResults);
-      console.log(`Sending ${filteredResults.length} results to parent`);
-      onSearchResults(filteredResults);
-    }, 300);
-
+    const timer = setTimeout(fetchResults, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedCategory, searchAudiences, onSearchResults]);
+  }, [searchQuery, currentPage, searchAudiences, onSearchResults]);
+
+  const handlePageClick = (event: { selected: number }) => {
+    onPageChange(event.selected + 1);
+  };
 
   return (
     <div className="space-y-4">
@@ -63,33 +55,26 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({ onSearchResults }) => {
           className="pl-10"
         />
       </div>
-      
-      <div className="flex flex-wrap gap-2">
-        <button
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            selectedCategory === '' 
-              ? 'bg-[#509fe0]/10 text-[#509fe0] font-medium' 
-              : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-          }`}
-          onClick={() => setSelectedCategory('')}
-        >
-          All Categories
-        </button>
-        
-        {categories.map((category) => (
-          <button
-            key={category}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-              selectedCategory === category 
-                ? 'bg-[#509fe0]/10 text-[#509fe0] font-medium' 
-                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-            }`}
-            onClick={() => setSelectedCategory(category)}
-          >
-            {category}
-          </button>
-        ))}
-      </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-4">
+          <ReactPaginate
+            previousLabel="Previous"
+            nextLabel="Next"
+            breakLabel="..."
+            pageCount={totalPages}
+            marginPagesDisplayed={2}
+            pageRangeDisplayed={5}
+            onPageChange={handlePageClick}
+            containerClassName="flex gap-2"
+            pageClassName="px-3 py-1 rounded border"
+            activeClassName="bg-blue-500 text-white"
+            previousClassName="px-3 py-1 rounded border"
+            nextClassName="px-3 py-1 rounded border"
+            disabledClassName="opacity-50"
+          />
+        </div>
+      )}
     </div>
   );
 };
