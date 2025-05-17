@@ -25,57 +25,49 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchAudiences = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Starting audience fetch...');
+      console.log('Fetching audiences from Supabase...');
 
-      // First verify table exists and is accessible
-      const { data: tableInfo, error: tableError } = await supabase
-        .from('15 may')
-        .select('*')
-        .limit(1);
+      // Get total count first
+      const { count, error: countError } = await supabase
+        .from('audiences')
+        .select('*', { count: 'exact', head: true });
 
-      if (tableError) {
-        console.error('Table access error:', tableError);
-        throw new Error(`Table access error: ${tableError.message}`);
-      }
+      if (countError) throw countError;
+      
+      setTotalCount(count || 0);
+      console.log(`Total audiences count: ${count}`);
 
-      console.log('Table access verified:', tableInfo);
-
-      // Get all records
+      // Fetch all audiences
       const { data, error: fetchError } = await supabase
-        .from('15 may')
-        .select('segment_name, data_supplier, estimated_volumes, boost_cpm, segment_description');
+        .from('audiences')
+        .select('*')
+        .order('name');
 
-      if (fetchError) {
-        console.error('Data fetch error:', fetchError);
-        throw fetchError;
-      }
-
-      console.log('Raw data fetched:', data);
+      if (fetchError) throw fetchError;
 
       if (!data || data.length === 0) {
-        console.log('No data returned from query');
+        console.log('No audiences found');
         setAudiences([]);
-        setTotalCount(0);
         return;
       }
 
       const formattedAudiences = data.map(audience => ({
-        id: audience.segment_name,
-        name: audience.segment_name,
-        description: audience.segment_description || '',
-        category: audience.data_supplier || 'Unknown',
+        id: audience.id,
+        name: audience.name,
+        description: audience.description || '',
+        category: audience.category,
+        subcategory: audience.subcategory || '',
         dataSupplier: audience.data_supplier || '',
-        reach: audience.estimated_volumes ? parseInt(audience.estimated_volumes) : undefined,
-        cpm: audience.boost_cpm ? parseFloat(audience.boost_cpm) : undefined
+        tags: audience.tags || [],
+        reach: audience.reach,
+        cpm: audience.cpm
       }));
 
-      console.log(`Formatted ${formattedAudiences.length} audiences:`, formattedAudiences[0]);
-      
+      console.log(`Successfully fetched ${formattedAudiences.length} audiences`);
       setAudiences(formattedAudiences);
-      setTotalCount(formattedAudiences.length);
       setError(null);
     } catch (err) {
-      console.error('Error in fetchAudiences:', err);
+      console.error('Error fetching audiences:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
       setAudiences([]);
       setTotalCount(0);
@@ -86,7 +78,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user) {
-      console.log('User authenticated, fetching audiences...');
       fetchAudiences();
     }
   }, [user, fetchAudiences]);
@@ -96,23 +87,45 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     page = 1,
     pageSize = SEARCH_LIMIT
   ): Promise<AudienceSegment[]> => {
-    console.log('Searching audiences:', { query, page, pageSize, totalAudiences: audiences.length });
+    try {
+      setLoading(true);
+      console.log('Searching audiences:', { query, page, pageSize });
 
-    if (!query) {
-      return audiences.slice((page - 1) * pageSize, page * pageSize);
+      let queryBuilder = supabase
+        .from('audiences')
+        .select('*');
+
+      if (query) {
+        queryBuilder = queryBuilder.textSearch(
+          'name,description,category,subcategory,data_supplier',
+          query
+        );
+      }
+
+      const { data, error: searchError } = await queryBuilder
+        .order('name')
+        .range((page - 1) * pageSize, page * pageSize - 1);
+
+      if (searchError) throw searchError;
+
+      return data.map(audience => ({
+        id: audience.id,
+        name: audience.name,
+        description: audience.description || '',
+        category: audience.category,
+        subcategory: audience.subcategory || '',
+        dataSupplier: audience.data_supplier || '',
+        tags: audience.tags || [],
+        reach: audience.reach,
+        cpm: audience.cpm
+      }));
+    } catch (err) {
+      console.error('Error searching audiences:', err);
+      throw err;
+    } finally {
+      setLoading(false);
     }
-
-    const searchQuery = query.toLowerCase();
-    const filteredAudiences = audiences.filter(audience => 
-      audience.name.toLowerCase().includes(searchQuery) ||
-      audience.description.toLowerCase().includes(searchQuery) ||
-      audience.category.toLowerCase().includes(searchQuery) ||
-      audience.dataSupplier.toLowerCase().includes(searchQuery)
-    );
-
-    console.log(`Found ${filteredAudiences.length} matches for "${query}"`);
-    return filteredAudiences.slice((page - 1) * pageSize, page * pageSize);
-  }, [audiences]);
+  }, []);
 
   return (
     <TaxonomyContext.Provider value={{
