@@ -20,38 +20,33 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [totalCount, setTotalCount] = useState(0);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const fetchAudiences = useCallback(async () => {
+    if (!user || authLoading) return;
+
     try {
       setLoading(true);
-      console.log('Fetching audiences from Supabase...');
+      console.log('Taxonomy: Fetching audiences for user:', user.email);
 
-      // Get total count first
-      const { count, error: countError } = await supabase
+      const { data: audiences, error: audiencesError, count } = await supabase
         .from('audiences')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact' });
 
-      if (countError) throw countError;
-      
+      if (audiencesError) {
+        throw audiencesError;
+      }
+
+      console.log(`Taxonomy: Found ${count} audiences`);
       setTotalCount(count || 0);
-      console.log(`Total audiences count: ${count}`);
 
-      // Fetch all audiences
-      const { data, error: fetchError } = await supabase
-        .from('audiences')
-        .select('*')
-        .order('name');
-
-      if (fetchError) throw fetchError;
-
-      if (!data || data.length === 0) {
-        console.log('No audiences found');
+      if (!audiences || audiences.length === 0) {
+        console.log('Taxonomy: No audiences found');
         setAudiences([]);
         return;
       }
 
-      const formattedAudiences = data.map(audience => ({
+      const formattedAudiences = audiences.map(audience => ({
         id: audience.id,
         name: audience.name,
         description: audience.description || '',
@@ -63,33 +58,36 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         cpm: audience.cpm
       }));
 
-      console.log(`Successfully fetched ${formattedAudiences.length} audiences`);
+      console.log(`Taxonomy: Successfully formatted ${formattedAudiences.length} audiences`);
       setAudiences(formattedAudiences);
       setError(null);
     } catch (err) {
-      console.error('Error fetching audiences:', err);
+      console.error('Taxonomy: Error fetching audiences:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
       setAudiences([]);
       setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user, authLoading]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !authLoading) {
+      console.log('Taxonomy: Initial fetch triggered for user:', user.email);
       fetchAudiences();
     }
-  }, [user, fetchAudiences]);
+  }, [user, authLoading, fetchAudiences]);
 
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
     pageSize = SEARCH_LIMIT
   ): Promise<AudienceSegment[]> => {
+    if (!user) return [];
+
     try {
       setLoading(true);
-      console.log('Searching audiences:', { query, page, pageSize });
+      console.log('Taxonomy: Searching audiences:', { query, page, pageSize });
 
       let queryBuilder = supabase
         .from('audiences')
@@ -120,12 +118,12 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         cpm: audience.cpm
       }));
     } catch (err) {
-      console.error('Error searching audiences:', err);
+      console.error('Taxonomy: Error searching audiences:', err);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   return (
     <TaxonomyContext.Provider value={{

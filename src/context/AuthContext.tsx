@@ -39,17 +39,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is stored in local storage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    const initializeAuth = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          console.log('Auth: Restored user from storage:', parsedUser.email);
+          setUser(parsedUser);
+        }
+      } catch (error) {
+        console.error('Auth: Error restoring user:', error);
+        localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
-    // Simulate API call
     try {
       await new Promise(resolve => setTimeout(resolve, 800));
       const foundUser = MOCK_USERS.find(u => u.email === email);
@@ -58,12 +68,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Invalid credentials');
       }
       
-      // In a real app, you would verify the password here
-      
+      console.log('Auth: User logged in:', foundUser.email);
       setUser(foundUser);
       localStorage.setItem('user', JSON.stringify(foundUser));
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Auth: Login failed:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -71,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    console.log('Auth: User logged out');
     setUser(null);
     localStorage.removeItem('user');
   };
