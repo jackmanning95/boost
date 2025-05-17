@@ -94,10 +94,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .select('*');
 
       if (query) {
-        queryBuilder = queryBuilder.textSearch(
-          'name,description,category,subcategory,data_supplier',
-          query
-        );
+        queryBuilder = queryBuilder.textSearch('search_vector', query);
       }
 
       const { data, error: searchError } = await queryBuilder
@@ -137,11 +134,3 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     </TaxonomyContext.Provider>
   );
 };
-
-export function useTaxonomy(): TaxonomyContextType {
-  const context = useContext(TaxonomyContext);
-  if (!context) {
-    throw new Error('useTaxonomy must be used within a TaxonomyProvider');
-  }
-  return context;
-}
