@@ -25,22 +25,39 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchAudiences = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Fetching audiences from Supabase...');
+      console.log('Starting audience fetch...');
 
-      // Get total count first
-      const { count: totalRecords } = await supabase
-        .from('15 may')
-        .select('*', { count: 'exact', head: true });
-
-      setTotalCount(totalRecords || 0);
-
-      // Fetch all records
-      const { data, error: fetchError } = await supabase
+      // First verify table exists and is accessible
+      const { data: tableInfo, error: tableError } = await supabase
         .from('15 may')
         .select('*')
-        .order('segment_name');
+        .limit(1);
 
-      if (fetchError) throw fetchError;
+      if (tableError) {
+        console.error('Table access error:', tableError);
+        throw new Error(`Table access error: ${tableError.message}`);
+      }
+
+      console.log('Table access verified:', tableInfo);
+
+      // Get all records
+      const { data, error: fetchError } = await supabase
+        .from('15 may')
+        .select('segment_name, data_supplier, estimated_volumes, boost_cpm, segment_description');
+
+      if (fetchError) {
+        console.error('Data fetch error:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('Raw data fetched:', data);
+
+      if (!data || data.length === 0) {
+        console.log('No data returned from query');
+        setAudiences([]);
+        setTotalCount(0);
+        return;
+      }
 
       const formattedAudiences = data.map(audience => ({
         id: audience.segment_name,
@@ -48,16 +65,20 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: audience.segment_description || '',
         category: audience.data_supplier || 'Unknown',
         dataSupplier: audience.data_supplier || '',
-        reach: audience.estimated_volumes || undefined,
+        reach: audience.estimated_volumes ? parseInt(audience.estimated_volumes) : undefined,
         cpm: audience.boost_cpm ? parseFloat(audience.boost_cpm) : undefined
       }));
 
-      console.log(`Fetched ${formattedAudiences.length} audiences`);
+      console.log(`Formatted ${formattedAudiences.length} audiences:`, formattedAudiences[0]);
+      
       setAudiences(formattedAudiences);
+      setTotalCount(formattedAudiences.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching audiences:', err);
+      console.error('Error in fetchAudiences:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
+      setAudiences([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -65,6 +86,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user) {
+      console.log('User authenticated, fetching audiences...');
       fetchAudiences();
     }
   }, [user, fetchAudiences]);
@@ -74,6 +96,8 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     page = 1,
     pageSize = SEARCH_LIMIT
   ): Promise<AudienceSegment[]> => {
+    console.log('Searching audiences:', { query, page, pageSize, totalAudiences: audiences.length });
+
     if (!query) {
       return audiences.slice((page - 1) * pageSize, page * pageSize);
     }
@@ -86,6 +110,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       audience.dataSupplier.toLowerCase().includes(searchQuery)
     );
 
+    console.log(`Found ${filteredAudiences.length} matches for "${query}"`);
     return filteredAudiences.slice((page - 1) * pageSize, page * pageSize);
   }, [audiences]);
 
