@@ -27,22 +27,23 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(true);
       console.log('Fetching audiences from Supabase...');
 
-      const { data: count } = await supabase
+      // Get total count first
+      const { count: totalRecords } = await supabase
         .from('15 may')
-        .select('count', { count: 'exact' });
+        .select('*', { count: 'exact', head: true });
 
-      setTotalCount(count?.[0]?.count || 0);
+      setTotalCount(totalRecords || 0);
 
+      // Fetch all records
       const { data, error: fetchError } = await supabase
         .from('15 may')
         .select('*')
-        .order('segment_name')
-        .limit(SEARCH_LIMIT);
+        .order('segment_name');
 
       if (fetchError) throw fetchError;
 
       const formattedAudiences = data.map(audience => ({
-        id: audience.segment_name, // Using segment_name as ID since it's unique
+        id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
         category: audience.data_supplier || 'Unknown',
@@ -73,40 +74,20 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     page = 1,
     pageSize = SEARCH_LIMIT
   ): Promise<AudienceSegment[]> => {
-    try {
-      setLoading(true);
-      console.log('Searching audiences:', { query, page, pageSize });
-
-      let queryBuilder = supabase
-        .from('15 may')
-        .select('*');
-
-      if (query) {
-        queryBuilder = queryBuilder.or(`segment_name.ilike.%${query}%,segment_description.ilike.%${query}%,data_supplier.ilike.%${query}%`);
-      }
-
-      const { data, error: searchError } = await queryBuilder
-        .order('segment_name')
-        .range((page - 1) * pageSize, page * pageSize - 1);
-
-      if (searchError) throw searchError;
-
-      return data.map(audience => ({
-        id: audience.segment_name,
-        name: audience.segment_name,
-        description: audience.segment_description || '',
-        category: audience.data_supplier || 'Unknown',
-        dataSupplier: audience.data_supplier || '',
-        reach: audience.estimated_volumes || undefined,
-        cpm: audience.boost_cpm ? parseFloat(audience.boost_cpm) : undefined
-      }));
-    } catch (err) {
-      console.error('Error searching audiences:', err);
-      throw err;
-    } finally {
-      setLoading(false);
+    if (!query) {
+      return audiences.slice((page - 1) * pageSize, page * pageSize);
     }
-  }, []);
+
+    const searchQuery = query.toLowerCase();
+    const filteredAudiences = audiences.filter(audience => 
+      audience.name.toLowerCase().includes(searchQuery) ||
+      audience.description.toLowerCase().includes(searchQuery) ||
+      audience.category.toLowerCase().includes(searchQuery) ||
+      audience.dataSupplier.toLowerCase().includes(searchQuery)
+    );
+
+    return filteredAudiences.slice((page - 1) * pageSize, page * pageSize);
+  }, [audiences]);
 
   return (
     <TaxonomyContext.Provider value={{

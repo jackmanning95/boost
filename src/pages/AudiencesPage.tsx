@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
@@ -20,6 +20,10 @@ const AudiencesPage: React.FC = () => {
   const { isAdmin } = useAuth();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(0);
+
+  useEffect(() => {
+    setSearchResults(audiences);
+  }, [audiences]);
 
   const handleSearchResults = (results: AudienceSegment[]) => {
     setSearchResults(results);
