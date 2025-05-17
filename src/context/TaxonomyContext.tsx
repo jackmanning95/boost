@@ -13,6 +13,14 @@ interface TaxonomyContextType {
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
 
+export const useTaxonomy = (): TaxonomyContextType => {
+  const context = useContext(TaxonomyContext);
+  if (context === undefined) {
+    throw new Error('useTaxonomy must be used within a TaxonomyProvider');
+  }
+  return context;
+};
+
 const SEARCH_LIMIT = 100;
 
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
