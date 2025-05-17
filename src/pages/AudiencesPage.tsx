@@ -4,35 +4,22 @@ import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
 import AudienceCard from '../components/audiences/AudienceCard';
 import AudienceRecommendations from '../components/audiences/AudienceRecommendations';
-import AudienceImporter from '../components/audiences/AudienceImporter';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useCampaign } from '../context/CampaignContext';
 import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import ReactPaginate from 'react-paginate';
-import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, RefreshCw } from 'lucide-react';
+import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
-  const { audiences, loading, error, refreshAudiences } = useTaxonomy();
+  const { audiences, loading, error } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign } = useCampaign();
   const { isAdmin } = useAuth();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshAudiences();
-    setIsRefreshing(false);
-  };
-
-  const handleImport = (importedAudiences: AudienceSegment[]) => {
-    setSearchResults(importedAudiences);
-    setCurrentPage(0);
-  };
 
   const handleSearchResults = (results: AudienceSegment[]) => {
     setSearchResults(results);
@@ -58,8 +45,6 @@ const AudiencesPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {isAdmin && <AudienceImporter onImport={handleImport} />}
-
           {!isAdmin && activeCampaign && (
             <div className="flex items-center">
               <div className="mr-4 text-right hidden md:block">
@@ -101,14 +86,6 @@ const AudiencesPage: React.FC = () => {
       ) : error ? (
         <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
           <p className="text-red-600 mb-4">{error.message}</p>
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? 'Refreshing...' : 'Try Again'}
-          </Button>
         </div>
       ) : currentAudiences.length > 0 ? (
         <div>
@@ -120,18 +97,6 @@ const AudiencesPage: React.FC = () => {
                   ? 'All Audiences' 
                   : `Search Results (${searchResults.length})`}
               </h2>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                icon={<RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />}
-                disabled={isRefreshing}
-              >
-                Refresh
-              </Button>
             </div>
           </div>
 
@@ -182,14 +147,6 @@ const AudiencesPage: React.FC = () => {
       ) : (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <p className="text-gray-500 mb-4">No audience segments found matching your search criteria.</p>
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-          </Button>
         </div>
       )}
     </Layout>

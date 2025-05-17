@@ -8,10 +8,6 @@ interface TaxonomyContextType {
   loading: boolean;
   error: Error | null;
   searchAudiences: (query: string, page?: number, pageSize?: number) => Promise<AudienceSegment[]>;
-  getAudiencesByCategory: (category: string) => Promise<AudienceSegment[]>;
-  getAudienceById: (id: string) => Promise<AudienceSegment | undefined>;
-  getRecommendedAudiences: (baseAudiences: AudienceSegment[], count?: number) => Promise<AudienceSegment[]>;
-  refreshAudiences: () => Promise<void>;
   totalCount: number;
 }
 
@@ -32,29 +28,27 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Fetching audiences from Supabase...');
 
       const { data: count } = await supabase
-        .from('audiences')
+        .from('15 may')
         .select('count', { count: 'exact' });
 
       setTotalCount(count?.[0]?.count || 0);
 
       const { data, error: fetchError } = await supabase
-        .from('audiences')
+        .from('15 may')
         .select('*')
-        .order('name')
+        .order('segment_name')
         .limit(SEARCH_LIMIT);
 
       if (fetchError) throw fetchError;
 
       const formattedAudiences = data.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
+        id: audience.segment_name, // Using segment_name as ID since it's unique
+        name: audience.segment_name,
+        description: audience.segment_description || '',
+        category: audience.data_supplier || 'Unknown',
         dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach || undefined,
-        cpm: audience.cpm || undefined
+        reach: audience.estimated_volumes || undefined,
+        cpm: audience.boost_cpm ? parseFloat(audience.boost_cpm) : undefined
       }));
 
       console.log(`Fetched ${formattedAudiences.length} audiences`);
@@ -84,32 +78,27 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Searching audiences:', { query, page, pageSize });
 
       let queryBuilder = supabase
-        .from('audiences')
+        .from('15 may')
         .select('*');
 
       if (query) {
-        queryBuilder = queryBuilder.textSearch(
-          'name,description,category,subcategory,data_supplier',
-          query
-        );
+        queryBuilder = queryBuilder.or(`segment_name.ilike.%${query}%,segment_description.ilike.%${query}%,data_supplier.ilike.%${query}%`);
       }
 
       const { data, error: searchError } = await queryBuilder
-        .order('name')
+        .order('segment_name')
         .range((page - 1) * pageSize, page * pageSize - 1);
 
       if (searchError) throw searchError;
 
       return data.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
+        id: audience.segment_name,
+        name: audience.segment_name,
+        description: audience.segment_description || '',
+        category: audience.data_supplier || 'Unknown',
         dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach || undefined,
-        cpm: audience.cpm || undefined
+        reach: audience.estimated_volumes || undefined,
+        cpm: audience.boost_cpm ? parseFloat(audience.boost_cpm) : undefined
       }));
     } catch (err) {
       console.error('Error searching audiences:', err);
@@ -119,112 +108,12 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
-  const getAudiencesByCategory = useCallback(async (category: string): Promise<AudienceSegment[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('audiences')
-        .select('*')
-        .eq('category', category)
-        .order('name');
-
-      if (error) throw error;
-
-      return data.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
-        dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach || undefined,
-        cpm: audience.cpm || undefined
-      }));
-    } catch (err) {
-      console.error('Error fetching audiences by category:', err);
-      throw err;
-    }
-  }, []);
-
-  const getAudienceById = useCallback(async (id: string): Promise<AudienceSegment | undefined> => {
-    try {
-      const { data, error } = await supabase
-        .from('audiences')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      if (!data) return undefined;
-
-      return {
-        id: data.id,
-        name: data.name,
-        description: data.description || '',
-        category: data.category,
-        subcategory: data.subcategory || '',
-        dataSupplier: data.data_supplier || '',
-        tags: data.tags || [],
-        reach: data.reach || undefined,
-        cpm: data.cpm || undefined
-      };
-    } catch (err) {
-      console.error('Error fetching audience by ID:', err);
-      throw err;
-    }
-  }, []);
-
-  const getRecommendedAudiences = useCallback(async (
-    baseAudiences: AudienceSegment[],
-    count = 3
-  ): Promise<AudienceSegment[]> => {
-    try {
-      if (baseAudiences.length === 0) return [];
-
-      const categories = baseAudiences.map(a => a.category);
-      const baseIds = baseAudiences.map(a => a.id);
-
-      const { data, error } = await supabase
-        .from('audiences')
-        .select('*')
-        .in('category', categories)
-        .not('id', 'in', `(${baseIds.join(',')})`)
-        .order('created_at', { ascending: false })
-        .limit(count);
-
-      if (error) throw error;
-
-      return data.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
-        dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach || undefined,
-        cpm: audience.cpm || undefined
-      }));
-    } catch (err) {
-      console.error('Error fetching recommended audiences:', err);
-      throw err;
-    }
-  }, []);
-
-  const refreshAudiences = useCallback(async () => {
-    await fetchAudiences();
-  }, [fetchAudiences]);
-
   return (
     <TaxonomyContext.Provider value={{
       audiences,
       loading,
       error,
       searchAudiences,
-      getAudiencesByCategory,
-      getAudienceById,
-      getRecommendedAudiences,
-      refreshAudiences,
       totalCount
     }}>
       {children}
