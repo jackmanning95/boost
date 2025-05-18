@@ -21,12 +21,70 @@ interface TaxonomyContextType {
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
 
+// Complete list of data suppliers
+const ALL_DATA_SUPPLIERS = [
+  '33Across',
+  '4SIGHT',
+  'Acxiom',
+  'Adstra',
+  'Affinity Answers',
+  'Affinity Solutions',
+  'Alliant',
+  'AnalyticsIQ',
+  'Anteriad',
+  'AutoScout',
+  'Bombora',
+  'Claritas',
+  'ComScore',
+  'Cordless Media',
+  'Data Axle',
+  'Dun & Bradstreet',
+  'Dynata',
+  'Epsilon',
+  'Experian',
+  'Experian (via geo)',
+  'Experian Worldview',
+  'Eyeota',
+  'Eyeota Powered by Ibotta',
+  'GDR',
+  'GfK',
+  'Goldfish Ads',
+  'Gourmet Ads Data',
+  'HG Data',
+  'Infutor',
+  'Intuition',
+  'IRI',
+  'IXI (Equifax)',
+  'Kantar',
+  'Katalyst',
+  'Lifesight',
+  'Lighthouse List',
+  'MARS Consumer Health',
+  'Media Source Solutions',
+  'Peoplefinders DaaS',
+  'Playwire',
+  'Plunge Digital',
+  'Powerlytics',
+  'Selling Simplified',
+  'ShareThis',
+  'SMS-INC',
+  'Sovrn',
+  'Starcount',
+  'Stirista',
+  'TVision',
+  'Verisk',
+  'Webbula',
+  'Wiland Ultimate',
+  'YouGov',
+  'Ziff Davis'
+].sort();
+
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [totalCount, setTotalCount] = useState(0);
-  const [dataSuppliers, setDataSuppliers] = useState<string[]>([]);
+  const [dataSuppliers] = useState<string[]>(ALL_DATA_SUPPLIERS);
   const { user, loading: authLoading } = useAuth();
 
   const normalizeDataSupplier = (supplier: string | null): string => {
@@ -36,14 +94,19 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let normalized = supplier.trim().replace(/\s*\d+$/, '');
     
     // Handle special cases
-    if (normalized.toLowerCase().includes('accountscout')) {
-      return 'AccountScout';
+    if (normalized.toLowerCase().includes('data axle')) {
+      return 'Data Axle';
     }
     
     // Remove any trailing slashes and their content
     normalized = normalized.split('/')[0].trim();
     
-    return normalized;
+    // Match to known suppliers if possible
+    const matchedSupplier = ALL_DATA_SUPPLIERS.find(
+      s => s.toLowerCase() === normalized.toLowerCase()
+    );
+    
+    return matchedSupplier || normalized;
   };
 
   const fetchAudiences = useCallback(async () => {
@@ -53,26 +116,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(true);
       console.log('Taxonomy: Fetching audiences for user:', user.email);
 
-      // First, fetch all unique data suppliers
-      const { data: supplierData, error: supplierError } = await supabase
-        .from('15 may')
-        .select('data_supplier');
-
-      if (supplierError) {
-        throw supplierError;
-      }
-
-      // Normalize and deduplicate suppliers
-      const uniqueSuppliers = Array.from(new Set(
-        supplierData
-          .map(item => normalizeDataSupplier(item.data_supplier))
-          .filter(Boolean)
-      )).sort();
-
-      console.log('Taxonomy: Found unique suppliers:', uniqueSuppliers);
-      setDataSuppliers(uniqueSuppliers);
-
-      // Then fetch all audiences
       const { data: audiences, error: audiencesError, count } = await supabase
         .from('15 may')
         .select('*', { count: 'exact' });
