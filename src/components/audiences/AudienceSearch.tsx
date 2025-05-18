@@ -12,6 +12,22 @@ interface AudienceSearchProps {
   totalPages: number;
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 const AudienceSearch: React.FC<AudienceSearchProps> = ({
   onSearchResults,
   onPageChange,
@@ -20,22 +36,20 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
 }) => {
   const { searchAudiences, loading } = useTaxonomy();
   const [searchQuery, setSearchQuery] = useState('');
-  const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     const fetchResults = async () => {
       try {
-        const results = await searchAudiences(searchQuery, currentPage);
+        const results = await searchAudiences(debouncedSearchQuery, currentPage);
         onSearchResults(results);
       } catch (error) {
         console.error('Error fetching search results:', error);
       }
     };
 
-    const timer = setTimeout(fetchResults, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, currentPage, searchAudiences, onSearchResults]);
+    fetchResults();
+  }, [debouncedSearchQuery, currentPage, searchAudiences, onSearchResults]);
 
   const handlePageClick = (event: { selected: number }) => {
     onPageChange(event.selected + 1);

@@ -84,7 +84,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!user) return [];
 
     try {
-      setLoading(true);
       console.log('Taxonomy: Searching audiences:', { query, page, pageSize });
 
       let queryBuilder = supabase
@@ -118,8 +117,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.error('Taxonomy: Error searching audiences:', err);
       throw err;
-    } finally {
-      setLoading(false);
     }
   }, [user]);
 
