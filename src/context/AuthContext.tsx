@@ -131,7 +131,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sign up with Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`
+        }
       });
 
       if (error) throw error;
@@ -150,15 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
         if (profileError) throw profileError;
-
-        setUser({
-          id: data.user.id,
-          email: data.user.email!,
-          name,
-          role: 'client',
-          companyName,
-          platformIds: {}
-        });
       }
     } catch (error) {
       console.error('Auth: Sign up failed:', error);

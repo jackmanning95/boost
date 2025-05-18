@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Mail } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 
@@ -16,13 +16,14 @@ const SignUpForm: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
     }));
-    setError(''); // Clear error when user types
+    setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,12 +55,33 @@ const SignUpForm: React.FC = () => {
         name: formData.name,
         companyName: formData.companyName
       });
+      setIsSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-6">
+          <Mail size={32} />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
+        <p className="text-gray-600 mb-6">
+          We've sent a verification link to {formData.email}.<br />
+          Please click the link to verify your email address.
+        </p>
+        <Link to="/login">
+          <Button variant="outline">
+            Return to Sign In
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
