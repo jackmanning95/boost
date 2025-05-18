@@ -64,8 +64,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       errors.endDate = 'End date must be after start date';
     }
     
-    if (activeCampaign.budget < 0) {
-      errors.budget = 'Budget cannot be negative';
+    if (!activeCampaign.budget || activeCampaign.budget < 0) {
+      errors.budget = 'Budget must be a positive number';
     }
     
     const totalPlatforms = [
@@ -128,10 +128,10 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
         <Input
           label="Campaign Budget (USD)"
           type="number"
-          min="1"
-          step="1000"
+          min="0"
+          step="1"
           value={activeCampaign.budget || ''}
-          onChange={(e) => handleInputChange('budget', Number(e.target.value))}
+          onChange={(e) => handleInputChange('budget', Math.max(0, Number(e.target.value)))}
           error={formErrors.budget}
           required
         />
