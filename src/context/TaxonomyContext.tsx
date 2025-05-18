@@ -45,8 +45,8 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      const formattedAudiences = audiences.map((audience, index) => ({
-        id: `audience-${index}`,
+      const formattedAudiences = audiences.map(audience => ({
+        id: audience.segment_name, // Use segment_name as unique ID
         name: audience.segment_name,
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
@@ -80,7 +80,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
-    pageSize = 100
+    pageSize = 12 // Match the PAGE_SIZE constant from AudiencesPage
   ): Promise<AudienceSegment[]> => {
     if (!user) return [];
 
@@ -89,7 +89,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       let queryBuilder = supabase
         .from('15 may')
-        .select('*');
+        .select('*', { count: 'exact' });
 
       if (query) {
         queryBuilder = queryBuilder.or(
@@ -99,13 +99,21 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
 
-      const { data, error: searchError } = await queryBuilder
-        .range((page - 1) * pageSize, page * pageSize - 1);
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize - 1;
+
+      const { data, error: searchError, count } = await queryBuilder
+        .range(start, end)
+        .order('segment_name');
 
       if (searchError) throw searchError;
 
-      return data.map((audience, index) => ({
-        id: `audience-${index}`,
+      if (count !== null) {
+        setTotalCount(count);
+      }
+
+      return data.map(audience => ({
+        id: audience.segment_name, // Use segment_name as unique ID
         name: audience.segment_name,
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',

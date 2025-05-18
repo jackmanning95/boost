@@ -86,6 +86,7 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
             previousClassName="px-3 py-1 rounded border"
             nextClassName="px-3 py-1 rounded border"
             disabledClassName="opacity-50"
+            forcePage={currentPage - 1}
           />
         </div>
       )}

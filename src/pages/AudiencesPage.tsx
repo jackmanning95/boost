@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
 import AudienceCard from '../components/audiences/AudienceCard';
@@ -9,17 +9,17 @@ import { useCampaign } from '../context/CampaignContext';
 import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
-import ReactPaginate from 'react-paginate';
 import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
-  const { audiences, loading, error } = useTaxonomy();
+  const { audiences, loading, error, totalCount } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign } = useCampaign();
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -27,17 +27,18 @@ const AudiencesPage: React.FC = () => {
 
   const handleSearchResults = (results: AudienceSegment[]) => {
     setSearchResults(results);
-    setCurrentPage(0);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo(0, 0);
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
-  const pageCount = Math.ceil(searchResults.length / PAGE_SIZE);
-  const offset = currentPage * PAGE_SIZE;
-  const currentAudiences = searchResults.slice(offset, offset + PAGE_SIZE);
+  const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
-  const handlePageChange = ({ selected }: { selected: number }) => {
-    setCurrentPage(selected);
-    window.scrollTo(0, 0);
+  const handleCreateCampaign = () => {
+    navigate('/campaigns/new');
   };
 
   return (
@@ -67,20 +68,24 @@ const AudiencesPage: React.FC = () => {
           )}
 
           {!isAdmin && !activeCampaign && (
-            <Link to="/campaigns/new">
-              <Button 
-                variant="primary"
-                icon={<PlusCircle size={18} />}
-              >
-                Create New Campaign
-              </Button>
-            </Link>
+            <Button 
+              variant="primary"
+              icon={<PlusCircle size={18} />}
+              onClick={handleCreateCampaign}
+            >
+              Create New Campaign
+            </Button>
           )}
         </div>
       </div>
 
       <div className="mb-8">
-        <AudienceSearch onSearchResults={handleSearchResults} />
+        <AudienceSearch 
+          onSearchResults={handleSearchResults}
+          onPageChange={handlePageChange}
+          currentPage={currentPage}
+          totalPages={pageCount}
+        />
       </div>
 
       {loading ? (
@@ -91,7 +96,7 @@ const AudiencesPage: React.FC = () => {
         <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
           <p className="text-red-600 mb-4">{error.message}</p>
         </div>
-      ) : currentAudiences.length > 0 ? (
+      ) : searchResults.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
@@ -99,13 +104,13 @@ const AudiencesPage: React.FC = () => {
               <h2 className="text-xl font-semibold">
                 {searchResults.length === audiences.length 
                   ? 'All Audiences' 
-                  : `Search Results (${searchResults.length})`}
+                  : `Search Results (${totalCount})`}
               </h2>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {currentAudiences.map(audience => (
+            {searchResults.map(audience => (
               <AudienceCard
                 key={audience.id}
                 audience={audience}
@@ -125,7 +130,7 @@ const AudiencesPage: React.FC = () => {
                 pageCount={pageCount}
                 marginPagesDisplayed={2}
                 pageRangeDisplayed={5}
-                onPageChange={handlePageChange}
+                onPageChange={({ selected }) => handlePageChange(selected + 1)}
                 containerClassName="flex items-center gap-2"
                 pageClassName="flex"
                 pageLinkClassName="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
@@ -137,6 +142,7 @@ const AudiencesPage: React.FC = () => {
                 breakClassName="flex items-center"
                 breakLinkClassName="text-gray-400"
                 disabledClassName="opacity-50 cursor-not-allowed"
+                forcePage={currentPage - 1}
               />
             </div>
           )}
