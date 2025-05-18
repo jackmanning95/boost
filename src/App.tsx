@@ -8,6 +8,7 @@ import { NotificationProvider } from './context/NotificationContext';
 // Pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import SignUpPage from './pages/SignUpPage';
 import AudiencesPage from './pages/AudiencesPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignBuilderPage from './pages/CampaignBuilderPage';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
                 {/* Public routes */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignUpPage />} />
                 
                 {/* Protected routes */}
                 <Route 

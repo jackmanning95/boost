@@ -1,38 +1,24 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  signUp: (data: SignUpData) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface SignUpData {
+  email: string;
+  password: string;
+  name: string;
+  companyName?: string;
+}
 
-// Mock user data for demonstration
-const MOCK_USERS: User[] = [
-  {
-    id: '1',
-    email: 'jack@boostdata.io',
-    name: 'Jack Admin',
-    role: 'admin',
-    platformIds: {},
-    companyName: 'Boost Data'
-  },
-  {
-    id: '2',
-    email: 'client@example.com',
-    name: 'Demo Client',
-    role: 'client',
-    platformIds: {
-      meta: '2934983222',
-      programmatic: '8745612390'
-    },
-    companyName: 'Example Corp'
-  }
-];
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -41,36 +27,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          console.log('Auth: Restored user from storage:', parsedUser.email);
-          setUser(parsedUser);
+        // Get session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Get user profile data
+          const { data: profile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profile) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: profile.name,
+              role: profile.role,
+              companyName: profile.company_name,
+              platformIds: profile.platform_ids || {}
+            });
+          }
         }
       } catch (error) {
-        console.error('Auth: Error restoring user:', error);
-        localStorage.removeItem('user');
+        console.error('Auth: Error initializing:', error);
       } finally {
         setLoading(false);
       }
     };
 
     initializeAuth();
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email!,
+            name: profile.name,
+            role: profile.role,
+            companyName: profile.company_name,
+            platformIds: profile.platform_ids || {}
+          });
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
-    setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const foundUser = MOCK_USERS.find(u => u.email === email);
+      setLoading(true);
       
-      if (!foundUser) {
-        throw new Error('Invalid credentials');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile) {
+          setUser({
+            id: data.user.id,
+            email: data.user.email!,
+            name: profile.name,
+            role: profile.role,
+            companyName: profile.company_name,
+            platformIds: profile.platform_ids || {}
+          });
+        }
       }
-      
-      console.log('Auth: User logged in:', foundUser.email);
-      setUser(foundUser);
-      localStorage.setItem('user', JSON.stringify(foundUser));
     } catch (error) {
       console.error('Auth: Login failed:', error);
       throw error;
@@ -79,16 +124,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    console.log('Auth: User logged out');
-    setUser(null);
-    localStorage.removeItem('user');
+  const signUp = async ({ email, password, name, companyName }: SignUpData) => {
+    try {
+      setLoading(true);
+      
+      // Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Create user profile
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            name,
+            role: 'client',
+            company_name: companyName,
+            platform_ids: {}
+          });
+
+        if (profileError) throw profileError;
+
+        setUser({
+          id: data.user.id,
+          email: data.user.email!,
+          name,
+          role: 'client',
+          companyName,
+          platformIds: {}
+        });
+      }
+    } catch (error) {
+      console.error('Auth: Sign up failed:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error('Auth: Logout failed:', error);
+    }
   };
 
   const isAdmin = Boolean(user?.role === 'admin');
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, signUp, logout, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
