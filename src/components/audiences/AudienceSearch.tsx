@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AudienceSegment } from '../../types';
 import { useTaxonomy } from '../../context/TaxonomyContext';
-import { Search, SortAsc, SortDesc, Filter } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import Input from '../ui/Input';
 import ReactPaginate from 'react-paginate';
 
@@ -78,14 +78,6 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
     fetchResults();
   }, [debouncedSearchQuery, currentPage, selectedDataSupplier, cpmSortOrder, searchAudiences, onSearchResults]);
 
-  const toggleCpmSort = () => {
-    setCpmSortOrder(current => {
-      if (current === null) return 'asc';
-      if (current === 'asc') return 'desc';
-      return null;
-    });
-  };
-
   return (
     <div className="space-y-4">
       {/* Main Search Bar */}
@@ -121,19 +113,16 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
           ))}
         </select>
 
-        {/* CPM Sort Button */}
-        <button
-          onClick={toggleCpmSort}
-          className={`flex items-center rounded-md border px-3 py-1.5 text-sm transition-colors ${
-            cpmSortOrder
-              ? 'border-blue-500 bg-blue-50 text-blue-700'
-              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
+        {/* CPM Sort Dropdown */}
+        <select
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white"
+          value={cpmSortOrder || ''}
+          onChange={(e) => setCpmSortOrder(e.target.value as SortOrder)}
         >
-          {cpmSortOrder === 'asc' && <SortAsc size={16} className="mr-1.5" />}
-          {cpmSortOrder === 'desc' && <SortDesc size={16} className="mr-1.5" />}
-          CPM {cpmSortOrder === 'asc' ? '(Low to High)' : cpmSortOrder === 'desc' ? '(High to Low)' : ''}
-        </button>
+          <option value="">Sort by CPM</option>
+          <option value="asc">CPM: Low to High</option>
+          <option value="desc">CPM: High to Low</option>
+        </select>
       </div>
 
       {totalPages > 1 && (
