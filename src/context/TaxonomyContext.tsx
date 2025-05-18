@@ -7,7 +7,13 @@ interface TaxonomyContextType {
   audiences: AudienceSegment[];
   loading: boolean;
   error: Error | null;
-  searchAudiences: (query: string, page?: number, pageSize?: number) => Promise<AudienceSegment[]>;
+  searchAudiences: (
+    query: string,
+    page?: number,
+    pageSize?: number,
+    dataSupplier?: string,
+    cpmSort?: 'asc' | 'desc' | null
+  ) => Promise<AudienceSegment[]>;
   totalCount: number;
   getRecommendedAudiences: (selectedAudiences: AudienceSegment[], limit?: number) => AudienceSegment[];
 }
@@ -46,7 +52,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       const formattedAudiences = audiences.map(audience => ({
-        id: audience.segment_name, // Use segment_name as unique ID
+        id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
@@ -80,17 +86,20 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
-    pageSize = 12 // Match the PAGE_SIZE constant from AudiencesPage
+    pageSize = 12,
+    dataSupplier?: string,
+    cpmSort?: 'asc' | 'desc' | null
   ): Promise<AudienceSegment[]> => {
     if (!user) return [];
 
     try {
-      console.log('Taxonomy: Searching audiences:', { query, page, pageSize });
+      console.log('Taxonomy: Searching audiences:', { query, page, pageSize, dataSupplier, cpmSort });
 
       let queryBuilder = supabase
         .from('15 may')
         .select('*', { count: 'exact' });
 
+      // Apply text search filter
       if (query) {
         queryBuilder = queryBuilder.or(
           `segment_name.ilike.%${query}%,` +
@@ -99,12 +108,23 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
 
+      // Apply data supplier filter
+      if (dataSupplier) {
+        queryBuilder = queryBuilder.eq('data_supplier', dataSupplier);
+      }
+
+      // Apply CPM sorting
+      if (cpmSort) {
+        queryBuilder = queryBuilder.order('boost_cpm', { ascending: cpmSort === 'asc' });
+      } else {
+        queryBuilder = queryBuilder.order('segment_name');
+      }
+
       const start = (page - 1) * pageSize;
       const end = start + pageSize - 1;
 
       const { data, error: searchError, count } = await queryBuilder
-        .range(start, end)
-        .order('segment_name');
+        .range(start, end);
 
       if (searchError) throw searchError;
 
@@ -113,7 +133,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       return data.map(audience => ({
-        id: audience.segment_name, // Use segment_name as unique ID
+        id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
