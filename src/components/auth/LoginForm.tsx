@@ -96,13 +96,6 @@ const LoginForm: React.FC = () => {
           </p>
         </div>
       </form>
-      
-      <div className="mt-6 text-center text-sm text-gray-500">
-        <p>For demo purposes, use:</p>
-        <p className="font-medium text-gray-700 mt-1">Admin: jack@boostdata.io</p>
-        <p className="font-medium text-gray-700">Client: client@example.com</p>
-        <p className="text-gray-500 mt-1">(Any password will work)</p>
-      </div>
     </div>
   );
 };
