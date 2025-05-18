@@ -13,16 +13,6 @@ interface TaxonomyContextType {
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
 
-export const useTaxonomy = (): TaxonomyContextType => {
-  const context = useContext(TaxonomyContext);
-  if (context === undefined) {
-    throw new Error('useTaxonomy must be used within a TaxonomyProvider');
-  }
-  return context;
-};
-
-const SEARCH_LIMIT = 100;
-
 export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [audiences, setAudiences] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,7 +28,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Taxonomy: Fetching audiences for user:', user.email);
 
       const { data: audiences, error: audiencesError, count } = await supabase
-        .from('audiences')
+        .from('15 may')
         .select('*', { count: 'exact' });
 
       if (audiencesError) {
@@ -54,16 +44,16 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      const formattedAudiences = audiences.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
+      const formattedAudiences = audiences.map((audience, index) => ({
+        id: `audience-${index}`,
+        name: audience.segment_name,
+        description: audience.segment_description || '',
+        category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
+        subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
         dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach,
-        cpm: audience.cpm
+        tags: [],
+        reach: parseInt(audience.estimated_volumes) || undefined,
+        cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
       }));
 
       console.log(`Taxonomy: Successfully formatted ${formattedAudiences.length} audiences`);
@@ -89,7 +79,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
-    pageSize = SEARCH_LIMIT
+    pageSize = 100
   ): Promise<AudienceSegment[]> => {
     if (!user) return [];
 
@@ -98,29 +88,32 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Taxonomy: Searching audiences:', { query, page, pageSize });
 
       let queryBuilder = supabase
-        .from('audiences')
+        .from('15 may')
         .select('*');
 
       if (query) {
-        queryBuilder = queryBuilder.textSearch('search_vector', query);
+        queryBuilder = queryBuilder.or(
+          `segment_name.ilike.%${query}%,` +
+          `segment_description.ilike.%${query}%,` +
+          `data_supplier.ilike.%${query}%`
+        );
       }
 
       const { data, error: searchError } = await queryBuilder
-        .order('name')
         .range((page - 1) * pageSize, page * pageSize - 1);
 
       if (searchError) throw searchError;
 
-      return data.map(audience => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description || '',
-        category: audience.category,
-        subcategory: audience.subcategory || '',
+      return data.map((audience, index) => ({
+        id: `audience-${index}`,
+        name: audience.segment_name,
+        description: audience.segment_description || '',
+        category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
+        subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
         dataSupplier: audience.data_supplier || '',
-        tags: audience.tags || [],
-        reach: audience.reach,
-        cpm: audience.cpm
+        tags: [],
+        reach: parseInt(audience.estimated_volumes) || undefined,
+        cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
       }));
     } catch (err) {
       console.error('Taxonomy: Error searching audiences:', err);
@@ -141,4 +134,12 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       {children}
     </TaxonomyContext.Provider>
   );
+};
+
+export const useTaxonomy = (): TaxonomyContextType => {
+  const context = useContext(TaxonomyContext);
+  if (context === undefined) {
+    throw new Error('useTaxonomy must be used within a TaxonomyProvider');
+  }
+  return context;
 };
