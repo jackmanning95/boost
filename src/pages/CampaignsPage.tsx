@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, Plus } from 'lucide-react';
+import { Calendar, Clock, Plus, Users } from 'lucide-react';
 import Input from '../components/ui/Input';
 
 const CampaignsPage: React.FC = () => {
@@ -24,6 +24,12 @@ const CampaignsPage: React.FC = () => {
       setShowNewCampaignForm(false);
       navigate('/audiences');
     }
+  };
+
+  const handleStartWithAudiences = () => {
+    const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+    initializeCampaign(defaultName);
+    navigate('/audiences');
   };
   
   // Filter campaigns for client users
@@ -70,13 +76,22 @@ const CampaignsPage: React.FC = () => {
         </div>
         
         {!isAdmin && (
-          <Button 
-            variant="primary" 
-            onClick={() => setShowNewCampaignForm(true)}
-            icon={<Plus size={18} />}
-          >
-            New Campaign
-          </Button>
+          <div className="flex gap-4">
+            <Button 
+              variant="outline"
+              onClick={handleStartWithAudiences}
+              icon={<Users size={18} />}
+            >
+              Start with Audiences
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={() => setShowNewCampaignForm(true)}
+              icon={<Plus size={18} />}
+            >
+              New Campaign
+            </Button>
+          </div>
         )}
       </div>
       
@@ -185,13 +200,22 @@ const CampaignsPage: React.FC = () => {
           </p>
           
           {!isAdmin && !showNewCampaignForm && (
-            <Button 
-              variant="primary" 
-              onClick={() => setShowNewCampaignForm(true)}
-              icon={<Plus size={18} />}
-            >
-              Create Campaign
-            </Button>
+            <div className="flex justify-center gap-4">
+              <Button 
+                variant="outline"
+                onClick={handleStartWithAudiences}
+                icon={<Users size={18} />}
+              >
+                Start with Audiences
+              </Button>
+              <Button 
+                variant="primary" 
+                onClick={() => setShowNewCampaignForm(true)}
+                icon={<Plus size={18} />}
+              >
+                Create Campaign
+              </Button>
+            </div>
           )}
         </div>
       )}

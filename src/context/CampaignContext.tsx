@@ -70,89 +70,126 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addAudienceToCampaign = (audience: AudienceSegment) => {
-    if (!activeCampaign) return;
+    if (!activeCampaign) {
+      console.warn('No active campaign to add audience to');
+      return;
+    }
 
-    // Check if audience is already in campaign
-    if (activeCampaign.audiences.some(a => a.id === audience.id)) return;
+    try {
+      // Check if audience is already in campaign
+      if (activeCampaign.audiences.some(a => a.id === audience.id)) {
+        console.log('Audience already in campaign:', audience.id);
+        return;
+      }
 
-    const updatedCampaign = {
-      ...activeCampaign,
-      audiences: [...activeCampaign.audiences, audience],
-      updatedAt: new Date().toISOString()
-    };
+      const updatedCampaign = {
+        ...activeCampaign,
+        audiences: [...activeCampaign.audiences, audience],
+        updatedAt: new Date().toISOString()
+      };
 
-    setActiveCampaign(updatedCampaign);
-    setCampaigns(prev => 
-      prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-    );
+      setActiveCampaign(updatedCampaign);
+      setCampaigns(prev => 
+        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
+      );
+
+      console.log('Successfully added audience:', audience.id);
+    } catch (error) {
+      console.error('Error adding audience to campaign:', error);
+    }
   };
 
   const removeAudienceFromCampaign = (audienceId: string) => {
-    if (!activeCampaign) return;
+    if (!activeCampaign) {
+      console.warn('No active campaign to remove audience from');
+      return;
+    }
 
-    const updatedCampaign = {
-      ...activeCampaign,
-      audiences: activeCampaign.audiences.filter(a => a.id !== audienceId),
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      const updatedCampaign = {
+        ...activeCampaign,
+        audiences: activeCampaign.audiences.filter(a => a.id !== audienceId),
+        updatedAt: new Date().toISOString()
+      };
 
-    setActiveCampaign(updatedCampaign);
-    setCampaigns(prev => 
-      prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-    );
+      setActiveCampaign(updatedCampaign);
+      setCampaigns(prev => 
+        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
+      );
+
+      console.log('Successfully removed audience:', audienceId);
+    } catch (error) {
+      console.error('Error removing audience from campaign:', error);
+    }
   };
 
   const updateCampaignDetails = (details: Partial<Campaign>) => {
-    if (!activeCampaign) return;
+    if (!activeCampaign) {
+      console.warn('No active campaign to update');
+      return;
+    }
 
-    const updatedCampaign = {
-      ...activeCampaign,
-      ...details,
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      const updatedCampaign = {
+        ...activeCampaign,
+        ...details,
+        updatedAt: new Date().toISOString()
+      };
 
-    setActiveCampaign(updatedCampaign);
-    setCampaigns(prev => 
-      prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-    );
+      setActiveCampaign(updatedCampaign);
+      setCampaigns(prev => 
+        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
+      );
+
+      console.log('Successfully updated campaign details');
+    } catch (error) {
+      console.error('Error updating campaign details:', error);
+    }
   };
 
   const submitCampaignRequest = async (notes?: string) => {
-    if (!activeCampaign || !user) return;
+    if (!activeCampaign || !user) {
+      console.warn('No active campaign or user to submit request');
+      return;
+    }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const newRequest: AudienceRequest = {
-      id: `request-${Date.now()}`,
-      campaignId: activeCampaign.id,
-      clientId: user.id,
-      audiences: activeCampaign.audiences,
-      platforms: activeCampaign.platforms,
-      budget: activeCampaign.budget,
-      startDate: activeCampaign.startDate,
-      endDate: activeCampaign.endDate,
-      notes,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
+      const newRequest: AudienceRequest = {
+        id: `request-${Date.now()}`,
+        campaignId: activeCampaign.id,
+        clientId: user.id,
+        audiences: activeCampaign.audiences,
+        platforms: activeCampaign.platforms,
+        budget: activeCampaign.budget,
+        startDate: activeCampaign.startDate,
+        endDate: activeCampaign.endDate,
+        notes,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
 
-    setRequests(prev => [...prev, newRequest]);
+      setRequests(prev => [...prev, newRequest]);
 
-    // Update campaign status
-    const updatedCampaign = {
-      ...activeCampaign,
-      status: 'submitted' as const,
-      updatedAt: new Date().toISOString()
-    };
+      // Update campaign status
+      const updatedCampaign = {
+        ...activeCampaign,
+        status: 'submitted' as const,
+        updatedAt: new Date().toISOString()
+      };
 
-    setCampaigns(prev => 
-      prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-    );
-    setActiveCampaign(updatedCampaign);
+      setCampaigns(prev => 
+        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
+      );
+      setActiveCampaign(updatedCampaign);
 
-    // In a real app, you would send an email notification here
-    console.log(`Email notification sent to jack@boostdata.io for new campaign request: ${activeCampaign.name}`);
+      console.log('Successfully submitted campaign request');
+    } catch (error) {
+      console.error('Error submitting campaign request:', error);
+      throw error;
+    }
   };
 
   const getCampaignById = (id: string): Campaign | undefined => {
