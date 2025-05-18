@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
-import { Plus, Briefcase, Search, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Briefcase, Search, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
 import AdvertiserAccountModal from './AdvertiserAccountModal';
 
 export interface AdvertiserAccount {
@@ -19,6 +19,9 @@ interface AdvertiserAccountManagerProps {
   onDelete: (accountId: string) => void;
 }
 
+type SortField = 'advertiserName' | 'platform' | 'advertiserId';
+type SortDirection = 'asc' | 'desc';
+
 const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
   accounts,
   onAdd,
@@ -28,6 +31,8 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<SortField>('advertiserName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const handleAdd = () => {
     setEditingAccount(null);
@@ -48,6 +53,15 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
     setIsModalOpen(false);
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   const filteredAccounts = accounts.filter(account => {
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -57,13 +71,26 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
     );
   });
 
-  const groupedAccounts = filteredAccounts.reduce((acc, account) => {
-    if (!acc[account.platform]) {
-      acc[account.platform] = [];
-    }
-    acc[account.platform].push(account);
-    return acc;
-  }, {} as Record<string, AdvertiserAccount[]>);
+  const sortedAccounts = [...filteredAccounts].sort((a, b) => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    const aValue = a[sortField].toLowerCase();
+    const bValue = b[sortField].toLowerCase();
+    return aValue > bValue ? direction : -direction;
+  });
+
+  const SortButton: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
+    <button
+      className="flex items-center space-x-1 text-left font-medium text-gray-700 hover:text-gray-900"
+      onClick={() => handleSort(field)}
+    >
+      <span>{label}</span>
+      <ArrowUpDown size={14} className={`
+        transition-transform
+        ${sortField === field && sortDirection === 'desc' ? 'rotate-180' : ''}
+        ${sortField === field ? 'opacity-100' : 'opacity-50'}
+      `} />
+    </button>
+  );
 
   return (
     <>
@@ -85,7 +112,7 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="relative">
               <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -97,49 +124,63 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
               />
             </div>
 
-            {Object.entries(groupedAccounts).map(([platform, platformAccounts]) => (
-              <div key={platform} className="space-y-2">
-                <h3 className="font-medium text-gray-900">{platform}</h3>
-                <div className="bg-gray-50 rounded-lg divide-y divide-gray-200">
-                  {platformAccounts.map(account => (
-                    <div key={account.id} className="p-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">{account.advertiserName}</h4>
-                        <p className="text-sm text-gray-600">ID: {account.advertiserId}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(account)}
-                          icon={<Edit2 size={16} />}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onDelete(account.id)}
-                          icon={<Trash2 size={16} />}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-4 py-3">
+                      <SortButton field="advertiserName" label="Advertiser Name" />
+                    </th>
+                    <th className="px-4 py-3">
+                      <SortButton field="platform" label="Platform" />
+                    </th>
+                    <th className="px-4 py-3">
+                      <SortButton field="advertiserId" label="Account ID" />
+                    </th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {sortedAccounts.map(account => (
+                    <tr key={account.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">{account.advertiserName}</td>
+                      <td className="px-4 py-3">{account.platform}</td>
+                      <td className="px-4 py-3 font-mono text-sm">{account.advertiserId}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(account)}
+                            icon={<Edit2 size={16} />}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onDelete(account.id)}
+                            icon={<Trash2 size={16} />}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-            ))}
+                </tbody>
+              </table>
 
-            {filteredAccounts.length === 0 && (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-600">
-                  {searchQuery
-                    ? 'No accounts match your search'
-                    : 'No advertiser accounts added yet'}
-                </p>
-              </div>
-            )}
+              {sortedAccounts.length === 0 && (
+                <div className="text-center py-8 bg-gray-50 rounded-lg mt-4">
+                  <p className="text-gray-600">
+                    {searchQuery
+                      ? 'No accounts match your search'
+                      : 'No advertiser accounts added yet'}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
