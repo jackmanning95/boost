@@ -52,8 +52,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: supplierData, error: supplierError } = await supabase
         .from('15 may')
         .select('data_supplier')
-        .not('data_supplier', 'is', null)
-        .distinct();
+        .filter('data_supplier', 'not.is', null);
 
       if (supplierError) {
         throw supplierError;
@@ -154,7 +153,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Apply CPM sorting
       if (cpmSort) {
-        const sortOrder = cpmSort === 'asc' ? 'asc' : 'desc';
         queryBuilder = queryBuilder.order('boost_cpm', { ascending: cpmSort === 'asc' });
       } else {
         queryBuilder = queryBuilder.order('segment_name');
