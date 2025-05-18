@@ -9,18 +9,20 @@ interface PrivateRouteProps {
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   
+  console.log('PrivateRoute: Rendering with user:', !!user, 'loading:', loading);
+  
+  // Simplified loading check - just show a brief message
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    console.log('PrivateRoute: Still loading auth state');
+    return <div>Loading...</div>;
   }
   
   if (!user) {
+    console.log('PrivateRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
   
+  console.log('PrivateRoute: User authenticated, rendering protected content');
   return <>{children}</>;
 };
 

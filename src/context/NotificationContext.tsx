@@ -21,22 +21,31 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      console.log('NotificationContext: No user, skipping fetch');
+      setLoading(false);
+      return;
+    }
 
     const fetchNotifications = async () => {
       try {
+        console.log('NotificationContext: Fetching notifications');
         setLoading(true);
         const { data, error: fetchError } = await supabase
           .from('notifications')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('NotificationContext: Fetch error:', fetchError);
+          throw fetchError;
+        }
 
+        console.log('NotificationContext: Notifications fetched:', data?.length || 0);
         setNotifications(data || []);
         setError(null);
       } catch (err) {
-        console.error('Error fetching notifications:', err);
+        console.error('NotificationContext: Error fetching notifications:', err);
         setError(err instanceof Error ? err : new Error('Failed to fetch notifications'));
       } finally {
         setLoading(false);
@@ -45,7 +54,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     fetchNotifications();
 
-    // Subscribe to new notifications
+    // Temporarily commenting out subscription for debugging
+    /*
     const subscription = supabase
       .channel('notifications')
       .on('postgres_changes', {
@@ -61,10 +71,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       subscription.unsubscribe();
     };
+    */
   }, [user]);
 
   const markAsRead = async (id: string) => {
     try {
+      console.log('NotificationContext: Marking notification as read:', id);
       const { error: updateError } = await supabase
         .from('notifications')
         .update({ read: true })
@@ -76,13 +88,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         prev.map(n => n.id === id ? { ...n, read: true } : n)
       );
     } catch (err) {
-      console.error('Error marking notification as read:', err);
+      console.error('NotificationContext: Error marking as read:', err);
       throw err;
     }
   };
 
   const markAllAsRead = async () => {
     try {
+      console.log('NotificationContext: Marking all notifications as read');
       const { error: updateError } = await supabase
         .from('notifications')
         .update({ read: true })
@@ -94,7 +107,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         prev.map(n => ({ ...n, read: true }))
       );
     } catch (err) {
-      console.error('Error marking all notifications as read:', err);
+      console.error('NotificationContext: Error marking all as read:', err);
       throw err;
     }
   };
