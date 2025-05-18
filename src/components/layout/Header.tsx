@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Menu, X, User, LogOut, Bell } from 'lucide-react';
+import { Menu, X, User, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import Button from '../ui/Button';
+import NotificationDropdown from '../notifications/NotificationDropdown';
 
 const Header: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -53,9 +54,7 @@ const Header: React.FC = () => {
           <div className="flex items-center">
             {user ? (
               <>
-                <button className="p-2 rounded-full text-gray-500 hover:bg-gray-100 mr-2 hidden sm:block">
-                  <Bell size={20} />
-                </button>
+                <NotificationDropdown />
                 
                 <div className="relative ml-3 flex items-center">
                   <div className="flex items-center space-x-2">
