@@ -4,25 +4,65 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
-import { User, Settings, Briefcase, Shield } from 'lucide-react';
+import { User, Settings, Shield } from 'lucide-react';
+import AdvertiserAccountManager, { AdvertiserAccount } from '../components/settings/AdvertiserAccountManager';
 
 const SettingsPage: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+  const [accounts, setAccounts] = useState<AdvertiserAccount[]>([
+    {
+      id: '1',
+      platform: 'Meta',
+      advertiserName: 'Example Corp',
+      advertiserId: '2934983222',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: '2',
+      platform: 'DV360',
+      advertiserName: 'Example Corp',
+      advertiserId: '8745612390',
+      createdAt: new Date().toISOString()
+    }
+  ]);
   
   if (!user) {
     return null;
   }
+
+  const handleAddAccount = (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
+    const newAccount: AdvertiserAccount = {
+      ...account,
+      id: `account-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    setAccounts(prev => [...prev, newAccount]);
+  };
+
+  const handleUpdateAccount = (updatedAccount: AdvertiserAccount) => {
+    setAccounts(prev => 
+      prev.map(account => 
+        account.id === updatedAccount.id ? updatedAccount : account
+      )
+    );
+  };
+
+  const handleDeleteAccount = (accountId: string) => {
+    if (confirm('Are you sure you want to delete this account?')) {
+      setAccounts(prev => prev.filter(account => account.id !== accountId));
+    }
+  };
   
   const tabs = [
     { id: 'profile', label: 'Profile', icon: <User size={18} /> },
-    { id: 'platforms', label: 'Platform IDs', icon: <Briefcase size={18} /> },
+    { id: 'platforms', label: 'Platform IDs', icon: <Settings size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
   ];
   
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
@@ -103,53 +143,12 @@ const SettingsPage: React.FC = () => {
             )}
             
             {activeTab === 'platforms' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Briefcase size={20} className="mr-2 text-blue-600" />
-                    Platform Integration IDs
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 mb-6">
-                    Add your platform account IDs to ensure audiences are dispatched to the correct accounts.
-                  </p>
-                  
-                  <form className="space-y-6">
-                    <div className="grid grid-cols-1 gap-6">
-                      <Input
-                        label="Meta Business ID"
-                        defaultValue={user.platformIds.meta || ''}
-                        placeholder="Enter your Meta Business ID"
-                      />
-                      
-                      <Input
-                        label="The Trade Desk Advertiser ID"
-                        defaultValue={user.platformIds.ttd || ''}
-                        placeholder="Enter your TTD Advertiser ID"
-                      />
-                      
-                      <Input
-                        label="DV360 Partner ID"
-                        defaultValue={user.platformIds.dv360 || ''}
-                        placeholder="Enter your DV360 Partner ID"
-                      />
-                      
-                      <Input
-                        label="Amazon DSP Advertiser ID"
-                        defaultValue={user.platformIds.amazon || ''}
-                        placeholder="Enter your Amazon DSP Advertiser ID"
-                      />
-                    </div>
-                    
-                    <div className="flex justify-end">
-                      <Button variant="primary">
-                        Save Platform IDs
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
+              <AdvertiserAccountManager
+                accounts={accounts}
+                onAdd={handleAddAccount}
+                onUpdate={handleUpdateAccount}
+                onDelete={handleDeleteAccount}
+              />
             )}
             
             {activeTab === 'security' && (
