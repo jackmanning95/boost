@@ -9,13 +9,14 @@ import { useCampaign } from '../context/CampaignContext';
 import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
-import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import ReactPaginate from 'react-paginate';
+import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, Users } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
-  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign } = useCampaign();
+  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign } = useCampaign();
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
@@ -34,12 +35,13 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
+  const handleCreateCampaign = () => {
+    const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+    initializeCampaign(defaultName);
+  };
+
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
-
-  const handleCreateCampaign = () => {
-    navigate('/campaigns/new');
-  };
 
   return (
     <Layout>
@@ -68,13 +70,23 @@ const AudiencesPage: React.FC = () => {
           )}
 
           {!isAdmin && !activeCampaign && (
-            <Button 
-              variant="primary"
-              icon={<PlusCircle size={18} />}
-              onClick={handleCreateCampaign}
-            >
-              Create New Campaign
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                icon={<Users size={18} />}
+                onClick={handleCreateCampaign}
+              >
+                Start with Audiences
+              </Button>
+              <Link to="/campaigns/new">
+                <Button 
+                  variant="primary"
+                  icon={<PlusCircle size={18} />}
+                >
+                  Create Campaign
+                </Button>
+              </Link>
+            </div>
           )}
         </div>
       </div>
