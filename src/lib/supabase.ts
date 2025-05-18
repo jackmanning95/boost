@@ -12,18 +12,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: true
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 });
 
-// Initialize connection
-supabase
-  .from('15 may')
-  .select('count', { count: 'exact', head: true })
-  .then(({ error }) => {
+// Initialize connection and verify it's working
+const initializeSupabase = async () => {
+  try {
+    console.log('Supabase: Testing connection...');
+    const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+    
     if (error) {
-      console.error('Supabase connection error:', error);
-    } else {
-      console.log('Supabase connection established successfully');
+      console.error('Supabase: Connection error:', error);
+      throw error;
     }
-  });
+    
+    console.log('Supabase: Connection established successfully');
+    return true;
+  } catch (error) {
+    console.error('Supabase: Failed to initialize:', error);
+    return false;
+  }
+};
+
+// Initialize connection
+initializeSupabase();
