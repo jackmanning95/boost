@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AudienceSegment } from '../../types';
 import { useTaxonomy } from '../../context/TaxonomyContext';
-import { Search, SortAsc, SortDesc } from 'lucide-react';
+import { Search, SortAsc, SortDesc, Filter } from 'lucide-react';
 import Input from '../ui/Input';
 import ReactPaginate from 'react-paginate';
 
@@ -42,9 +42,20 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
   const [cpmSortOrder, setCpmSortOrder] = useState<SortOrder>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  // Get unique data suppliers
+  // Get unique data suppliers and normalize AccountScout variations
   const dataSuppliers = React.useMemo(() => {
-    const suppliers = new Set(audiences.map(a => a.dataSupplier).filter(Boolean));
+    const suppliers = new Set(
+      audiences
+        .map(a => {
+          const supplier = a.dataSupplier;
+          // Normalize AccountScout variations
+          if (supplier?.toLowerCase().includes('accountscout')) {
+            return 'AccountScout';
+          }
+          return supplier;
+        })
+        .filter(Boolean)
+    );
     return Array.from(suppliers).sort();
   }, [audiences]);
 
@@ -77,50 +88,52 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Search Input */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={20} className="text-gray-400" />
-          </div>
-          <Input
-            type="text"
-            placeholder="Search audiences..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      {/* Main Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search size={20} className="text-gray-400" />
+        </div>
+        <Input
+          type="text"
+          placeholder="Search audiences by name, description, or category..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Filters Row */}
+      <div className="flex flex-wrap items-center gap-2 pb-2">
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-gray-500" />
+          <span className="text-sm text-gray-600">Filter by:</span>
         </div>
 
         {/* Data Supplier Filter */}
-        <div>
-          <select
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            value={selectedDataSupplier}
-            onChange={(e) => setSelectedDataSupplier(e.target.value)}
-          >
-            <option value="">All Data Suppliers</option>
-            {dataSuppliers.map(supplier => (
-              <option key={supplier} value={supplier}>{supplier}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white"
+          value={selectedDataSupplier}
+          onChange={(e) => setSelectedDataSupplier(e.target.value)}
+        >
+          <option value="">All Data Suppliers</option>
+          {dataSuppliers.map(supplier => (
+            <option key={supplier} value={supplier}>{supplier}</option>
+          ))}
+        </select>
 
-        {/* CPM Sort */}
-        <div>
-          <button
-            onClick={toggleCpmSort}
-            className={`flex items-center justify-center w-full rounded-md border px-3 py-2 text-sm transition-colors ${
-              cpmSortOrder
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            {cpmSortOrder === 'asc' && <SortAsc size={16} className="mr-2" />}
-            {cpmSortOrder === 'desc' && <SortDesc size={16} className="mr-2" />}
-            Sort by CPM {cpmSortOrder === 'asc' ? '(Low to High)' : cpmSortOrder === 'desc' ? '(High to Low)' : ''}
-          </button>
-        </div>
+        {/* CPM Sort Button */}
+        <button
+          onClick={toggleCpmSort}
+          className={`flex items-center rounded-md border px-3 py-1.5 text-sm transition-colors ${
+            cpmSortOrder
+              ? 'border-blue-500 bg-blue-50 text-blue-700'
+              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          {cpmSortOrder === 'asc' && <SortAsc size={16} className="mr-1.5" />}
+          {cpmSortOrder === 'desc' && <SortDesc size={16} className="mr-1.5" />}
+          CPM {cpmSortOrder === 'asc' ? '(Low to High)' : cpmSortOrder === 'desc' ? '(High to Low)' : ''}
+        </button>
       </div>
 
       {totalPages > 1 && (

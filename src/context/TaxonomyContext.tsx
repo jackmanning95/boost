@@ -27,6 +27,11 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [totalCount, setTotalCount] = useState(0);
   const { user, loading: authLoading } = useAuth();
 
+  const normalizeDataSupplier = (supplier: string | null): string => {
+    if (!supplier) return '';
+    return supplier.toLowerCase().includes('accountscout') ? 'AccountScout' : supplier;
+  };
+
   const fetchAudiences = useCallback(async () => {
     if (!user || authLoading) return;
 
@@ -57,7 +62,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
         subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: audience.data_supplier || '',
+        dataSupplier: normalizeDataSupplier(audience.data_supplier),
         tags: [],
         reach: parseInt(audience.estimated_volumes) || undefined,
         cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
@@ -108,14 +113,24 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
 
-      // Apply data supplier filter
+      // Apply data supplier filter with AccountScout normalization
       if (dataSupplier) {
-        queryBuilder = queryBuilder.eq('data_supplier', dataSupplier);
+        if (dataSupplier === 'AccountScout') {
+          queryBuilder = queryBuilder.ilike('data_supplier', '%accountscout%');
+        } else {
+          queryBuilder = queryBuilder.eq('data_supplier', dataSupplier);
+        }
       }
 
       // Apply CPM sorting
       if (cpmSort) {
-        queryBuilder = queryBuilder.order('boost_cpm', { ascending: cpmSort === 'asc' });
+        // Convert CPM string to number for proper sorting
+        const orderBy = `(CASE 
+          WHEN boost_cpm IS NULL THEN ${cpmSort === 'asc' ? 'NULL' : '999999999'}
+          ELSE CAST(REGEXP_REPLACE(boost_cpm, '[^0-9.]', '', 'g') AS NUMERIC)
+        END) ${cpmSort === 'asc' ? 'asc' : 'desc'} NULLS LAST`;
+        
+        queryBuilder = queryBuilder.order(orderBy, { ascending: cpmSort === 'asc' });
       } else {
         queryBuilder = queryBuilder.order('segment_name');
       }
@@ -138,7 +153,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: audience.segment_description || '',
         category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
         subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: audience.data_supplier || '',
+        dataSupplier: normalizeDataSupplier(audience.data_supplier),
         tags: [],
         reach: parseInt(audience.estimated_volumes) || undefined,
         cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
