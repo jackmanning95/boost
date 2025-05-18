@@ -32,13 +32,18 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const normalizeDataSupplier = (supplier: string | null): string => {
     if (!supplier) return '';
     
-    // Normalize AccountScout variations
-    if (supplier.toLowerCase().includes('accountscout')) {
+    // Remove any trailing numbers and whitespace
+    let normalized = supplier.trim().replace(/\s*\d+$/, '');
+    
+    // Handle special cases
+    if (normalized.toLowerCase().includes('accountscout')) {
       return 'AccountScout';
     }
     
-    // Remove any trailing numbers or special characters
-    return supplier.trim().replace(/\s*\d+$/, '');
+    // Remove any trailing slashes and their content
+    normalized = normalized.split('/')[0].trim();
+    
+    return normalized;
   };
 
   const fetchAudiences = useCallback(async () => {
@@ -48,11 +53,10 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(true);
       console.log('Taxonomy: Fetching audiences for user:', user.email);
 
-      // First, fetch unique data suppliers
+      // First, fetch all unique data suppliers
       const { data: supplierData, error: supplierError } = await supabase
         .from('15 may')
-        .select('data_supplier')
-        .filter('data_supplier', 'not.is', null);
+        .select('data_supplier');
 
       if (supplierError) {
         throw supplierError;
@@ -65,6 +69,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .filter(Boolean)
       )).sort();
 
+      console.log('Taxonomy: Found unique suppliers:', uniqueSuppliers);
       setDataSuppliers(uniqueSuppliers);
 
       // Then fetch all audiences
@@ -89,7 +94,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
-        category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
+        category: normalizeDataSupplier(audience.data_supplier),
         subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
         dataSupplier: normalizeDataSupplier(audience.data_supplier),
         tags: [],
@@ -144,11 +149,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Apply data supplier filter
       if (dataSupplier) {
-        if (dataSupplier === 'AccountScout') {
-          queryBuilder = queryBuilder.ilike('data_supplier', '%accountscout%');
-        } else {
-          queryBuilder = queryBuilder.ilike('data_supplier', `${dataSupplier}%`);
-        }
+        queryBuilder = queryBuilder.ilike('data_supplier', `%${dataSupplier}%`);
       }
 
       // Apply CPM sorting
@@ -174,7 +175,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
-        category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
+        category: normalizeDataSupplier(audience.data_supplier),
         subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
         dataSupplier: normalizeDataSupplier(audience.data_supplier),
         tags: [],
