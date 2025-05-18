@@ -16,6 +16,7 @@ interface TaxonomyContextType {
   ) => Promise<AudienceSegment[]>;
   totalCount: number;
   getRecommendedAudiences: (selectedAudiences: AudienceSegment[], limit?: number) => AudienceSegment[];
+  dataSuppliers: string[];
 }
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
@@ -25,11 +26,19 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [dataSuppliers, setDataSuppliers] = useState<string[]>([]);
   const { user, loading: authLoading } = useAuth();
 
   const normalizeDataSupplier = (supplier: string | null): string => {
     if (!supplier) return '';
-    return supplier.toLowerCase().includes('accountscout') ? 'AccountScout' : supplier;
+    
+    // Normalize AccountScout variations
+    if (supplier.toLowerCase().includes('accountscout')) {
+      return 'AccountScout';
+    }
+    
+    // Remove any trailing numbers or special characters
+    return supplier.trim().replace(/\s*\d+$/, '');
   };
 
   const fetchAudiences = useCallback(async () => {
@@ -39,6 +48,27 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(true);
       console.log('Taxonomy: Fetching audiences for user:', user.email);
 
+      // First, fetch unique data suppliers
+      const { data: supplierData, error: supplierError } = await supabase
+        .from('15 may')
+        .select('data_supplier')
+        .not('data_supplier', 'is', null)
+        .distinct();
+
+      if (supplierError) {
+        throw supplierError;
+      }
+
+      // Normalize and deduplicate suppliers
+      const uniqueSuppliers = Array.from(new Set(
+        supplierData
+          .map(item => normalizeDataSupplier(item.data_supplier))
+          .filter(Boolean)
+      )).sort();
+
+      setDataSuppliers(uniqueSuppliers);
+
+      // Then fetch all audiences
       const { data: audiences, error: audiencesError, count } = await supabase
         .from('15 may')
         .select('*', { count: 'exact' });
@@ -113,21 +143,19 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
 
-      // Apply data supplier filter with AccountScout normalization
+      // Apply data supplier filter
       if (dataSupplier) {
         if (dataSupplier === 'AccountScout') {
           queryBuilder = queryBuilder.ilike('data_supplier', '%accountscout%');
         } else {
-          queryBuilder = queryBuilder.eq('data_supplier', dataSupplier);
+          queryBuilder = queryBuilder.ilike('data_supplier', `${dataSupplier}%`);
         }
       }
 
       // Apply CPM sorting
       if (cpmSort) {
-        queryBuilder = queryBuilder.order('boost_cpm', {
-          ascending: cpmSort === 'asc',
-          nullsFirst: false
-        });
+        const sortOrder = cpmSort === 'asc' ? 'asc' : 'desc';
+        queryBuilder = queryBuilder.order('boost_cpm', { ascending: cpmSort === 'asc' });
       } else {
         queryBuilder = queryBuilder.order('segment_name');
       }
@@ -191,7 +219,8 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       error,
       searchAudiences,
       totalCount,
-      getRecommendedAudiences
+      getRecommendedAudiences,
+      dataSuppliers
     }}>
       {children}
     </TaxonomyContext.Provider>

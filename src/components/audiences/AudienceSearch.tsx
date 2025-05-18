@@ -36,28 +36,11 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
   currentPage,
   totalPages
 }) => {
-  const { searchAudiences, loading, audiences } = useTaxonomy();
+  const { searchAudiences, loading, dataSuppliers } = useTaxonomy();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDataSupplier, setSelectedDataSupplier] = useState<string>('');
   const [cpmSortOrder, setCpmSortOrder] = useState<SortOrder>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  // Get unique data suppliers and normalize AccountScout variations
-  const dataSuppliers = React.useMemo(() => {
-    const suppliers = new Set(
-      audiences
-        .map(a => {
-          const supplier = a.dataSupplier;
-          // Normalize AccountScout variations
-          if (supplier?.toLowerCase().includes('accountscout')) {
-            return 'AccountScout';
-          }
-          return supplier;
-        })
-        .filter(Boolean)
-    );
-    return Array.from(suppliers).sort();
-  }, [audiences]);
 
   useEffect(() => {
     const fetchResults = async () => {
