@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ChevronRight } from 'lucide-react';
 import Input from '../ui/Input';
@@ -85,6 +86,15 @@ const LoginForm: React.FC = () => {
         >
           Sign in
         </Button>
+
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-600">
+            Don't have an account?{' '}
+            <Link to="/signup" className="text-blue-600 hover:text-blue-500 font-medium">
+              Sign up
+            </Link>
+          </p>
+        </div>
       </form>
       
       <div className="mt-6 text-center text-sm text-gray-500">
