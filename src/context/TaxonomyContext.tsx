@@ -9,6 +9,7 @@ interface TaxonomyContextType {
   error: Error | null;
   searchAudiences: (query: string, page?: number, pageSize?: number) => Promise<AudienceSegment[]>;
   totalCount: number;
+  getRecommendedAudiences: (selectedAudiences: AudienceSegment[], limit?: number) => AudienceSegment[];
 }
 
 const TaxonomyContext = createContext<TaxonomyContextType | undefined>(undefined);
@@ -120,13 +121,37 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [user]);
 
+  const getRecommendedAudiences = useCallback((
+    selectedAudiences: AudienceSegment[],
+    limit = 3
+  ): AudienceSegment[] => {
+    if (selectedAudiences.length === 0 || audiences.length === 0) {
+      return [];
+    }
+
+    // Get categories from selected audiences
+    const selectedCategories = new Set(selectedAudiences.map(a => a.category));
+    const selectedIds = new Set(selectedAudiences.map(a => a.id));
+
+    // Find audiences in the same categories but not already selected
+    const recommendations = audiences
+      .filter(audience => 
+        selectedCategories.has(audience.category) && 
+        !selectedIds.has(audience.id)
+      )
+      .slice(0, limit);
+
+    return recommendations;
+  }, [audiences]);
+
   return (
     <TaxonomyContext.Provider value={{
       audiences,
       loading,
       error,
       searchAudiences,
-      totalCount
+      totalCount,
+      getRecommendedAudiences
     }}>
       {children}
     </TaxonomyContext.Provider>
