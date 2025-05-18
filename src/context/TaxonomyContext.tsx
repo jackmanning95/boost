@@ -124,13 +124,10 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Apply CPM sorting
       if (cpmSort) {
-        // Convert CPM string to number for proper sorting
-        const orderBy = `(CASE 
-          WHEN boost_cpm IS NULL THEN ${cpmSort === 'asc' ? 'NULL' : '999999999'}
-          ELSE CAST(REGEXP_REPLACE(boost_cpm, '[^0-9.]', '', 'g') AS NUMERIC)
-        END) ${cpmSort === 'asc' ? 'asc' : 'desc'} NULLS LAST`;
-        
-        queryBuilder = queryBuilder.order(orderBy, { ascending: cpmSort === 'asc' });
+        queryBuilder = queryBuilder.order('boost_cpm', {
+          ascending: cpmSort === 'asc',
+          nullsFirst: false
+        });
       } else {
         queryBuilder = queryBuilder.order('segment_name');
       }
