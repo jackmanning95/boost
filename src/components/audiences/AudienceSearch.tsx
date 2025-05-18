@@ -40,13 +40,7 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDataSupplier, setSelectedDataSupplier] = useState<string>('');
   const [cpmSortOrder, setCpmSortOrder] = useState<SortOrder>(null);
-  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  // Filter data suppliers based on search
-  const filteredSuppliers = dataSuppliers.filter(supplier =>
-    supplier.toLowerCase().includes(supplierSearchQuery.toLowerCase())
-  );
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -99,31 +93,21 @@ const AudienceSearch: React.FC<AudienceSearchProps> = ({
 
         {/* Data Supplier Filter */}
         <div className="relative">
-          <div className="relative">
-            <select
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white appearance-none pr-8 max-h-48"
-              value={selectedDataSupplier}
-              onChange={(e) => setSelectedDataSupplier(e.target.value)}
-              style={{ maxHeight: '200px' }}
-            >
-              <option value="">All Data Suppliers ({dataSuppliers.length})</option>
-              {filteredSuppliers.map(supplier => (
-                <option key={supplier} value={supplier}>{supplier}</option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+          <select
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white appearance-none pr-8"
+            value={selectedDataSupplier}
+            onChange={(e) => setSelectedDataSupplier(e.target.value)}
+          >
+            <option value="">All Data Suppliers ({dataSuppliers.length})</option>
+            {dataSuppliers.map(supplier => (
+              <option key={supplier} value={supplier}>{supplier}</option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
-          <Input
-            type="text"
-            placeholder="Search suppliers..."
-            value={supplierSearchQuery}
-            onChange={(e) => setSupplierSearchQuery(e.target.value)}
-            className="mt-1 text-sm"
-          />
         </div>
 
         {/* CPM Sort Dropdown */}
