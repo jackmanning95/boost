@@ -87,28 +87,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [dataSuppliers] = useState<string[]>(ALL_DATA_SUPPLIERS);
   const { user } = useAuth();
 
-  const normalizeDataSupplier = (supplier: string | null): string => {
-    if (!supplier) return '';
-    
-    // Remove any trailing numbers and whitespace
-    let normalized = supplier.trim().replace(/\s*\d+$/, '');
-    
-    // Handle special cases
-    if (normalized.toLowerCase().includes('data axle')) {
-      return 'Data Axle';
-    }
-    
-    // Remove any trailing slashes and their content
-    normalized = normalized.split('/')[0].trim();
-    
-    // Match to known suppliers if possible
-    const matchedSupplier = ALL_DATA_SUPPLIERS.find(
-      s => s.toLowerCase() === normalized.toLowerCase()
-    );
-    
-    return matchedSupplier || normalized;
-  };
-
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
@@ -117,8 +95,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     cpmSort?: 'asc' | 'desc' | null
   ): Promise<AudienceSegment[]> => {
     try {
-      console.log('Taxonomy: Searching audiences:', { query, page, pageSize, dataSupplier, cpmSort });
-
       let queryBuilder = supabase
         .from('15 may')
         .select('*', { count: 'exact' });
@@ -162,39 +138,39 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
-        category: normalizeDataSupplier(audience.data_supplier),
+        category: audience.data_supplier?.split('/')[0]?.trim() || 'Other',
         subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: normalizeDataSupplier(audience.data_supplier),
+        dataSupplier: audience.data_supplier || '',
         tags: [],
         reach: parseInt(audience.estimated_volumes) || undefined,
         cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
       }));
     } catch (err) {
-      console.error('Taxonomy: Error searching audiences:', err);
+      console.error('Error searching audiences:', err);
       throw err;
     }
   }, []);
 
-  const fetchAudiences = useCallback(async () => {
+  const fetchInitialAudiences = useCallback(async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
-      const results = await searchAudiences('', 1, 12);
+      const results = await searchAudiences('');
       setAudiences(results);
       setError(null);
     } catch (err) {
-      console.error('Taxonomy: Error fetching audiences:', err);
+      console.error('Error fetching initial audiences:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
       setAudiences([]);
     } finally {
       setLoading(false);
     }
-  }, [searchAudiences]);
+  }, [user, searchAudiences]);
 
   useEffect(() => {
-    if (user) {
-      fetchAudiences();
-    }
-  }, [user, fetchAudiences]);
+    fetchInitialAudiences();
+  }, [fetchInitialAudiences]);
 
   const getRecommendedAudiences = useCallback((
     selectedAudiences: AudienceSegment[],
@@ -204,11 +180,9 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return [];
     }
 
-    // Get categories from selected audiences
     const selectedCategories = new Set(selectedAudiences.map(a => a.category));
     const selectedIds = new Set(selectedAudiences.map(a => a.id));
 
-    // Find audiences in the same categories but not already selected
     const recommendations = audiences
       .filter(audience => 
         selectedCategories.has(audience.category) && 
