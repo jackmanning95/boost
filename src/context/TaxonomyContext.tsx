@@ -117,7 +117,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Taxonomy: Fetching audiences for user:', user.email);
 
       const { data: audiences, error: audiencesError, count } = await supabase
-        .from('15 may')
+        .from('audiences')
         .select('*', { count: 'exact' });
 
       if (audiencesError) {
@@ -134,15 +134,15 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       const formattedAudiences = audiences.map(audience => ({
-        id: audience.segment_name,
-        name: audience.segment_name,
-        description: audience.segment_description || '',
-        category: normalizeDataSupplier(audience.data_supplier),
-        subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: normalizeDataSupplier(audience.data_supplier),
-        tags: [],
-        reach: parseInt(audience.estimated_volumes) || undefined,
-        cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
+        id: audience.id,
+        name: audience.name,
+        description: audience.description || '',
+        category: audience.category,
+        subcategory: audience.subcategory || '',
+        dataSupplier: audience.data_supplier || '',
+        tags: audience.tags || [],
+        reach: audience.reach,
+        cpm: audience.cpm
       }));
 
       console.log(`Taxonomy: Successfully formatted ${formattedAudiences.length} audiences`);
@@ -178,28 +178,24 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Taxonomy: Searching audiences:', { query, page, pageSize, dataSupplier, cpmSort });
 
       let queryBuilder = supabase
-        .from('15 may')
+        .from('audiences')
         .select('*', { count: 'exact' });
 
-      // Apply text search filter
+      // Apply text search filter if query exists
       if (query) {
-        queryBuilder = queryBuilder.or(
-          `segment_name.ilike.%${query}%,` +
-          `segment_description.ilike.%${query}%,` +
-          `data_supplier.ilike.%${query}%`
-        );
+        queryBuilder = queryBuilder.textSearch('search_vector', query);
       }
 
       // Apply data supplier filter
       if (dataSupplier) {
-        queryBuilder = queryBuilder.ilike('data_supplier', `%${dataSupplier}%`);
+        queryBuilder = queryBuilder.eq('data_supplier', dataSupplier);
       }
 
       // Apply CPM sorting
       if (cpmSort) {
-        queryBuilder = queryBuilder.order('boost_cpm', { ascending: cpmSort === 'asc' });
+        queryBuilder = queryBuilder.order('cpm', { ascending: cpmSort === 'asc' });
       } else {
-        queryBuilder = queryBuilder.order('segment_name');
+        queryBuilder = queryBuilder.order('name');
       }
 
       const start = (page - 1) * pageSize;
@@ -214,16 +210,16 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTotalCount(count);
       }
 
-      return data.map(audience => ({
-        id: audience.segment_name,
-        name: audience.segment_name,
-        description: audience.segment_description || '',
-        category: normalizeDataSupplier(audience.data_supplier),
-        subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: normalizeDataSupplier(audience.data_supplier),
-        tags: [],
-        reach: parseInt(audience.estimated_volumes) || undefined,
-        cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
+      return (data || []).map(audience => ({
+        id: audience.id,
+        name: audience.name,
+        description: audience.description || '',
+        category: audience.category,
+        subcategory: audience.subcategory || '',
+        dataSupplier: audience.data_supplier || '',
+        tags: audience.tags || [],
+        reach: audience.reach,
+        cpm: audience.cpm
       }));
     } catch (err) {
       console.error('Taxonomy: Error searching audiences:', err);
