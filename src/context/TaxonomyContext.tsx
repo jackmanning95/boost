@@ -169,8 +169,10 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user, searchAudiences]);
 
   useEffect(() => {
-    fetchInitialAudiences();
-  }, [fetchInitialAudiences]);
+    if (user) {
+      fetchInitialAudiences();
+    }
+  }, [user, fetchInitialAudiences]);
 
   const getRecommendedAudiences = useCallback((
     selectedAudiences: AudienceSegment[],
