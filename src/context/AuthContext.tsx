@@ -27,24 +27,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Auth initialization error:', sessionError);
-          return;
-        }
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          const { data: profile, error: profileError } = await supabase
+          const { data: profile } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
-
-          if (profileError) {
-            console.error('Profile fetch error:', profileError);
-            return;
-          }
 
           if (profile) {
             setUser({
@@ -68,16 +58,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
-
-        if (profileError) {
-          console.error('Profile fetch error:', profileError);
-          return;
-        }
 
         if (profile) {
           setUser({
@@ -111,13 +96,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('users')
           .select('*')
           .eq('id', data.user.id)
           .single();
-
-        if (profileError) throw profileError;
 
         if (profile) {
           setUser({
