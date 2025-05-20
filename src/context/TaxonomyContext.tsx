@@ -85,7 +85,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [error, setError] = useState<Error | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [dataSuppliers] = useState<string[]>(ALL_DATA_SUPPLIERS);
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
 
   const normalizeDataSupplier = (supplier: string | null): string => {
     if (!supplier) return '';
@@ -109,62 +109,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return matchedSupplier || normalized;
   };
 
-  const fetchAudiences = useCallback(async () => {
-    if (!user || authLoading) return;
-
-    try {
-      setLoading(true);
-      console.log('Taxonomy: Fetching audiences for user:', user.email);
-
-      const { data: audiences, error: audiencesError, count } = await supabase
-        .from('15 may')
-        .select('*', { count: 'exact' });
-
-      if (audiencesError) {
-        throw audiencesError;
-      }
-
-      console.log(`Taxonomy: Found ${count} audiences`);
-      setTotalCount(count || 0);
-
-      if (!audiences || audiences.length === 0) {
-        console.log('Taxonomy: No audiences found');
-        setAudiences([]);
-        return;
-      }
-
-      const formattedAudiences = audiences.map(audience => ({
-        id: audience.segment_name,
-        name: audience.segment_name,
-        description: audience.segment_description || '',
-        category: normalizeDataSupplier(audience.data_supplier),
-        subcategory: audience.data_supplier?.split('/')[1]?.trim() || '',
-        dataSupplier: normalizeDataSupplier(audience.data_supplier),
-        tags: [],
-        reach: parseInt(audience.estimated_volumes) || undefined,
-        cpm: parseFloat(audience.boost_cpm?.replace(/[^0-9.]/g, '')) || undefined
-      }));
-
-      console.log(`Taxonomy: Successfully formatted ${formattedAudiences.length} audiences`);
-      setAudiences(formattedAudiences);
-      setError(null);
-    } catch (err) {
-      console.error('Taxonomy: Error fetching audiences:', err);
-      setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
-      setAudiences([]);
-      setTotalCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    if (user && !authLoading) {
-      console.log('Taxonomy: Initial fetch triggered for user:', user.email);
-      fetchAudiences();
-    }
-  }, [user, authLoading, fetchAudiences]);
-
   const searchAudiences = useCallback(async (
     query: string,
     page = 1,
@@ -172,8 +116,6 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     dataSupplier?: string,
     cpmSort?: 'asc' | 'desc' | null
   ): Promise<AudienceSegment[]> => {
-    if (!user) return [];
-
     try {
       console.log('Taxonomy: Searching audiences:', { query, page, pageSize, dataSupplier, cpmSort });
 
@@ -214,7 +156,9 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTotalCount(count);
       }
 
-      return (data || []).map(audience => ({
+      if (!data) return [];
+
+      return data.map(audience => ({
         id: audience.segment_name,
         name: audience.segment_name,
         description: audience.segment_description || '',
@@ -229,7 +173,28 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Taxonomy: Error searching audiences:', err);
       throw err;
     }
-  }, [user]);
+  }, []);
+
+  const fetchAudiences = useCallback(async () => {
+    try {
+      setLoading(true);
+      const results = await searchAudiences('', 1, 12);
+      setAudiences(results);
+      setError(null);
+    } catch (err) {
+      console.error('Taxonomy: Error fetching audiences:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
+      setAudiences([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchAudiences]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAudiences();
+    }
+  }, [user, fetchAudiences]);
 
   const getRecommendedAudiences = useCallback((
     selectedAudiences: AudienceSegment[],
