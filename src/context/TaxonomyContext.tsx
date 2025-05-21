@@ -95,6 +95,8 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     cpmSort?: 'asc' | 'desc' | null
   ): Promise<AudienceSegment[]> => {
     try {
+      console.log('Searching audiences with params:', { query, page, pageSize, dataSupplier, cpmSort });
+      
       let queryBuilder = supabase
         .from('15 may')
         .select('*', { count: 'exact' });
@@ -126,7 +128,12 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error: searchError, count } = await queryBuilder
         .range(start, end);
 
-      if (searchError) throw searchError;
+      if (searchError) {
+        console.error('Search error:', searchError);
+        throw searchError;
+      }
+
+      console.log('Search results:', { count, resultsCount: data?.length });
 
       if (count !== null) {
         setTotalCount(count);
@@ -152,13 +159,18 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const fetchInitialAudiences = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('TaxonomyContext: No user, skipping fetch');
+      return;
+    }
     
     try {
+      console.log('TaxonomyContext: Fetching initial audiences');
       setLoading(true);
       const results = await searchAudiences('');
       setAudiences(results);
       setError(null);
+      console.log('TaxonomyContext: Initial audiences fetched:', results.length);
     } catch (err) {
       console.error('Error fetching initial audiences:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch audiences'));
@@ -171,6 +183,8 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (user) {
       fetchInitialAudiences();
+    } else {
+      setAudiences([]);
     }
   }, [user, fetchInitialAudiences]);
 
