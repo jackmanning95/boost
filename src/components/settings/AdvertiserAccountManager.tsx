@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
 import { Plus, Briefcase, Search, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
 import AdvertiserAccountModal from './AdvertiserAccountModal';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 export interface AdvertiserAccount {
   id: string;
@@ -19,24 +21,75 @@ interface AdvertiserAccountManagerProps {
   onDelete: (accountId: string) => void;
 }
 
-type SortField = 'advertiserName' | 'platform' | 'advertiserId';
-type SortDirection = 'asc' | 'desc';
-
 const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
   accounts,
   onAdd,
   onUpdate,
   onDelete
 }) => {
+  const { user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('advertiserName');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<'advertiserName' | 'platform' | 'advertiserId'>('advertiserName');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const handleAdd = () => {
-    setEditingAccount(null);
-    setIsModalOpen(true);
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('advertiser_accounts')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        // Update platform IDs in user profile
+        if (data) {
+          const platformIds = data.reduce((acc, account) => ({
+            ...acc,
+            [account.platform]: account.advertiser_id
+          }), {});
+
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({ platform_ids: platformIds })
+            .eq('id', user.id);
+
+          if (updateError) throw updateError;
+        }
+      } catch (error) {
+        console.error('Error fetching advertiser accounts:', error);
+      }
+    };
+
+    fetchAccounts();
+  }, [user]);
+
+  const handleAdd = async (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('advertiser_accounts')
+        .insert([{
+          user_id: user.id,
+          platform: account.platform,
+          advertiser_name: account.advertiserName,
+          advertiser_id: account.advertiserId
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      onAdd(account);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Error adding advertiser account:', error);
+    }
   };
 
   const handleEdit = (account: AdvertiserAccount) => {
