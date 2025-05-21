@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { Card, CardContent } from '../components/ui/Card';
@@ -6,16 +6,42 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, Users, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
+import { AudienceRequest } from '../types';
 
 const RequestsPage: React.FC = () => {
   const { requests, campaigns } = useCampaign();
   const { isAdmin } = useAuth();
+  const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   
   // Redirect if user is not admin
   if (!isAdmin) {
     return <Navigate to="/campaigns" replace />;
   }
+
+  const handleApprove = async (requestId: string) => {
+    try {
+      // In a real app, this would make an API call to update the request status
+      console.log('Approving request:', requestId);
+      // Update local state or trigger a refresh
+    } catch (error) {
+      console.error('Error approving request:', error);
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    try {
+      // In a real app, this would make an API call to update the request status
+      console.log('Rejecting request:', requestId);
+      // Update local state or trigger a refresh
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+    }
+  };
+
+  const handleViewDetails = (requestId: string) => {
+    setSelectedRequest(requestId === selectedRequest ? null : requestId);
+  };
   
   // Sort requests by creation date (newest first)
   const sortedRequests = [...requests].sort(
@@ -53,6 +79,32 @@ const RequestsPage: React.FC = () => {
   const getCampaignName = (campaignId: string) => {
     const campaign = campaigns.find(c => c.id === campaignId);
     return campaign ? campaign.name : 'Unknown Campaign';
+  };
+
+  const renderRequestDetails = (request: AudienceRequest) => {
+    if (request.id !== selectedRequest) return null;
+
+    return (
+      <div className="mt-6 border-t border-gray-200 pt-6">
+        <h4 className="text-lg font-medium mb-4">Selected Audiences</h4>
+        <div className="space-y-3">
+          {request.audiences.map(audience => (
+            <div key={audience.id} className="bg-gray-50 rounded-md p-4">
+              <h5 className="font-medium">{audience.name}</h5>
+              <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-sm text-gray-500">
+                  {audience.dataSupplier}
+                </span>
+                <span className="text-sm font-medium">
+                  {audience.reach?.toLocaleString()} users
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
   
   return (
@@ -92,6 +144,7 @@ const RequestsPage: React.FC = () => {
                             variant="outline"
                             size="sm"
                             icon={<XCircle size={16} />}
+                            onClick={() => handleReject(request.id)}
                           >
                             Reject
                           </Button>
@@ -99,6 +152,7 @@ const RequestsPage: React.FC = () => {
                             variant="success"
                             size="sm"
                             icon={<CheckCircle size={16} />}
+                            onClick={() => handleApprove(request.id)}
                           >
                             Approve
                           </Button>
@@ -152,11 +206,18 @@ const RequestsPage: React.FC = () => {
                       <p className="text-sm">{request.notes}</p>
                     </div>
                   )}
+
+                  {renderRequestDetails(request)}
                 </div>
                 
                 <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
-                  <Button variant="outline" size="sm">
-                    View Details
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewDetails(request.id)}
+                    icon={<ChevronRight size={16} className={`transform transition-transform ${selectedRequest === request.id ? 'rotate-90' : ''}`} />}
+                  >
+                    {selectedRequest === request.id ? 'Hide Details' : 'View Details'}
                   </Button>
                 </div>
               </CardContent>
