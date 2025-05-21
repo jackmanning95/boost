@@ -4,10 +4,6 @@ import { Database } from './database.types';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('Initializing Supabase client');
-console.log('Supabase URL available:', !!supabaseUrl);
-console.log('Supabase Anon Key available:', !!supabaseAnonKey);
-
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing required Supabase environment variables');
 }
@@ -23,7 +19,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // Initialize connection and verify it's working
 const initializeSupabase = async () => {
   try {
-    console.log('Testing Supabase connection...');
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     
     if (error) {
@@ -31,7 +26,6 @@ const initializeSupabase = async () => {
       return false;
     }
     
-    console.log('Supabase connection successful');
     return true;
   } catch (error) {
     console.error('Failed to initialize Supabase:', error);
@@ -40,6 +34,4 @@ const initializeSupabase = async () => {
 };
 
 // Initialize connection
-initializeSupabase().then(success => {
-  console.log('Supabase initialization complete:', success ? 'successful' : 'failed');
-});
+initializeSupabase();
