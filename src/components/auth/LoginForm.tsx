@@ -14,16 +14,12 @@ const LoginForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login form submitted for email:', email);
     setError('');
     setIsLoading(true);
 
     try {
-      console.log('Attempting login...');
       await login(email, password);
-      console.log('Login successful');
     } catch (err) {
-      console.error('Login form error:', err);
       setError('Invalid email or password');
     } finally {
       setIsLoading(false);
