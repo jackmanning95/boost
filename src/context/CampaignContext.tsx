@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Campaign, AudienceSegment, AudienceRequest } from '../types';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface CampaignContextType {
   campaigns: Campaign[];
@@ -17,35 +18,44 @@ interface CampaignContextType {
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
 
-// Mock campaign data
-const MOCK_CAMPAIGNS: Campaign[] = [
-  {
-    id: '1',
-    name: 'Summer Brand Awareness',
-    clientId: '2',
-    audiences: [],
-    platforms: {
-      social: ['Meta', 'Instagram'],
-      programmatic: ['DV360']
-    },
-    budget: 50000,
-    startDate: '2025-06-01',
-    endDate: '2025-08-31',
-    status: 'draft',
-    createdAt: '2025-05-15T10:30:00Z',
-    updatedAt: '2025-05-15T10:30:00Z'
-  }
-];
-
-const MOCK_REQUESTS: AudienceRequest[] = [];
-
 export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [campaigns, setCampaigns] = useState<Campaign[]>(MOCK_CAMPAIGNS);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
-  const [requests, setRequests] = useState<AudienceRequest[]>(MOCK_REQUESTS);
+  const [requests, setRequests] = useState<AudienceRequest[]>([]);
 
-  const initializeCampaign = (name: string) => {
+  // Fetch campaigns and requests on mount
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchData = async () => {
+      try {
+        // Fetch campaigns
+        const { data: campaignData, error: campaignError } = await supabase
+          .from('campaigns')
+          .select('*')
+          .eq('client_id', user.id);
+
+        if (campaignError) throw campaignError;
+        setCampaigns(campaignData || []);
+
+        // Fetch requests
+        const { data: requestData, error: requestError } = await supabase
+          .from('audience_requests')
+          .select('*')
+          .eq(user.role === 'admin' ? 'status' : 'client_id', user.role === 'admin' ? 'pending' : user.id);
+
+        if (requestError) throw requestError;
+        setRequests(requestData || []);
+      } catch (error) {
+        console.error('Error fetching campaign data:', error);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  const initializeCampaign = async (name: string) => {
     if (!user) return;
 
     const newCampaign: Campaign = {
@@ -65,18 +75,39 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       updatedAt: new Date().toISOString()
     };
 
-    setCampaigns(prev => [...prev, newCampaign]);
-    setActiveCampaign(newCampaign);
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert([{
+          id: newCampaign.id,
+          name: newCampaign.name,
+          client_id: newCampaign.clientId,
+          audiences: newCampaign.audiences,
+          platforms: newCampaign.platforms,
+          budget: newCampaign.budget,
+          start_date: newCampaign.startDate,
+          end_date: newCampaign.endDate,
+          status: newCampaign.status
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCampaigns(prev => [...prev, newCampaign]);
+      setActiveCampaign(newCampaign);
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+    }
   };
 
-  const addAudienceToCampaign = (audience: AudienceSegment) => {
+  const addAudienceToCampaign = async (audience: AudienceSegment) => {
     if (!activeCampaign) {
       console.warn('No active campaign to add audience to');
       return;
     }
 
     try {
-      // Check if audience is already in campaign
       if (activeCampaign.audiences.some(a => a.id === audience.id)) {
         console.log('Audience already in campaign:', audience.id);
         return;
@@ -87,6 +118,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         audiences: [...activeCampaign.audiences, audience],
         updatedAt: new Date().toISOString()
       };
+
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          audiences: updatedCampaign.audiences,
+          updated_at: updatedCampaign.updatedAt
+        })
+        .eq('id', activeCampaign.id);
+
+      if (error) throw error;
 
       setActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
@@ -99,7 +140,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const removeAudienceFromCampaign = (audienceId: string) => {
+  const removeAudienceFromCampaign = async (audienceId: string) => {
     if (!activeCampaign) {
       console.warn('No active campaign to remove audience from');
       return;
@@ -112,6 +153,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatedAt: new Date().toISOString()
       };
 
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          audiences: updatedCampaign.audiences,
+          updated_at: updatedCampaign.updatedAt
+        })
+        .eq('id', activeCampaign.id);
+
+      if (error) throw error;
+
       setActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
@@ -123,11 +174,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const updateCampaignDetails = (details: Partial<Campaign>) => {
-    if (!activeCampaign) {
-      console.warn('No active campaign to update');
-      return;
-    }
+  const updateCampaignDetails = async (details: Partial<Campaign>) => {
+    if (!activeCampaign) return;
 
     try {
       const updatedCampaign = {
@@ -136,27 +184,29 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatedAt: new Date().toISOString()
       };
 
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          ...details,
+          updated_at: updatedCampaign.updatedAt
+        })
+        .eq('id', activeCampaign.id);
+
+      if (error) throw error;
+
       setActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
-
-      console.log('Successfully updated campaign details');
     } catch (error) {
-      console.error('Error updating campaign details:', error);
+      console.error('Error updating campaign:', error);
     }
   };
 
   const submitCampaignRequest = async (notes?: string) => {
-    if (!activeCampaign || !user) {
-      console.warn('No active campaign or user to submit request');
-      return;
-    }
+    if (!activeCampaign || !user) return;
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       const newRequest: AudienceRequest = {
         id: `request-${Date.now()}`,
         campaignId: activeCampaign.id,
@@ -171,23 +221,29 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: new Date().toISOString()
       };
 
-      setRequests(prev => [...prev, newRequest]);
+      const { error } = await supabase
+        .from('audience_requests')
+        .insert([{
+          id: newRequest.id,
+          campaign_id: newRequest.campaignId,
+          client_id: newRequest.clientId,
+          audiences: newRequest.audiences,
+          platforms: newRequest.platforms,
+          budget: newRequest.budget,
+          start_date: newRequest.startDate,
+          end_date: newRequest.endDate,
+          notes: newRequest.notes,
+          status: newRequest.status
+        }]);
+
+      if (error) throw error;
 
       // Update campaign status
-      const updatedCampaign = {
-        ...activeCampaign,
-        status: 'submitted' as const,
-        updatedAt: new Date().toISOString()
-      };
-
-      setCampaigns(prev => 
-        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-      );
-      setActiveCampaign(updatedCampaign);
-
-      console.log('Successfully submitted campaign request');
+      await updateCampaignDetails({ status: 'submitted' });
+      
+      setRequests(prev => [...prev, newRequest]);
     } catch (error) {
-      console.error('Error submitting campaign request:', error);
+      console.error('Error submitting request:', error);
       throw error;
     }
   };
