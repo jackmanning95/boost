@@ -20,11 +20,14 @@ const AudienceCard: React.FC<AudienceCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleToggle = () => {
-    if (isSelected) {
-      onDeselect?.(audience.id);
-    } else {
-      onSelect?.(audience);
+  const handleToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isSelected && onDeselect) {
+      onDeselect(audience.id);
+    } else if (!isSelected && onSelect) {
+      onSelect(audience);
     }
   };
 
