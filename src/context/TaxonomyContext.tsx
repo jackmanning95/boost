@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { AudienceSegment } from '../types';
 import { supabase } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 interface TaxonomyContextType {
   audiences: AudienceSegment[];
@@ -98,7 +98,7 @@ export const TaxonomyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Searching audiences with params:', { query, page, pageSize, dataSupplier, cpmSort });
       
       let queryBuilder = supabase
-        .from('15 may')
+        .from('"15 may"')
         .select('*', { count: 'exact' });
 
       // Apply text search filter
