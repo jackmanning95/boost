@@ -40,6 +40,19 @@ const AudiencesPage: React.FC = () => {
     initializeCampaign(defaultName);
   };
 
+  // Handle audience selection
+  const handleSelectAudience = (audience: AudienceSegment) => {
+    if (!activeCampaign) {
+      // If no active campaign, create one and then add the audience
+      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+      initializeCampaign(defaultName);
+      // The audience will be added after the campaign is initialized
+      setTimeout(() => addAudienceToCampaign(audience), 100);
+    } else {
+      addAudienceToCampaign(audience);
+    }
+  };
+
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -127,7 +140,7 @@ const AudiencesPage: React.FC = () => {
                 key={audience.id}
                 audience={audience}
                 isSelected={selectedAudiences.some(a => a.id === audience.id)}
-                onSelect={!isAdmin ? addAudienceToCampaign : undefined}
+                onSelect={!isAdmin ? handleSelectAudience : undefined}
                 onDeselect={!isAdmin ? removeAudienceFromCampaign : undefined}
               />
             ))}
@@ -162,7 +175,7 @@ const AudiencesPage: React.FC = () => {
           {!isAdmin && (
             <AudienceRecommendations
               selectedAudiences={selectedAudiences}
-              onSelectAudience={addAudienceToCampaign}
+              onSelectAudience={handleSelectAudience}
             />
           )}
         </div>
