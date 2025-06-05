@@ -186,12 +186,23 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatedAt: new Date().toISOString()
       };
 
+      // Convert camelCase to snake_case for Supabase
+      const supabaseUpdate: Record<string, any> = {
+        updated_at: updatedCampaign.updatedAt
+      };
+
+      // Map the properties to their snake_case equivalents
+      if ('name' in details) supabaseUpdate.name = details.name;
+      if ('audiences' in details) supabaseUpdate.audiences = details.audiences;
+      if ('platforms' in details) supabaseUpdate.platforms = details.platforms;
+      if ('budget' in details) supabaseUpdate.budget = details.budget;
+      if ('startDate' in details) supabaseUpdate.start_date = details.startDate;
+      if ('endDate' in details) supabaseUpdate.end_date = details.endDate;
+      if ('status' in details) supabaseUpdate.status = details.status;
+
       const { error } = await supabase
         .from('campaigns')
-        .update({
-          ...details,
-          updated_at: updatedCampaign.updatedAt
-        })
+        .update(supabaseUpdate)
         .eq('id', activeCampaign.id);
 
       if (error) throw error;
