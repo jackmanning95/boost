@@ -58,6 +58,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initializeCampaign = async (name: string) => {
     if (!user) return;
 
+    const currentDate = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
     const newCampaign: Campaign = {
       id: `campaign-${Date.now()}`,
       name,
@@ -68,8 +70,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         programmatic: []
       },
       budget: 0,
-      startDate: '',
-      endDate: '',
+      startDate: currentDate, // Set default start date to today
+      endDate: currentDate, // Set default end date to today
       status: 'draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
