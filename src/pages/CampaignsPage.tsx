@@ -4,13 +4,14 @@ import Layout from '../components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import CampaignFilters from '../components/campaigns/CampaignFilters';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, Plus, Users } from 'lucide-react';
+import { Calendar, Clock, Plus, Users, Eye } from 'lucide-react';
 import Input from '../components/ui/Input';
 
 const CampaignsPage: React.FC = () => {
-  const { campaigns, initializeCampaign } = useCampaign();
+  const { filteredCampaigns, initializeCampaign, filters, setFilters, loading } = useCampaign();
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [showNewCampaignForm, setShowNewCampaignForm] = useState(false);
@@ -31,32 +32,25 @@ const CampaignsPage: React.FC = () => {
     initializeCampaign(defaultName);
     navigate('/audiences');
   };
-  
-  // Filter campaigns for client users
-  const filteredCampaigns = isAdmin 
-    ? campaigns 
-    : campaigns.filter(campaign => campaign.clientId === user?.id);
-  
-  // Sort campaigns by date (newest first)
-  const sortedCampaigns = [...filteredCampaigns].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+
+  const handleViewCampaign = (campaignId: string) => {
+    navigate(`/campaigns/${campaignId}`);
+  };
   
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return <Badge variant="default">Draft</Badge>;
-      case 'submitted':
-        return <Badge variant="primary">Submitted</Badge>;
-      case 'approved':
-        return <Badge variant="success">Approved</Badge>;
-      case 'active':
-        return <Badge variant="secondary">Active</Badge>;
-      case 'completed':
-        return <Badge variant="outline">Completed</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
-    }
+    const statusConfig = {
+      draft: { variant: 'default' as const, label: 'Draft' },
+      submitted: { variant: 'primary' as const, label: 'Submitted' },
+      pending_review: { variant: 'warning' as const, label: 'Pending Review' },
+      in_progress: { variant: 'secondary' as const, label: 'In Progress' },
+      waiting_on_client: { variant: 'warning' as const, label: 'Waiting on Client' },
+      delivered: { variant: 'success' as const, label: 'Delivered' },
+      failed: { variant: 'danger' as const, label: 'Failed' },
+      completed: { variant: 'success' as const, label: 'Completed' }
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || { variant: 'default' as const, label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
   
   const formatDate = (dateString: string) => {
@@ -72,7 +66,9 @@ const CampaignsPage: React.FC = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-          <p className="text-gray-600">Manage your audience campaigns</p>
+          <p className="text-gray-600">
+            {isAdmin ? 'Manage all client campaigns' : 'Manage your audience campaigns'}
+          </p>
         </div>
         
         {!isAdmin && (
@@ -94,6 +90,12 @@ const CampaignsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Filters */}
+      <CampaignFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
       
       {showNewCampaignForm && (
         <Card className="mb-8">
@@ -123,25 +125,45 @@ const CampaignsPage: React.FC = () => {
           </CardContent>
         </Card>
       )}
-      
-      {sortedCampaigns.length > 0 ? (
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#509fe0]"></div>
+        </div>
+      ) : filteredCampaigns.length > 0 ? (
         <div className="grid grid-cols-1 gap-6">
-          {sortedCampaigns.map(campaign => (
+          {filteredCampaigns.map(campaign => (
             <Card key={campaign.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-0">
                 <div className="p-6">
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900">{campaign.name}</h3>
                       <div className="flex items-center mt-1">
                         <Clock size={16} className="text-gray-400 mr-1" />
                         <span className="text-sm text-gray-500">
                           Created on {formatDate(campaign.createdAt)}
                         </span>
+                        {isAdmin && campaign.users && (
+                          <>
+                            <span className="mx-2 text-gray-300">•</span>
+                            <span className="text-sm text-gray-500">
+                              {campaign.users.name} ({campaign.users.companies?.name})
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       {getStatusBadge(campaign.status)}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewCampaign(campaign.id)}
+                        icon={<Eye size={16} />}
+                      >
+                        View Details
+                      </Button>
                       {campaign.status === 'draft' && !isAdmin && (
                         <Link to="/audiences">
                           <Button variant="primary" size="sm">Continue</Button>
@@ -192,14 +214,22 @@ const CampaignsPage: React.FC = () => {
         </div>
       ) : (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {filters.search || filters.status || filters.dateRange.start || filters.dateRange.end
+              ? 'No campaigns match your filters'
+              : 'No campaigns yet'
+            }
+          </h3>
           <p className="text-gray-600 mb-6">
-            {isAdmin 
-              ? "You'll see client campaign requests here when they're submitted"
-              : "Create your first campaign to start selecting audiences"}
+            {filters.search || filters.status || filters.dateRange.start || filters.dateRange.end
+              ? 'Try adjusting your search criteria or filters'
+              : isAdmin 
+                ? "You'll see client campaigns here when they're created"
+                : "Create your first campaign to start selecting audiences"
+            }
           </p>
           
-          {!isAdmin && !showNewCampaignForm && (
+          {!isAdmin && !showNewCampaignForm && !(filters.search || filters.status || filters.dateRange.start || filters.dateRange.end) && (
             <div className="flex justify-center gap-4">
               <Button 
                 variant="outline"

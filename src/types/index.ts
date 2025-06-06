@@ -6,7 +6,15 @@ export interface User {
   platformIds: {
     [key: string]: string;
   };
+  companyId?: string;
   companyName?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AudienceSegment {
@@ -31,9 +39,38 @@ export interface Campaign {
   budget: number;
   startDate: string;
   endDate: string;
-  status: 'draft' | 'submitted' | 'approved' | 'active' | 'completed';
+  status: 'draft' | 'submitted' | 'pending_review' | 'in_progress' | 'waiting_on_client' | 'delivered' | 'failed' | 'completed';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignComment {
+  id: string;
+  campaignId: string;
+  userId: string;
+  parentCommentId?: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    name: string;
+    role: string;
+  };
+  replies?: CampaignComment[];
+}
+
+export interface CampaignWorkflowHistory {
+  id: string;
+  campaignId: string;
+  userId: string;
+  fromStatus?: string;
+  toStatus: string;
+  notes?: string;
+  createdAt: string;
+  user?: {
+    name: string;
+    role: string;
+  };
 }
 
 export interface AudienceRequest {
@@ -60,4 +97,13 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+}
+
+export interface CampaignFilters {
+  search: string;
+  status: string;
+  dateRange: {
+    start: string;
+    end: string;
+  };
 }

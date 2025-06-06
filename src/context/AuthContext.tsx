@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User } from '../types';
+import { User, Company } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
@@ -37,7 +37,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user) {
           const { data: profile } = await supabase
             .from('users')
-            .select('*')
+            .select(`
+              *,
+              companies (
+                id,
+                name
+              )
+            `)
             .eq('id', session.user.id)
             .single();
 
@@ -47,7 +53,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: session.user.email!,
               name: profile.name,
               role: profile.role,
-              companyName: profile.company_name,
+              companyId: profile.company_id,
+              companyName: profile.companies?.name,
               platformIds: profile.platform_ids || {}
             });
           }
@@ -67,7 +74,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const { data: profile } = await supabase
             .from('users')
-            .select('*')
+            .select(`
+              *,
+              companies (
+                id,
+                name
+              )
+            `)
             .eq('id', session.user.id)
             .single();
 
@@ -77,7 +90,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: session.user.email!,
               name: profile.name,
               role: profile.role,
-              companyName: profile.company_name,
+              companyId: profile.company_id,
+              companyName: profile.companies?.name,
               platformIds: profile.platform_ids || {}
             });
           }
@@ -111,7 +125,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
         const { data: profile, error: profileError } = await supabase
           .from('users')
-          .select('*')
+          .select(`
+            *,
+            companies (
+              id,
+              name
+            )
+          `)
           .eq('id', data.user.id)
           .single();
 
@@ -123,7 +143,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: data.user.email!,
             name: profile.name,
             role: profile.role,
-            companyName: profile.company_name,
+            companyId: profile.company_id,
+            companyName: profile.companies?.name,
             platformIds: profile.platform_ids || {}
           });
         }
@@ -151,6 +172,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
+        // Create or find company
+        let companyId: string;
+        
+        if (companyName) {
+          // Try to create new company
+          const { data: company, error: companyError } = await supabase
+            .from('companies')
+            .insert({ name: companyName })
+            .select()
+            .single();
+            
+          if (companyError) {
+            // Company might already exist, try to find it
+            const { data: existingCompany } = await supabase
+              .from('companies')
+              .select('id')
+              .eq('name', companyName)
+              .single();
+              
+            companyId = existingCompany?.id || '';
+          } else {
+            companyId = company.id;
+          }
+        } else {
+          // Use default company
+          const { data: defaultCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .eq('name', 'Default Company')
+            .single();
+            
+          companyId = defaultCompany?.id || '';
+        }
+
         const { error: profileError } = await supabase
           .from('users')
           .insert({
@@ -158,7 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: data.user.email,
             name,
             role: 'client',
-            company_name: companyName,
+            company_id: companyId,
             platform_ids: {}
           });
 

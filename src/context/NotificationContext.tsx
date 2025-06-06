@@ -34,6 +34,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const { data, error: fetchError } = await supabase
           .from('notifications')
           .select('*')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
         if (fetchError) {
@@ -54,8 +55,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     fetchNotifications();
 
-    // Temporarily commenting out subscription for debugging
-    /*
+    // Enable real-time subscription
     const subscription = supabase
       .channel('notifications')
       .on('postgres_changes', {
@@ -64,14 +64,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         table: 'notifications',
         filter: `user_id=eq.${user.id}`
       }, payload => {
+        console.log('New notification received:', payload);
         setNotifications(prev => [payload.new as Notification, ...prev]);
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, payload => {
+        console.log('Notification updated:', payload);
+        setNotifications(prev =>
+          prev.map(n => n.id === payload.new.id ? payload.new as Notification : n)
+        );
       })
       .subscribe();
 
     return () => {
       subscription.unsubscribe();
     };
-    */
   }, [user]);
 
   const markAsRead = async (id: string) => {

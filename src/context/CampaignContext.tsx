@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Campaign, AudienceSegment, AudienceRequest } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -7,22 +7,40 @@ interface CampaignContextType {
   campaigns: Campaign[];
   activeCampaign: Campaign | null;
   requests: AudienceRequest[];
+  comments: CampaignComment[];
+  workflowHistory: CampaignWorkflowHistory[];
+  filters: CampaignFilters;
+  loading: boolean;
   initializeCampaign: (name: string) => void;
   addAudienceToCampaign: (audience: AudienceSegment) => void;
   removeAudienceFromCampaign: (audienceId: string) => void;
   updateCampaignDetails: (details: Partial<Campaign>) => void;
+  updateCampaignStatus: (campaignId: string, status: string, notes?: string) => Promise<void>;
   submitCampaignRequest: (notes?: string) => Promise<void>;
   getCampaignById: (id: string) => Campaign | undefined;
   getRequestById: (id: string) => AudienceRequest | undefined;
+  fetchCampaignComments: (campaignId: string) => Promise<void>;
+  addComment: (campaignId: string, content: string, parentCommentId?: string) => Promise<void>;
+  fetchWorkflowHistory: (campaignId: string) => Promise<void>;
+  setFilters: (filters: Partial<CampaignFilters>) => void;
+  filteredCampaigns: Campaign[];
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
 
 export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
   const [requests, setRequests] = useState<AudienceRequest[]>([]);
+  const [comments, setComments] = useState<CampaignComment[]>([]);
+  const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFiltersState] = useState<CampaignFilters>({
+    search: '',
+    status: '',
+    dateRange: { start: '', end: '' }
+  });
 
   // Fetch campaigns and requests on mount
   useEffect(() => {
@@ -30,35 +48,95 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const fetchData = async () => {
       try {
+        setLoading(true);
+        
         // Fetch campaigns
         const { data: campaignData, error: campaignError } = await supabase
           .from('campaigns')
-          .select('*')
-          .eq('client_id', user.id);
+          .select(`
+            *,
+            users!campaigns_client_id_fkey (
+              name,
+              company_id,
+              companies (name)
+            )
+          `)
+          .order('created_at', { ascending: false });
 
         if (campaignError) throw campaignError;
         setCampaigns(campaignData || []);
 
-        // Fetch requests
-        const { data: requestData, error: requestError } = await supabase
-          .from('audience_requests')
-          .select('*')
-          .eq(user.role === 'admin' ? 'status' : 'client_id', user.role === 'admin' ? 'pending' : user.id);
+        // Fetch requests for admin users
+        if (isAdmin) {
+          const { data: requestData, error: requestError } = await supabase
+            .from('audience_requests')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-        if (requestError) throw requestError;
-        setRequests(requestData || []);
+          if (requestError) throw requestError;
+          setRequests(requestData || []);
+        }
       } catch (error) {
         console.error('Error fetching campaign data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
-  }, [user]);
+
+    // Set up real-time subscriptions
+    const campaignSubscription = supabase
+      .channel('campaigns')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'campaigns'
+      }, (payload) => {
+        console.log('Campaign change:', payload);
+        fetchData(); // Refetch data on changes
+      })
+      .subscribe();
+
+    const commentsSubscription = supabase
+      .channel('campaign_comments')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'campaign_comments'
+      }, (payload) => {
+        console.log('Comment change:', payload);
+        if (payload.eventType === 'INSERT') {
+          fetchCampaignComments(payload.new.campaign_id);
+        }
+      })
+      .subscribe();
+
+    const workflowSubscription = supabase
+      .channel('campaign_workflow_history')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'campaign_workflow_history'
+      }, (payload) => {
+        console.log('Workflow change:', payload);
+        if (payload.eventType === 'INSERT') {
+          fetchWorkflowHistory(payload.new.campaign_id);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      campaignSubscription.unsubscribe();
+      commentsSubscription.unsubscribe();
+      workflowSubscription.unsubscribe();
+    };
+  }, [user, isAdmin]);
 
   const initializeCampaign = async (name: string) => {
     if (!user) return;
 
-    const currentDate = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const currentDate = new Date().toISOString().split('T')[0];
 
     const newCampaign: Campaign = {
       id: `campaign-${Date.now()}`,
@@ -70,8 +148,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         programmatic: []
       },
       budget: 0,
-      startDate: currentDate, // Set default start date to today
-      endDate: currentDate, // Set default end date to today
+      startDate: currentDate,
+      endDate: currentDate,
       status: 'draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -96,7 +174,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (error) throw error;
 
-      setCampaigns(prev => [...prev, newCampaign]);
+      setCampaigns(prev => [newCampaign, ...prev]);
       setActiveCampaign(newCampaign);
     } catch (error) {
       console.error('Error creating campaign:', error);
@@ -186,12 +264,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatedAt: new Date().toISOString()
       };
 
-      // Convert camelCase to snake_case for Supabase
       const supabaseUpdate: Record<string, any> = {
         updated_at: updatedCampaign.updatedAt
       };
 
-      // Map the properties to their snake_case equivalents
       if ('name' in details) supabaseUpdate.name = details.name;
       if ('audiences' in details) supabaseUpdate.audiences = details.audiences;
       if ('platforms' in details) supabaseUpdate.platforms = details.platforms;
@@ -213,6 +289,60 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     } catch (error) {
       console.error('Error updating campaign:', error);
+    }
+  };
+
+  const updateCampaignStatus = async (campaignId: string, status: string, notes?: string) => {
+    if (!user || !isAdmin) return;
+
+    try {
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (!campaign) return;
+
+      // Update campaign status
+      const { error: campaignError } = await supabase
+        .from('campaigns')
+        .update({ 
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaignId);
+
+      if (campaignError) throw campaignError;
+
+      // Add workflow history entry
+      const { error: historyError } = await supabase
+        .from('campaign_workflow_history')
+        .insert({
+          campaign_id: campaignId,
+          user_id: user.id,
+          from_status: campaign.status,
+          to_status: status,
+          notes
+        });
+
+      if (historyError) throw historyError;
+
+      // Create notification for client
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: campaign.clientId,
+          title: 'Campaign Status Updated',
+          message: `Your campaign "${campaign.name}" status has been updated to ${status.replace('_', ' ')}.`,
+          read: false
+        });
+
+      if (notificationError) console.error('Error creating notification:', notificationError);
+
+      // Update local state
+      setCampaigns(prev => 
+        prev.map(c => c.id === campaignId ? { ...c, status: status as any } : c)
+      );
+
+    } catch (error) {
+      console.error('Error updating campaign status:', error);
+      throw error;
     }
   };
 
@@ -254,12 +384,175 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Update campaign status
       await updateCampaignDetails({ status: 'submitted' });
       
-      setRequests(prev => [...prev, newRequest]);
+      // Create notification for admin
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: 'admin', // This should be replaced with actual admin user IDs
+          title: 'New Campaign Submitted',
+          message: `${user.name} has submitted a new campaign: "${activeCampaign.name}".`,
+          read: false
+        });
+
+      if (notificationError) console.error('Error creating notification:', notificationError);
+      
+      setRequests(prev => [newRequest, ...prev]);
     } catch (error) {
       console.error('Error submitting request:', error);
       throw error;
     }
   };
+
+  const fetchCampaignComments = async (campaignId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('campaign_comments')
+        .select(`
+          *,
+          users (name, role)
+        `)
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Organize comments into threaded structure
+      const commentsMap = new Map();
+      const rootComments: CampaignComment[] = [];
+
+      data?.forEach(comment => {
+        const formattedComment: CampaignComment = {
+          id: comment.id,
+          campaignId: comment.campaign_id,
+          userId: comment.user_id,
+          parentCommentId: comment.parent_comment_id,
+          content: comment.content,
+          createdAt: comment.created_at,
+          updatedAt: comment.updated_at,
+          user: comment.users,
+          replies: []
+        };
+
+        commentsMap.set(comment.id, formattedComment);
+
+        if (comment.parent_comment_id) {
+          const parent = commentsMap.get(comment.parent_comment_id);
+          if (parent) {
+            parent.replies = parent.replies || [];
+            parent.replies.push(formattedComment);
+          }
+        } else {
+          rootComments.push(formattedComment);
+        }
+      });
+
+      setComments(rootComments);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    }
+  };
+
+  const addComment = async (campaignId: string, content: string, parentCommentId?: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('campaign_comments')
+        .insert({
+          campaign_id: campaignId,
+          user_id: user.id,
+          parent_comment_id: parentCommentId,
+          content
+        });
+
+      if (error) throw error;
+
+      // Create notification for the other party
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (campaign) {
+        const notifyUserId = isAdmin ? campaign.clientId : 'admin'; // Replace with actual admin logic
+        
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: notifyUserId,
+            title: 'New Comment',
+            message: `${user.name} left a comment on campaign "${campaign.name}".`,
+            read: false
+          });
+
+        if (notificationError) console.error('Error creating notification:', notificationError);
+      }
+
+      // Refresh comments
+      await fetchCampaignComments(campaignId);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      throw error;
+    }
+  };
+
+  const fetchWorkflowHistory = async (campaignId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('campaign_workflow_history')
+        .select(`
+          *,
+          users (name, role)
+        `)
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedHistory: CampaignWorkflowHistory[] = data?.map(item => ({
+        id: item.id,
+        campaignId: item.campaign_id,
+        userId: item.user_id,
+        fromStatus: item.from_status,
+        toStatus: item.to_status,
+        notes: item.notes,
+        createdAt: item.created_at,
+        user: item.users
+      })) || [];
+
+      setWorkflowHistory(formattedHistory);
+    } catch (error) {
+      console.error('Error fetching workflow history:', error);
+    }
+  };
+
+  const setFilters = useCallback((newFilters: Partial<CampaignFilters>) => {
+    setFiltersState(prev => ({ ...prev, ...newFilters }));
+  }, []);
+
+  const filteredCampaigns = campaigns.filter(campaign => {
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      if (!campaign.name.toLowerCase().includes(searchLower)) {
+        return false;
+      }
+    }
+
+    // Status filter
+    if (filters.status && campaign.status !== filters.status) {
+      return false;
+    }
+
+    // Date range filter
+    if (filters.dateRange.start || filters.dateRange.end) {
+      const campaignDate = new Date(campaign.createdAt);
+      if (filters.dateRange.start && campaignDate < new Date(filters.dateRange.start)) {
+        return false;
+      }
+      if (filters.dateRange.end && campaignDate > new Date(filters.dateRange.end)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   const getCampaignById = (id: string): Campaign | undefined => {
     return campaigns.find(campaign => campaign.id === id);
@@ -274,13 +567,23 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       campaigns,
       activeCampaign,
       requests,
+      comments,
+      workflowHistory,
+      filters,
+      loading,
       initializeCampaign,
       addAudienceToCampaign,
       removeAudienceFromCampaign,
       updateCampaignDetails,
+      updateCampaignStatus,
       submitCampaignRequest,
       getCampaignById,
-      getRequestById
+      getRequestById,
+      fetchCampaignComments,
+      addComment,
+      fetchWorkflowHistory,
+      setFilters,
+      filteredCampaigns
     }}>
       {children}
     </CampaignContext.Provider>

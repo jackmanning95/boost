@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
 import AudiencesPage from './pages/AudiencesPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignBuilderPage from './pages/CampaignBuilderPage';
 import RequestsPage from './pages/RequestsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -46,6 +47,14 @@ const App: React.FC = () => {
                     element={
                       <PrivateRoute>
                         <CampaignsPage />
+                      </PrivateRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/campaigns/:id" 
+                    element={
+                      <PrivateRoute>
+                        <CampaignDetailPage />
                       </PrivateRoute>
                     } 
                   />
