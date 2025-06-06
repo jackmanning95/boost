@@ -92,7 +92,7 @@ const App: React.FC = () => {
                   />
                   
                   {/* Catch all */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<Navigate to="/\" replace />} />
                 </Routes>
               </Router>
             </CampaignProvider>
