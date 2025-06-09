@@ -21,6 +21,8 @@ interface AdvertiserAccountManagerProps {
   onDelete: (accountId: string) => void;
 }
 
+type SortField = 'advertiserName' | 'platform' | 'advertiserId';
+
 const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
   accounts,
   onAdd,
@@ -31,7 +33,7 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<'advertiserName' | 'platform' | 'advertiserId'>('advertiserName');
+  const [sortField, setSortField] = useState<SortField>('advertiserName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
@@ -46,7 +48,6 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
 
         if (error) throw error;
 
-        // Update platform IDs in user profile
         if (data) {
           const platformIds = data.reduce((acc, account) => ({
             ...acc,
@@ -101,9 +102,8 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
     if (editingAccount) {
       onUpdate({ ...account, id: editingAccount.id, createdAt: editingAccount.createdAt });
     } else {
-      onAdd(account);
+      handleAdd(account); // 💡 fix: use handleAdd to trigger DB insert
     }
-    setIsModalOpen(false);
   };
 
   const handleSort = (field: SortField) => {
@@ -157,7 +157,10 @@ const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
             <Button
               variant="primary"
               size="sm"
-              onClick={handleAdd}
+              onClick={() => {
+                setEditingAccount(null); // ✅ Reset editing state
+                setIsModalOpen(true);    // ✅ Open modal to add account
+              }}
               icon={<Plus size={16} />}
             >
               Add New Account
