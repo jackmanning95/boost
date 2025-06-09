@@ -1,254 +1,142 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
+import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import { Plus, Briefcase, Search, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
-import AdvertiserAccountModal from './AdvertiserAccountModal';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
+import { AdvertiserAccount } from './AdvertiserAccountManager';
 
-export interface AdvertiserAccount {
-  id: string;
-  platform: string;
-  advertiserName: string;
-  advertiserId: string;
-  createdAt: string;
+interface AdvertiserAccountModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => void;
+  account: AdvertiserAccount | null;
 }
 
-interface AdvertiserAccountManagerProps {
-  accounts: AdvertiserAccount[];
-  onAdd: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => void;
-  onUpdate: (account: AdvertiserAccount) => void;
-  onDelete: (accountId: string) => void;
-}
+const PLATFORM_OPTIONS = [
+  'Meta',
+  'Instagram',
+  'TikTok',
+  'X/Twitter',
+  'LinkedIn',
+  'Pinterest',
+  'Snapchat',
+  'Reddit',
+  'DV360',
+  'The Trade Desk',
+  'StackAdapt',
+  'Yahoo! DSP',
+  'Amazon DSP',
+  'MediaMath',
+  'Other (please specify)'
+];
 
-type SortField = 'advertiserName' | 'platform' | 'advertiserId';
-
-const AdvertiserAccountManager: React.FC<AdvertiserAccountManagerProps> = ({
-  accounts,
-  onAdd,
-  onUpdate,
-  onDelete
+const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  account
 }) => {
-  const { user } = useAuth();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('advertiserName');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [platform, setPlatform] = useState(account?.platform || '');
+  const [advertiserName, setAdvertiserName] = useState(account?.advertiserName || '');
+  const [advertiserId, setAdvertiserId] = useState(account?.advertiserId || '');
+  const [customPlatform, setCustomPlatform] = useState('');
 
   useEffect(() => {
-    if (!user) return;
-
-    const fetchAccounts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('advertiser_accounts')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (error) throw error;
-
-        if (data) {
-          const platformIds = data.reduce((acc, account) => ({
-            ...acc,
-            [account.platform]: account.advertiser_id
-          }), {});
-
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({ platform_ids: platformIds })
-            .eq('id', user.id);
-
-          if (updateError) throw updateError;
-        }
-      } catch (error) {
-        console.error('Error fetching advertiser accounts:', error);
-      }
-    };
-
-    fetchAccounts();
-  }, [user]);
-
-  const handleAdd = async (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('advertiser_accounts')
-        .insert([{
-          user_id: user.id,
-          platform: account.platform,
-          advertiser_name: account.advertiserName,
-          advertiser_id: account.advertiserId
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      onAdd(account);
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error('Error adding advertiser account:', error);
-    }
-  };
-
-  const handleEdit = (account: AdvertiserAccount) => {
-    setEditingAccount(account);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
-    if (editingAccount) {
-      onUpdate({ ...account, id: editingAccount.id, createdAt: editingAccount.createdAt });
+    if (account) {
+      setPlatform(account.platform);
+      setAdvertiserName(account.advertiserName);
+      setAdvertiserId(account.advertiserId);
+      setCustomPlatform(
+        PLATFORM_OPTIONS.includes(account.platform) ? '' : account.platform
+      );
     } else {
-      handleAdd(account); // 💡 fix: use handleAdd to trigger DB insert
+      setPlatform('');
+      setAdvertiserName('');
+      setAdvertiserId('');
+      setCustomPlatform('');
     }
-  };
+  }, [account, isOpen]);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+  const handleSubmit = () => {
+    if (
+      (platform === 'Other (please specify)' && customPlatform.trim() === '') ||
+      advertiserName.trim() === '' ||
+      advertiserId.trim() === ''
+    ) {
+      alert('Please complete all required fields.');
+      return;
     }
+
+    const finalPlatform =
+      platform === 'Other (please specify)' ? customPlatform.trim() : platform;
+
+    onSave({
+      platform: finalPlatform,
+      advertiserName: advertiserName.trim(),
+      advertiserId: advertiserId.trim()
+    });
   };
-
-  const filteredAccounts = accounts.filter(account => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      account.platform.toLowerCase().includes(searchLower) ||
-      account.advertiserName.toLowerCase().includes(searchLower) ||
-      account.advertiserId.toLowerCase().includes(searchLower)
-    );
-  });
-
-  const sortedAccounts = [...filteredAccounts].sort((a, b) => {
-    const direction = sortDirection === 'asc' ? 1 : -1;
-    const aValue = a[sortField].toLowerCase();
-    const bValue = b[sortField].toLowerCase();
-    return aValue > bValue ? direction : -direction;
-  });
-
-  const SortButton: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
-    <button
-      className="flex items-center space-x-1 text-left font-medium text-gray-700 hover:text-gray-900"
-      onClick={() => handleSort(field)}
-    >
-      <span>{label}</span>
-      <ArrowUpDown size={14} className={`
-        transition-transform
-        ${sortField === field && sortDirection === 'desc' ? 'rotate-180' : ''}
-        ${sortField === field ? 'opacity-100' : 'opacity-50'}
-      `} />
-    </button>
-  );
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center">
-              <Briefcase size={20} className="mr-2 text-blue-600" />
-              Manage Advertiser Accounts
-            </CardTitle>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setEditingAccount(null); // ✅ Reset editing state
-                setIsModalOpen(true);    // ✅ Open modal to add account
-              }}
-              icon={<Plus size={16} />}
-            >
-              Add New Account
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="relative">
-              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search accounts..."
-                className="w-full pl-10 pr-4 py-2 border rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+    <Modal isOpen={isOpen} onClose={onClose} title={account ? 'Edit Account' : 'Add New Account'}>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Platform</label>
+          <select
+            className="w-full border p-2 rounded-md"
+            value={PLATFORM_OPTIONS.includes(platform) ? platform : 'Other (please specify)'}
+            onChange={(e) => {
+              const selected = e.target.value;
+              setPlatform(selected);
+              if (selected !== 'Other (please specify)') setCustomPlatform('');
+            }}
+          >
+            <option value="" disabled>Select a platform</option>
+            {PLATFORM_OPTIONS.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="px-4 py-3">
-                      <SortButton field="advertiserName" label="Advertiser Name" />
-                    </th>
-                    <th className="px-4 py-3">
-                      <SortButton field="platform" label="Platform" />
-                    </th>
-                    <th className="px-4 py-3">
-                      <SortButton field="advertiserId" label="Account ID" />
-                    </th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {sortedAccounts.map(account => (
-                    <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{account.advertiserName}</td>
-                      <td className="px-4 py-3">{account.platform}</td>
-                      <td className="px-4 py-3 font-mono text-sm">{account.advertiserId}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(account)}
-                            icon={<Edit2 size={16} />}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onDelete(account.id)}
-                            icon={<Trash2 size={16} />}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {platform === 'Other (please specify)' && (
+            <input
+              type="text"
+              placeholder="Enter custom platform name"
+              className="mt-2 w-full border p-2 rounded-md"
+              value={customPlatform}
+              onChange={(e) => setCustomPlatform(e.target.value)}
+            />
+          )}
+        </div>
 
-              {sortedAccounts.length === 0 && (
-                <div className="text-center py-8 bg-gray-50 rounded-lg mt-4">
-                  <p className="text-gray-600">
-                    {searchQuery
-                      ? 'No accounts match your search'
-                      : 'No advertiser accounts added yet'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <div>
+          <label className="block text-sm font-medium mb-1">Advertiser Name</label>
+          <input
+            type="text"
+            className="w-full border p-2 rounded-md"
+            value={advertiserName}
+            onChange={(e) => setAdvertiserName(e.target.value)}
+          />
+        </div>
 
-      <AdvertiserAccountModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSave}
-        account={editingAccount}
-      />
-    </>
+        <div>
+          <label className="block text-sm font-medium mb-1">Advertiser ID</label>
+          <input
+            type="text"
+            className="w-full border p-2 rounded-md"
+            value={advertiserId}
+            onChange={(e) => setAdvertiserId(e.target.value)}
+          />
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSubmit}>
+            {account ? 'Save Changes' : 'Add Account'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 
-export default AdvertiserAccountManager;
+export default AdvertiserAccountModal;
