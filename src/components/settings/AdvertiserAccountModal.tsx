@@ -74,4 +74,108 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     }
 
     if (!advertiserName) {
-      newErrors.advertiserNam
+      newErrors.advertiserName = 'Advertiser name is required';
+    }
+
+    if (!advertiserId) {
+      newErrors.advertiserId = 'Advertiser ID is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (validateForm()) {
+      onSave({
+        platform:
+          platform === 'Other (please specify)' ? customPlatform : platform,
+        advertiserName,
+        advertiserId
+      });
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-semibold">
+            {account ? 'Edit Advertiser Account' : 'Add New Advertiser Account'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Platform
+            </label>
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+              className={`w-full rounded-md border ${
+                errors.platform ? 'border-red-500' : 'border-gray-300'
+              } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            >
+              <option value="">Select a platform</option>
+              {PLATFORMS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            {platform === 'Other (please specify)' && (
+              <input
+                type="text"
+                placeholder="Enter custom platform name"
+                value={customPlatform}
+                onChange={(e) => setCustomPlatform(e.target.value)}
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
+            {errors.platform && (
+              <p className="mt-1 text-sm text-red-600">{errors.platform}</p>
+            )}
+          </div>
+
+          <Input
+            label="Advertiser Name"
+            value={advertiserName}
+            onChange={(e) => setAdvertiserName(e.target.value)}
+            error={errors.advertiserName}
+            placeholder="e.g., Client A"
+          />
+
+          <Input
+            label="Advertiser ID"
+            value={advertiserId}
+            onChange={(e) => setAdvertiserId(e.target.value)}
+            error={errors.advertiserId}
+            placeholder="Enter the platform-specific ID"
+          />
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              {account ? 'Save Changes' : 'Add Account'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default AdvertiserAccountModal;
