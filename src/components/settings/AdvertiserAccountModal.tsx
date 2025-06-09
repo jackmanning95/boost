@@ -11,7 +11,25 @@ interface AdvertiserAccountModalProps {
   account?: AdvertiserAccount | null;
 }
 
-const PLATFORMS = ['Meta', 'The Trade Desk', 'DV360', 'Amazon DSP'];
+const PLATFORMS = [const PLATFORMS = [
+  'Meta',
+  'Instagram',
+  'TikTok',
+  'X/Twitter',
+  'LinkedIn',
+  'Pinterest',
+  'Snapchat',
+  'Programmatic Platforms',
+  'DV360',
+  'The Trade Desk',
+  'StackAdapt',
+  'Yahoo! DSP',
+  'Amazon DSP',
+  'MediaMath',
+  'Reddit',
+  'Other (please specify)',
+];
+];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   isOpen,
