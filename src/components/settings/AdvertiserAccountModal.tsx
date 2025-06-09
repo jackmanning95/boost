@@ -11,7 +11,7 @@ interface AdvertiserAccountModalProps {
   account?: AdvertiserAccount | null;
 }
 
-const PLATFORMS = [const PLATFORMS = [
+const PLATFORMS = [
   'Meta',
   'Instagram',
   'TikTok',
@@ -29,15 +29,15 @@ const PLATFORMS = [const PLATFORMS = [
   'Reddit',
   'Other (please specify)',
 ];
-];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  account
+  account,
 }) => {
   const [platform, setPlatform] = useState('');
+  const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
   const [advertiserId, setAdvertiserId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -45,10 +45,12 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   useEffect(() => {
     if (account) {
       setPlatform(account.platform);
+      setCustomPlatform('');
       setAdvertiserName(account.advertiserName);
       setAdvertiserId(account.advertiserId);
     } else {
       setPlatform('');
+      setCustomPlatform('');
       setAdvertiserName('');
       setAdvertiserId('');
     }
@@ -58,7 +60,10 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!platform) {
+    const finalPlatform =
+      platform === 'Other (please specify)' ? customPlatform : platform;
+
+    if (!finalPlatform) {
       newErrors.platform = 'Platform is required';
     }
     if (!advertiserName) {
@@ -75,11 +80,14 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const finalPlatform =
+      platform === 'Other (please specify)' ? customPlatform : platform;
+
     if (validateForm()) {
       onSave({
-        platform,
+        platform: finalPlatform,
         advertiserName,
-        advertiserId
+        advertiserId,
       });
     }
   };
@@ -108,16 +116,32 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
             </label>
             <select
               value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
+              onChange={(e) => {
+                setPlatform(e.target.value);
+                if (e.target.value !== 'Other (please specify)') {
+                  setCustomPlatform('');
+                }
+              }}
               className={`w-full rounded-md border ${
                 errors.platform ? 'border-red-500' : 'border-gray-300'
               } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
             >
               <option value="">Select a platform</option>
-              {PLATFORMS.map(p => (
-                <option key={p} value={p}>{p}</option>
+              {PLATFORMS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </select>
+            {platform === 'Other (please specify)' && (
+              <input
+                type="text"
+                placeholder="Enter custom platform name"
+                value={customPlatform}
+                onChange={(e) => setCustomPlatform(e.target.value)}
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
             {errors.platform && (
               <p className="mt-1 text-sm text-red-600">{errors.platform}</p>
             )}
