@@ -27,14 +27,14 @@ const PLATFORMS = [
   'Amazon DSP',
   'MediaMath',
   'Reddit',
-  'Other (please specify)',
+  'Other (please specify)'
 ];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  account,
+  account
 }) => {
   const [platform, setPlatform] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
@@ -45,14 +45,19 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   useEffect(() => {
     if (account) {
       setPlatform(account.platform);
-      setCustomPlatform('');
       setAdvertiserName(account.advertiserName);
       setAdvertiserId(account.advertiserId);
+      if (!PLATFORMS.includes(account.platform)) {
+        setCustomPlatform(account.platform);
+        setPlatform('Other (please specify)');
+      } else {
+        setCustomPlatform('');
+      }
     } else {
       setPlatform('');
-      setCustomPlatform('');
       setAdvertiserName('');
       setAdvertiserId('');
+      setCustomPlatform('');
     }
     setErrors({});
   }, [account, isOpen]);
@@ -60,121 +65,13 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    const finalPlatform =
-      platform === 'Other (please specify)' ? customPlatform : platform;
-
-    if (!finalPlatform) {
+    if (!platform) {
       newErrors.platform = 'Platform is required';
     }
+
+    if (platform === 'Other (please specify)' && !customPlatform.trim()) {
+      newErrors.platform = 'Please specify a platform';
+    }
+
     if (!advertiserName) {
-      newErrors.advertiserName = 'Advertiser name is required';
-    }
-    if (!advertiserId) {
-      newErrors.advertiserId = 'Advertiser ID is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const finalPlatform =
-      platform === 'Other (please specify)' ? customPlatform : platform;
-
-    if (validateForm()) {
-      onSave({
-        platform: finalPlatform,
-        advertiserName,
-        advertiserId,
-      });
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold">
-            {account ? 'Edit Advertiser Account' : 'Add New Advertiser Account'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Platform
-            </label>
-            <select
-              value={platform}
-              onChange={(e) => {
-                setPlatform(e.target.value);
-                if (e.target.value !== 'Other (please specify)') {
-                  setCustomPlatform('');
-                }
-              }}
-              className={`w-full rounded-md border ${
-                errors.platform ? 'border-red-500' : 'border-gray-300'
-              } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            >
-              <option value="">Select a platform</option>
-              {PLATFORMS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            {platform === 'Other (please specify)' && (
-              <input
-                type="text"
-                placeholder="Enter custom platform name"
-                value={customPlatform}
-                onChange={(e) => setCustomPlatform(e.target.value)}
-                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
-            {errors.platform && (
-              <p className="mt-1 text-sm text-red-600">{errors.platform}</p>
-            )}
-          </div>
-
-          <Input
-            label="Advertiser Name"
-            value={advertiserName}
-            onChange={(e) => setAdvertiserName(e.target.value)}
-            error={errors.advertiserName}
-            placeholder="e.g., Client A"
-          />
-
-          <Input
-            label="Advertiser ID"
-            value={advertiserId}
-            onChange={(e) => setAdvertiserId(e.target.value)}
-            error={errors.advertiserId}
-            placeholder="Enter the platform-specific ID"
-          />
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit">
-              {account ? 'Save Changes' : 'Add Account'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-export default AdvertiserAccountModal;
+      newErrors.advertiserNam
