@@ -1,142 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import Modal from '../ui/Modal';
+import React, { useState } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import Button from '../ui/Button';
-import { AdvertiserAccount } from './AdvertiserAccountManager';
+import AdvertiserAccountModal from './AdvertiserAccountModal';
 
-interface AdvertiserAccountModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => void;
-  account: AdvertiserAccount | null;
-}
+export type AdvertiserAccount = {
+  id: string;
+  platform: string;
+  advertiserName: string;
+  advertiserId: string;
+  createdAt: string;
+};
 
-const PLATFORM_OPTIONS = [
-  'Meta',
-  'Instagram',
-  'TikTok',
-  'X/Twitter',
-  'LinkedIn',
-  'Pinterest',
-  'Snapchat',
-  'Reddit',
-  'DV360',
-  'The Trade Desk',
-  'StackAdapt',
-  'Yahoo! DSP',
-  'Amazon DSP',
-  'MediaMath',
-  'Other (please specify)'
-];
+type Props = {
+  accounts: AdvertiserAccount[];
+  onAdd: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => void;
+  onUpdate: (account: AdvertiserAccount) => void;
+  onDelete: (id: string) => void;
+};
 
-const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
-  isOpen,
-  onClose,
-  onSave,
-  account
+const AdvertiserAccountManager: React.FC<Props> = ({
+  accounts,
+  onAdd,
+  onUpdate,
+  onDelete
 }) => {
-  const [platform, setPlatform] = useState(account?.platform || '');
-  const [advertiserName, setAdvertiserName] = useState(account?.advertiserName || '');
-  const [advertiserId, setAdvertiserId] = useState(account?.advertiserId || '');
-  const [customPlatform, setCustomPlatform] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
 
-  useEffect(() => {
-    if (account) {
-      setPlatform(account.platform);
-      setAdvertiserName(account.advertiserName);
-      setAdvertiserId(account.advertiserId);
-      setCustomPlatform(
-        PLATFORM_OPTIONS.includes(account.platform) ? '' : account.platform
-      );
+  const handleEdit = (account: AdvertiserAccount) => {
+    setEditingAccount(account);
+    setIsModalOpen(true);
+  };
+
+  const handleAdd = () => {
+    setEditingAccount(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = (data: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
+    if (editingAccount) {
+      onUpdate({ ...editingAccount, ...data });
     } else {
-      setPlatform('');
-      setAdvertiserName('');
-      setAdvertiserId('');
-      setCustomPlatform('');
+      onAdd(data);
     }
-  }, [account, isOpen]);
-
-  const handleSubmit = () => {
-    if (
-      (platform === 'Other (please specify)' && customPlatform.trim() === '') ||
-      advertiserName.trim() === '' ||
-      advertiserId.trim() === ''
-    ) {
-      alert('Please complete all required fields.');
-      return;
-    }
-
-    const finalPlatform =
-      platform === 'Other (please specify)' ? customPlatform.trim() : platform;
-
-    onSave({
-      platform: finalPlatform,
-      advertiserName: advertiserName.trim(),
-      advertiserId: advertiserId.trim()
-    });
+    setIsModalOpen(false);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={account ? 'Edit Account' : 'Add New Account'}>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Platform</label>
-          <select
-            className="w-full border p-2 rounded-md"
-            value={PLATFORM_OPTIONS.includes(platform) ? platform : 'Other (please specify)'}
-            onChange={(e) => {
-              const selected = e.target.value;
-              setPlatform(selected);
-              if (selected !== 'Other (please specify)') setCustomPlatform('');
-            }}
-          >
-            <option value="" disabled>Select a platform</option>
-            {PLATFORM_OPTIONS.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-
-          {platform === 'Other (please specify)' && (
-            <input
-              type="text"
-              placeholder="Enter custom platform name"
-              className="mt-2 w-full border p-2 rounded-md"
-              value={customPlatform}
-              onChange={(e) => setCustomPlatform(e.target.value)}
-            />
+    <>
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="text-blue-600">Connected Platform IDs</CardTitle>
+          <Button variant="primary" onClick={handleAdd}>Add Account</Button>
+        </CardHeader>
+        <CardContent>
+          {accounts.length === 0 ? (
+            <p className="text-gray-600">No accounts added yet.</p>
+          ) : (
+            <ul className="space-y-4">
+              {accounts.map(account => (
+                <li
+                  key={account.id}
+                  className="border border-gray-200 rounded-lg p-4 flex justify-between items-center"
+                >
+                  <div>
+                    <div className="font-medium">{account.advertiserName}</div>
+                    <div className="text-sm text-gray-500">
+                      {account.platform} – {account.advertiserId}
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="secondary" onClick={() => handleEdit(account)}>Edit</Button>
+                    <Button variant="destructive" onClick={() => onDelete(account.id)}>Delete</Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Advertiser Name</label>
-          <input
-            type="text"
-            className="w-full border p-2 rounded-md"
-            value={advertiserName}
-            onChange={(e) => setAdvertiserName(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Advertiser ID</label>
-          <input
-            type="text"
-            className="w-full border p-2 rounded-md"
-            value={advertiserId}
-            onChange={(e) => setAdvertiserId(e.target.value)}
-          />
-        </div>
-
-        <div className="flex justify-end space-x-2 pt-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSubmit}>
-            {account ? 'Save Changes' : 'Add Account'}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      {/* Modal */}
+      <AdvertiserAccountModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        account={editingAccount}
+      />
+    </>
   );
 };
 
-export default AdvertiserAccountModal;
+export default AdvertiserAccountManager;
