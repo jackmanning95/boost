@@ -50,15 +50,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setLoading(true);
         
-        // Fetch campaigns with user data from public.users table
+        // Fetch campaigns with user data using explicit foreign key
         const { data: campaignData, error: campaignError } = await supabase
           .from('campaigns')
           .select(`
             *,
-            users (
+            users!campaigns_client_id_fkey (
               name,
               company_id,
-              companies (name)
+              companies!users_company_id_fkey (name)
             )
           `)
           .order('created_at', { ascending: false });
@@ -409,7 +409,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .from('campaign_comments')
         .select(`
           *,
-          users (name, role)
+          users!campaign_comments_user_id_fkey (name, role)
         `)
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: true });
@@ -498,7 +498,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .from('campaign_workflow_history')
         .select(`
           *,
-          users (name, role)
+          users!campaign_workflow_history_user_id_fkey (name, role)
         `)
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: false });
