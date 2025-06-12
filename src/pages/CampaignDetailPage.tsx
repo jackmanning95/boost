@@ -26,6 +26,7 @@ const CampaignDetailPage: React.FC = () => {
   } = useCampaign();
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const campaign = id ? getCampaignById(id) : null;
 
@@ -35,22 +36,28 @@ const CampaignDetailPage: React.FC = () => {
       return;
     }
 
-    const loadCampaignData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([
-          fetchCampaignComments(id),
-          fetchWorkflowHistory(id)
-        ]);
-      } catch (error) {
-        console.error('Error loading campaign data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Only load data once
+    if (!dataLoaded) {
+      const loadCampaignData = async () => {
+        setLoading(true);
+        try {
+          await Promise.all([
+            fetchCampaignComments(id),
+            fetchWorkflowHistory(id)
+          ]);
+          setDataLoaded(true);
+        } catch (error) {
+          console.error('Error loading campaign data:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    loadCampaignData();
-  }, [id, fetchCampaignComments, fetchWorkflowHistory, navigate]);
+      loadCampaignData();
+    } else {
+      setLoading(false);
+    }
+  }, [id, dataLoaded, fetchCampaignComments, fetchWorkflowHistory, navigate]);
 
   if (!campaign) {
     return (
