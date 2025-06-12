@@ -50,12 +50,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setLoading(true);
         
-        // Fetch campaigns
+        // Fetch campaigns with user data from public.users table
         const { data: campaignData, error: campaignError } = await supabase
           .from('campaigns')
           .select(`
             *,
-            users!campaigns_client_id_fkey (
+            users (
               name,
               company_id,
               companies (name)
