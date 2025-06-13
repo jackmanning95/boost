@@ -4,12 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
-import { User, Settings, Shield } from 'lucide-react';
+import { User, Settings, Shield, Save } from 'lucide-react';
 import AdvertiserAccountManager, { AdvertiserAccount } from '../components/settings/AdvertiserAccountManager';
 
 const SettingsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
+  
+  // Profile form state
+  const [profileData, setProfileData] = useState({
+    name: user?.name || '',
+    email: user?.email || ''
+  });
+
   const [accounts, setAccounts] = useState<AdvertiserAccount[]>([
     {
       id: '1',
@@ -30,6 +39,33 @@ const SettingsPage: React.FC = () => {
   if (!user) {
     return null;
   }
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    setUpdateMessage('');
+
+    try {
+      await updateUserProfile({
+        name: profileData.name
+      });
+      setUpdateMessage('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setUpdateMessage('Failed to update profile. Please try again.');
+    } finally {
+      setIsUpdating(false);
+      // Clear message after 3 seconds
+      setTimeout(() => setUpdateMessage(''), 3000);
+    }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
   const handleAddAccount = (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
     const newAccount: AdvertiserAccount = {
@@ -106,35 +142,57 @@ const SettingsPage: React.FC = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form className="space-y-6">
+                  <form onSubmit={handleProfileUpdate} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <Input
                         label="Full Name"
-                        defaultValue={user.name}
+                        value={profileData.name}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        required
                       />
                       
                       <Input
                         label="Email Address"
                         type="email"
-                        defaultValue={user.email}
+                        value={profileData.email}
                         disabled
+                        className="bg-gray-50"
                       />
                       
                       <Input
                         label="Company"
-                        defaultValue={user.companyName || ''}
+                        value={user.companyName || ''}
+                        disabled
+                        className="bg-gray-50"
                       />
                       
                       <Input
                         label="Role"
-                        defaultValue={user.role === 'admin' ? 'Administrator' : 'Client'}
+                        value={user.role === 'admin' ? 'Administrator' : 'Client'}
                         disabled
+                        className="bg-gray-50"
                       />
                     </div>
                     
+                    {updateMessage && (
+                      <div className={`p-3 rounded-md text-sm ${
+                        updateMessage.includes('successfully') 
+                          ? 'bg-green-50 text-green-700 border border-green-200' 
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {updateMessage}
+                      </div>
+                    )}
+                    
                     <div className="flex justify-end">
-                      <Button variant="primary">
-                        Save Changes
+                      <Button 
+                        variant="primary" 
+                        type="submit"
+                        isLoading={isUpdating}
+                        icon={<Save size={16} />}
+                        disabled={profileData.name === user.name}
+                      >
+                        {isUpdating ? 'Saving...' : 'Save Changes'}
                       </Button>
                     </div>
                   </form>
