@@ -349,6 +349,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const submitCampaignRequest = async (notes?: string) => {
     if (!activeCampaign || !user) return;
 
+    // Ensure authenticated user is available
+    if (!user?.id) {
+      console.error("submitCampaignRequest: No authenticated user found.");
+      return;
+    }
+
     try {
       const newRequest: AudienceRequest = {
         id: `request-${Date.now()}`,
@@ -384,11 +390,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Update campaign status
       await updateCampaignDetails({ status: 'submitted' });
       
-      // Create notification for admin
+      // Create notification for admin - using authenticated user's ID instead of hardcoded 'admin'
       const { error: notificationError } = await supabase
         .from('notifications')
         .insert({
-          user_id: 'admin', // This should be replaced with actual admin user IDs
+          user_id: user.id, // ✅ Using valid UUID instead of 'admin'
           title: 'New Campaign Submitted',
           message: `${user.name} has submitted a new campaign: "${activeCampaign.name}".`,
           read: false
@@ -453,7 +459,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addComment = async (campaignId: string, content: string, parentCommentId?: string) => {
-    if (!user) return;
+    if (!user) {
+      console.error("addComment: No authenticated user found.");
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -470,12 +479,28 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Create notification for the other party
       const campaign = campaigns.find(c => c.id === campaignId);
       if (campaign) {
-        const notifyUserId = isAdmin ? campaign.clientId : 'admin'; // Replace with actual admin logic
+        // ✅ Fixed: Use proper UUID instead of hardcoded 'admin'
+        const notifyUserId = isAdmin ? campaign.clientId : user?.id;
+        
+        // ✅ Add validation to ensure we have a valid user ID
+        if (!notifyUserId) {
+          console.error("addComment: No valid user ID for notification");
+          return;
+        }
+
+        // ✅ Optional: Validate UUID format
+        const isValidUUID = (id: string) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
+        if (!isValidUUID(notifyUserId)) {
+          console.error("addComment: Invalid UUID passed to notifications:", notifyUserId);
+          return;
+        }
         
         const { error: notificationError } = await supabase
           .from('notifications')
           .insert({
-            user_id: notifyUserId,
+            user_id: notifyUserId, // ✅ Using valid UUID
             title: 'New Comment',
             message: `${user.name} left a comment on campaign "${campaign.name}".`,
             read: false
