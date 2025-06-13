@@ -42,6 +42,13 @@ export interface Campaign {
   status: 'draft' | 'submitted' | 'pending_review' | 'in_progress' | 'waiting_on_client' | 'delivered' | 'failed' | 'completed';
   createdAt: string;
   updatedAt: string;
+  users?: {
+    name: string;
+    company_id: string;
+    companies?: {
+      name: string;
+    };
+  };
 }
 
 export interface CampaignComment {
@@ -73,6 +80,21 @@ export interface CampaignWorkflowHistory {
   };
 }
 
+export interface CampaignActivity {
+  id: string;
+  campaignId: string;
+  userId: string;
+  actionType: 'created' | 'updated' | 'status_changed' | 'comment_added' | 'audience_added' | 'audience_removed';
+  actionDetails: Record<string, any>;
+  oldValues?: Record<string, any>;
+  newValues?: Record<string, any>;
+  createdAt: string;
+  user?: {
+    name: string;
+    role: string;
+  };
+}
+
 export interface AudienceRequest {
   id: string;
   campaignId: string;
@@ -97,6 +119,7 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+  campaignId?: string;
 }
 
 export interface CampaignFilters {

@@ -15,6 +15,7 @@ import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignBuilderPage from './pages/CampaignBuilderPage';
 import RequestsPage from './pages/RequestsPage';
 import SettingsPage from './pages/SettingsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 // Components
 import PrivateRoute from './components/auth/PrivateRoute';
@@ -83,6 +84,14 @@ const App: React.FC = () => {
                     } 
                   />
                   <Route 
+                    path="/notifications" 
+                    element={
+                      <PrivateRoute>
+                        <NotificationsPage />
+                      </PrivateRoute>
+                    } 
+                  />
+                  <Route 
                     path="/settings" 
                     element={
                       <PrivateRoute>
@@ -92,7 +101,7 @@ const App: React.FC = () => {
                   />
                   
                   {/* Catch all */}
-                  <Route path="*" element={<Navigate to="/\" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Router>
             </CampaignProvider>

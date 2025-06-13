@@ -7,10 +7,11 @@ import Badge from '../components/ui/Badge';
 import CampaignStatusTracker from '../components/campaigns/CampaignStatusTracker';
 import CampaignComments from '../components/campaigns/CampaignComments';
 import CampaignWorkflowHistory from '../components/campaigns/CampaignWorkflowHistory';
+import CampaignActivityTimeline from '../components/campaigns/CampaignActivityTimeline';
 import AdminStatusUpdater from '../components/campaigns/AdminStatusUpdater';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Calendar, DollarSign, Monitor, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, DollarSign, Monitor, Users, Activity } from 'lucide-react';
 
 const CampaignDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -18,15 +19,18 @@ const CampaignDetailPage: React.FC = () => {
   const { 
     getCampaignById, 
     comments, 
-    workflowHistory, 
+    workflowHistory,
+    activityLog,
     fetchCampaignComments, 
     fetchWorkflowHistory,
+    fetchActivityLog,
     addComment,
     updateCampaignStatus
   } = useCampaign();
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'comments' | 'workflow' | 'activity'>('comments');
 
   const campaign = id ? getCampaignById(id) : null;
 
@@ -43,7 +47,8 @@ const CampaignDetailPage: React.FC = () => {
         try {
           await Promise.all([
             fetchCampaignComments(id),
-            fetchWorkflowHistory(id)
+            fetchWorkflowHistory(id),
+            fetchActivityLog(id)
           ]);
           setDataLoaded(true);
         } catch (error) {
@@ -57,7 +62,7 @@ const CampaignDetailPage: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, [id, dataLoaded, fetchCampaignComments, fetchWorkflowHistory, navigate]);
+  }, [id, dataLoaded, fetchCampaignComments, fetchWorkflowHistory, fetchActivityLog, navigate]);
 
   if (!campaign) {
     return (
@@ -127,6 +132,14 @@ const CampaignDetailPage: React.FC = () => {
                 <span className="text-sm text-gray-500">
                   Created {formatDate(campaign.createdAt)}
                 </span>
+                {campaign.users && (
+                  <>
+                    <span className="text-gray-300">•</span>
+                    <span className="text-sm text-gray-500">
+                      {campaign.users.name} ({campaign.users.companies?.name})
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -235,11 +248,61 @@ const CampaignDetailPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Comments */}
-            <CampaignComments
-              comments={comments}
-              onAddComment={(content, parentCommentId) => addComment(campaign.id, content, parentCommentId)}
-            />
+            {/* Tabbed Content */}
+            <div className="bg-white border border-gray-200 rounded-lg">
+              {/* Tab Headers */}
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-6">
+                  <button
+                    onClick={() => setActiveTab('comments')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'comments'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Comments ({comments.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('activity')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'activity'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Activity size={16} className="inline mr-1" />
+                    Activity ({activityLog.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('workflow')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'workflow'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Workflow History ({workflowHistory.length})
+                  </button>
+                </nav>
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-6">
+                {activeTab === 'comments' && (
+                  <CampaignComments
+                    comments={comments}
+                    onAddComment={(content, parentCommentId) => addComment(campaign.id, content, parentCommentId)}
+                  />
+                )}
+                {activeTab === 'activity' && (
+                  <CampaignActivityTimeline activities={activityLog} />
+                )}
+                {activeTab === 'workflow' && (
+                  <CampaignWorkflowHistory history={workflowHistory} />
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Sidebar */}
@@ -251,9 +314,6 @@ const CampaignDetailPage: React.FC = () => {
                 onStatusUpdate={updateCampaignStatus}
               />
             )}
-
-            {/* Workflow History */}
-            <CampaignWorkflowHistory history={workflowHistory} />
           </div>
         </div>
       </div>

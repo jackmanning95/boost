@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters } from '../types';
+import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters, CampaignActivity } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -9,6 +9,7 @@ interface CampaignContextType {
   requests: AudienceRequest[];
   comments: CampaignComment[];
   workflowHistory: CampaignWorkflowHistory[];
+  activityLog: CampaignActivity[];
   filters: CampaignFilters;
   loading: boolean;
   initializeCampaign: (name: string) => void;
@@ -22,6 +23,7 @@ interface CampaignContextType {
   fetchCampaignComments: (campaignId: string) => Promise<void>;
   addComment: (campaignId: string, content: string, parentCommentId?: string) => Promise<void>;
   fetchWorkflowHistory: (campaignId: string) => Promise<void>;
+  fetchActivityLog: (campaignId: string) => Promise<void>;
   setFilters: (filters: Partial<CampaignFilters>) => void;
   filteredCampaigns: Campaign[];
 }
@@ -35,12 +37,82 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [requests, setRequests] = useState<AudienceRequest[]>([]);
   const [comments, setComments] = useState<CampaignComment[]>([]);
   const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
+  const [activityLog, setActivityLog] = useState<CampaignActivity[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
     dateRange: { start: '', end: '' }
   });
+
+  // Helper function to create notifications for relevant users
+  const createNotification = async (
+    title: string, 
+    message: string, 
+    targetUserIds: string[], 
+    campaignId?: string
+  ) => {
+    try {
+      const notifications = targetUserIds.map(userId => ({
+        user_id: userId,
+        title,
+        message,
+        read: false,
+        campaign_id: campaignId || null
+      }));
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (error) {
+        console.error('Error creating notifications:', error);
+      }
+    } catch (error) {
+      console.error('Error in createNotification:', error);
+    }
+  };
+
+  // Helper function to get admin user IDs
+  const getAdminUserIds = async (): Promise<string[]> => {
+    try {
+      const { data: admins, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+
+      if (error) {
+        console.error('Error fetching admin users:', error);
+        return [];
+      }
+
+      return admins?.map(admin => admin.id) || [];
+    } catch (error) {
+      console.error('Error in getAdminUserIds:', error);
+      return [];
+    }
+  };
+
+  // Helper function to get company team member IDs
+  const getCompanyTeamIds = async (companyId: string): Promise<string[]> => {
+    try {
+      const { data: teamMembers, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('company_id', companyId)
+        .neq('id', user?.id); // Exclude current user
+
+      if (error) {
+        console.error('Error fetching team members:', error);
+        return [];
+      }
+
+      return teamMembers?.map(member => member.id) || [];
+    } catch (error) {
+      console.error('Error in getCompanyTeamIds:', error);
+      return [];
+    }
+  };
 
   // Fetch campaigns and requests on mount
   useEffect(() => {
@@ -176,6 +248,19 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       setCampaigns(prev => [newCampaign, ...prev]);
       setActiveCampaign(newCampaign);
+
+      // Notify team members about new campaign
+      if (user.companyId) {
+        const teamIds = await getCompanyTeamIds(user.companyId);
+        if (teamIds.length > 0) {
+          await createNotification(
+            'New Campaign Created',
+            `${user.name} created a new campaign: "${newCampaign.name}"`,
+            teamIds,
+            newCampaign.id
+          );
+        }
+      }
     } catch (error) {
       console.error('Error creating campaign:', error);
     }
@@ -214,6 +299,19 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
 
+      // Log activity
+      await supabase
+        .from('campaign_activity_log')
+        .insert({
+          campaign_id: activeCampaign.id,
+          user_id: user?.id,
+          action_type: 'audience_added',
+          action_details: {
+            audience_name: audience.name,
+            audience_id: audience.id
+          }
+        });
+
       console.log('Successfully added audience:', audience.id);
     } catch (error) {
       console.error('Error adding audience to campaign:', error);
@@ -227,6 +325,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     try {
+      const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
       const updatedCampaign = {
         ...activeCampaign,
         audiences: activeCampaign.audiences.filter(a => a.id !== audienceId),
@@ -247,6 +346,21 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
+
+      // Log activity
+      if (removedAudience) {
+        await supabase
+          .from('campaign_activity_log')
+          .insert({
+            campaign_id: activeCampaign.id,
+            user_id: user?.id,
+            action_type: 'audience_removed',
+            action_details: {
+              audience_name: removedAudience.name,
+              audience_id: removedAudience.id
+            }
+          });
+      }
 
       console.log('Successfully removed audience:', audienceId);
     } catch (error) {
@@ -323,17 +437,19 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (historyError) throw historyError;
 
-      // Create notification for client
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: campaign.clientId,
-          title: 'Campaign Status Updated',
-          message: `Your campaign "${campaign.name}" status has been updated to ${status.replace('_', ' ')}.`,
-          read: false
-        });
+      // Create notification for client and team
+      const notificationTargets = [campaign.clientId];
+      if (campaign.users?.company_id) {
+        const teamIds = await getCompanyTeamIds(campaign.users.company_id);
+        notificationTargets.push(...teamIds);
+      }
 
-      if (notificationError) console.error('Error creating notification:', notificationError);
+      await createNotification(
+        'Campaign Status Updated',
+        `Your campaign "${campaign.name}" status has been updated to ${status.replace('_', ' ')}.${notes ? ` Note: ${notes}` : ''}`,
+        [...new Set(notificationTargets)], // Remove duplicates
+        campaignId
+      );
 
       // Update local state
       setCampaigns(prev => 
@@ -390,17 +506,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Update campaign status
       await updateCampaignDetails({ status: 'submitted' });
       
-      // Create notification for admin - using authenticated user's ID instead of hardcoded 'admin'
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: user.id, // ✅ Using valid UUID instead of 'admin'
-          title: 'New Campaign Submitted',
-          message: `${user.name} has submitted a new campaign: "${activeCampaign.name}".`,
-          read: false
-        });
-
-      if (notificationError) console.error('Error creating notification:', notificationError);
+      // Create notification for admins
+      const adminIds = await getAdminUserIds();
+      if (adminIds.length > 0) {
+        await createNotification(
+          'New Campaign Submitted',
+          `${user.name} has submitted a new campaign: "${activeCampaign.name}".`,
+          adminIds,
+          activeCampaign.id
+        );
+      }
       
       setRequests(prev => [newRequest, ...prev]);
     } catch (error) {
@@ -476,37 +591,52 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (error) throw error;
 
-      // Create notification for the other party
+      // Log activity
+      await supabase
+        .from('campaign_activity_log')
+        .insert({
+          campaign_id: campaignId,
+          user_id: user.id,
+          action_type: 'comment_added',
+          action_details: {
+            comment_content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+            is_reply: !!parentCommentId
+          }
+        });
+
+      // Create notification for relevant users
       const campaign = campaigns.find(c => c.id === campaignId);
       if (campaign) {
-        // ✅ Fixed: Use proper UUID instead of hardcoded 'admin'
-        const notifyUserId = isAdmin ? campaign.clientId : user?.id;
+        const notificationTargets: string[] = [];
         
-        // ✅ Add validation to ensure we have a valid user ID
-        if (!notifyUserId) {
-          console.error("addComment: No valid user ID for notification");
-          return;
-        }
-
-        // ✅ Optional: Validate UUID format
-        const isValidUUID = (id: string) =>
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-
-        if (!isValidUUID(notifyUserId)) {
-          console.error("addComment: Invalid UUID passed to notifications:", notifyUserId);
-          return;
+        // Notify campaign owner if commenter is not the owner
+        if (campaign.clientId !== user.id) {
+          notificationTargets.push(campaign.clientId);
         }
         
-        const { error: notificationError } = await supabase
-          .from('notifications')
-          .insert({
-            user_id: notifyUserId, // ✅ Using valid UUID
-            title: 'New Comment',
-            message: `${user.name} left a comment on campaign "${campaign.name}".`,
-            read: false
-          });
+        // Notify team members
+        if (user.companyId) {
+          const teamIds = await getCompanyTeamIds(user.companyId);
+          notificationTargets.push(...teamIds);
+        }
+        
+        // Notify admins if user is not admin
+        if (!isAdmin) {
+          const adminIds = await getAdminUserIds();
+          notificationTargets.push(...adminIds);
+        }
 
-        if (notificationError) console.error('Error creating notification:', notificationError);
+        // Remove duplicates and current user
+        const uniqueTargets = [...new Set(notificationTargets)].filter(id => id !== user.id);
+        
+        if (uniqueTargets.length > 0) {
+          await createNotification(
+            'New Comment',
+            `${user.name} left a comment on campaign "${campaign.name}".`,
+            uniqueTargets,
+            campaignId
+          );
+        }
       }
 
       // Refresh comments
@@ -544,6 +674,37 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setWorkflowHistory(formattedHistory);
     } catch (error) {
       console.error('Error fetching workflow history:', error);
+    }
+  };
+
+  const fetchActivityLog = async (campaignId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('campaign_activity_log')
+        .select(`
+          *,
+          users!campaign_activity_log_user_id_fkey (name, role)
+        `)
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedActivity: CampaignActivity[] = data?.map(item => ({
+        id: item.id,
+        campaignId: item.campaign_id,
+        userId: item.user_id,
+        actionType: item.action_type,
+        actionDetails: item.action_details,
+        oldValues: item.old_values,
+        newValues: item.new_values,
+        createdAt: item.created_at,
+        user: item.users
+      })) || [];
+
+      setActivityLog(formattedActivity);
+    } catch (error) {
+      console.error('Error fetching activity log:', error);
     }
   };
 
@@ -594,6 +755,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       requests,
       comments,
       workflowHistory,
+      activityLog,
       filters,
       loading,
       initializeCampaign,
@@ -607,6 +769,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       fetchCampaignComments,
       addComment,
       fetchWorkflowHistory,
+      fetchActivityLog,
       setFilters,
       filteredCampaigns
     }}>

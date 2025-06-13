@@ -9,6 +9,7 @@ interface AuthContextType {
   signUp: (data: SignUpData) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
+  updateUserProfile: (updates: Partial<User>) => Promise<void>;
 }
 
 interface SignUpData {
@@ -35,29 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select(`
-              *,
-              companies (
-                id,
-                name
-              )
-            `)
-            .eq('id', session.user.id)
-            .single();
-
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email!,
-              name: profile.name,
-              role: profile.role,
-              companyId: profile.company_id,
-              companyName: profile.companies?.name,
-              platformIds: profile.platform_ids || {}
-            });
-          }
+          await fetchUserProfile(session.user.id);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -72,29 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_IN' && session?.user) {
         setLoading(true);
         try {
-          const { data: profile } = await supabase
-            .from('users')
-            .select(`
-              *,
-              companies (
-                id,
-                name
-              )
-            `)
-            .eq('id', session.user.id)
-            .single();
-
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email!,
-              name: profile.name,
-              role: profile.role,
-              companyId: profile.company_id,
-              companyName: profile.companies?.name,
-              platformIds: profile.platform_ids || {}
-            });
-          }
+          await fetchUserProfile(session.user.id);
         } catch (error) {
           console.error('Error fetching user profile:', error);
         } finally {
@@ -111,6 +68,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const fetchUserProfile = async (userId: string) => {
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select(`
+        *,
+        companies (
+          id,
+          name
+        )
+      `)
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+
+    if (profile) {
+      setUser({
+        id: userId,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        companyId: profile.company_id,
+        companyName: profile.companies?.name,
+        platformIds: profile.platform_ids || {}
+      });
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -123,31 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select(`
-            *,
-            companies (
-              id,
-              name
-            )
-          `)
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError) throw profileError;
-
-        if (profile) {
-          setUser({
-            id: data.user.id,
-            email: data.user.email!,
-            name: profile.name,
-            role: profile.role,
-            companyId: profile.company_id,
-            companyName: profile.companies?.name,
-            platformIds: profile.platform_ids || {}
-          });
-        }
+        await fetchUserProfile(data.user.id);
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -173,13 +137,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         // Create or find company
-        let companyId: string;
+        let companyId: string | null = null;
         
-        if (companyName) {
+        if (companyName && companyName.trim()) {
           // Try to create new company
           const { data: company, error: companyError } = await supabase
             .from('companies')
-            .insert({ name: companyName })
+            .insert({ name: companyName.trim() })
             .select()
             .single();
             
@@ -188,22 +152,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { data: existingCompany } = await supabase
               .from('companies')
               .select('id')
-              .eq('name', companyName)
+              .eq('name', companyName.trim())
               .single();
               
-            companyId = existingCompany?.id || '';
+            companyId = existingCompany?.id || null;
           } else {
             companyId = company.id;
           }
-        } else {
-          // Use default company
+        }
+
+        // If no company provided or company creation failed, use default
+        if (!companyId) {
           const { data: defaultCompany } = await supabase
             .from('companies')
             .select('id')
             .eq('name', 'Default Company')
             .single();
             
-          companyId = defaultCompany?.id || '';
+          companyId = defaultCompany?.id || null;
         }
 
         const { error: profileError } = await supabase
@@ -227,6 +193,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = async (updates: Partial<User>) => {
+    if (!user) return;
+
+    try {
+      const updateData: any = {};
+      
+      if (updates.name) updateData.name = updates.name;
+      if (updates.platformIds) updateData.platform_ids = updates.platformIds;
+      
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setUser(prev => prev ? { ...prev, ...updates } : null);
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       setLoading(true);
@@ -242,7 +232,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signUp, logout, isAdmin }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      signUp, 
+      logout, 
+      isAdmin,
+      updateUserProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );
