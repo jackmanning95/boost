@@ -39,9 +39,10 @@ export interface Campaign {
   budget: number;
   startDate: string;
   endDate: string;
-  status: 'draft' | 'submitted' | 'pending_review' | 'in_progress' | 'waiting_on_client' | 'delivered' | 'failed' | 'completed';
+  status: 'draft' | 'submitted' | 'pending_review' | 'approved' | 'in_progress' | 'waiting_on_client' | 'delivered' | 'failed' | 'completed' | 'live' | 'paused';
   createdAt: string;
   updatedAt: string;
+  approvedAt?: string;
   users?: {
     name: string;
     company_id: string;
@@ -84,7 +85,7 @@ export interface CampaignActivity {
   id: string;
   campaignId: string;
   userId: string;
-  actionType: 'created' | 'updated' | 'status_changed' | 'comment_added' | 'audience_added' | 'audience_removed';
+  actionType: 'created' | 'updated' | 'status_changed' | 'comment_added' | 'audience_added' | 'audience_removed' | 'approved' | 'rejected';
   actionDetails: Record<string, any>;
   oldValues?: Record<string, any>;
   newValues?: Record<string, any>;
@@ -110,6 +111,7 @@ export interface AudienceRequest {
   notes?: string;
   status: 'pending' | 'reviewed' | 'approved' | 'rejected';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Notification {
@@ -120,6 +122,7 @@ export interface Notification {
   read: boolean;
   createdAt: string;
   campaignId?: string;
+  campaign_id?: string; // For database compatibility
 }
 
 export interface CampaignFilters {
@@ -129,4 +132,21 @@ export interface CampaignFilters {
     start: string;
     end: string;
   };
+}
+
+// New types for better organization
+export type CampaignStatusCategory = 'pending' | 'active' | 'completed';
+
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  status: Campaign['status'];
+  statusCategory: CampaignStatusCategory;
+  lastUpdate: string;
+  audienceCount: number;
+  budget: number;
+  clientName?: string;
+  companyName?: string;
+  createdAt: string;
+  updatedAt: string;
 }

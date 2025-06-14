@@ -17,7 +17,7 @@ const Header: React.FC = () => {
 
   const navItems = [
     { label: 'Audiences', path: '/audiences', show: !!user },
-    { label: 'Campaigns', path: '/campaigns', show: !!user && !isAdmin },
+    { label: 'Campaigns', path: '/campaigns', show: !!user },
     { label: 'Requests', path: '/requests', show: !!user && isAdmin },
     { label: 'Settings', path: '/settings', show: !!user },
   ].filter(item => item.show);

@@ -1,32 +1,53 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters, CampaignActivity } from '../types';
+import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters, CampaignActivity, CampaignStatusCategory } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
 interface CampaignContextType {
+  // Data
   campaigns: Campaign[];
-  activeCampaign: Campaign | null;
   requests: AudienceRequest[];
+  activeCampaign: Campaign | null;
   comments: CampaignComment[];
   workflowHistory: CampaignWorkflowHistory[];
   activityLog: CampaignActivity[];
   filters: CampaignFilters;
   loading: boolean;
+
+  // Campaign Management
   initializeCampaign: (name: string) => void;
   addAudienceToCampaign: (audience: AudienceSegment) => void;
   removeAudienceFromCampaign: (audienceId: string) => void;
   updateCampaignDetails: (details: Partial<Campaign>) => void;
   updateCampaignStatus: (campaignId: string, status: string, notes?: string) => Promise<void>;
   submitCampaignRequest: (notes?: string) => Promise<void>;
+
+  // Data Access
   getCampaignById: (id: string) => Campaign | undefined;
   getRequestById: (id: string) => AudienceRequest | undefined;
+  
+  // Comments & Activity
   fetchCampaignComments: (campaignId: string) => Promise<void>;
   addComment: (campaignId: string, content: string, parentCommentId?: string) => Promise<void>;
   fetchWorkflowHistory: (campaignId: string) => Promise<void>;
   fetchActivityLog: (campaignId: string) => Promise<void>;
+
+  // Filtering & Search
   setFilters: (filters: Partial<CampaignFilters>) => void;
   filteredCampaigns: Campaign[];
+  
+  // Requests Management
   refreshRequests: () => Promise<void>;
+  
+  // New: Separated data access
+  pendingRequests: AudienceRequest[];
+  approvedCampaigns: Campaign[];
+  activeCampaigns: Campaign[];
+  completedCampaigns: Campaign[];
+  
+  // New: Status categorization
+  getCampaignStatusCategory: (status: string) => CampaignStatusCategory;
+  getCampaignsByCategory: (category: CampaignStatusCategory) => Campaign[];
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
@@ -114,6 +135,41 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return [];
     }
   };
+
+  // Status categorization helper
+  const getCampaignStatusCategory = useCallback((status: string): CampaignStatusCategory => {
+    switch (status) {
+      case 'draft':
+      case 'submitted':
+      case 'pending_review':
+        return 'pending';
+      case 'approved':
+      case 'in_progress':
+      case 'waiting_on_client':
+      case 'delivered':
+      case 'live':
+      case 'paused':
+        return 'active';
+      case 'completed':
+      case 'failed':
+        return 'completed';
+      default:
+        return 'pending';
+    }
+  }, []);
+
+  // Get campaigns by category
+  const getCampaignsByCategory = useCallback((category: CampaignStatusCategory): Campaign[] => {
+    return campaigns.filter(campaign => getCampaignStatusCategory(campaign.status) === category);
+  }, [campaigns, getCampaignStatusCategory]);
+
+  // Computed values for separated data access
+  const pendingRequests = requests.filter(request => request.status === 'pending');
+  const approvedCampaigns = campaigns.filter(campaign => 
+    ['approved', 'in_progress', 'waiting_on_client', 'delivered', 'live', 'paused'].includes(campaign.status)
+  );
+  const activeCampaigns = getCampaignsByCategory('active');
+  const completedCampaigns = getCampaignsByCategory('completed');
 
   // Fetch campaigns and requests on mount
   useEffect(() => {
@@ -422,13 +478,20 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const campaign = campaigns.find(c => c.id === campaignId);
       if (!campaign) return;
 
+      const updateData: any = { 
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      // Add approved_at timestamp when approving
+      if (status === 'approved' && campaign.status !== 'approved') {
+        updateData.approved_at = new Date().toISOString();
+      }
+
       // Update campaign status
       const { error: campaignError } = await supabase
         .from('campaigns')
-        .update({ 
-          status,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', campaignId);
 
       if (campaignError) throw campaignError;
@@ -463,7 +526,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Update local state
       setCampaigns(prev => 
-        prev.map(c => c.id === campaignId ? { ...c, status: status as any } : c)
+        prev.map(c => c.id === campaignId ? { ...c, status: status as any, updatedAt: updateData.updated_at } : c)
       );
 
     } catch (error) {
@@ -782,7 +845,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       fetchActivityLog,
       setFilters,
       filteredCampaigns,
-      refreshRequests
+      refreshRequests,
+      pendingRequests,
+      approvedCampaigns,
+      activeCampaigns,
+      completedCampaigns,
+      getCampaignStatusCategory,
+      getCampaignsByCategory
     }}>
       {children}
     </CampaignContext.Provider>

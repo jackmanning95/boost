@@ -25,7 +25,9 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 import { AudienceRequest } from '../types';
 
@@ -80,7 +82,7 @@ class RequestsErrorBoundary extends React.Component<
 }
 
 const RequestsPageContent: React.FC = () => {
-  const { requests = [], campaigns = [], updateCampaignStatus } = useCampaign();
+  const { pendingRequests, campaigns, updateCampaignStatus, refreshRequests } = useCampaign();
   const { isAdmin, user } = useAuth();
   const { refreshNotifications } = useNotifications();
   const navigate = useNavigate();
@@ -156,15 +158,15 @@ const RequestsPageContent: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        // Ensure requests is an array
-        if (!Array.isArray(requests)) {
-          console.warn('Requests is not an array:', requests);
+        // Ensure pendingRequests is an array
+        if (!Array.isArray(pendingRequests)) {
+          console.warn('Pending requests is not an array:', pendingRequests);
           setLoading(false);
           return;
         }
 
         // Get unique client IDs from requests
-        const clientIds = [...new Set(requests.map(r => r?.clientId).filter(Boolean))];
+        const clientIds = [...new Set(pendingRequests.map(r => r?.clientId).filter(Boolean))];
         
         if (clientIds.length > 0) {
           // Fetch user data
@@ -214,7 +216,7 @@ const RequestsPageContent: React.FC = () => {
     };
 
     fetchRequestData();
-  }, [requests]);
+  }, [pendingRequests]);
 
   const handleApprove = async (requestId: string) => {
     if (!requestId) return;
@@ -232,7 +234,7 @@ const RequestsPageContent: React.FC = () => {
       if (error) throw error;
 
       // Find the request and create notification
-      const request = requests.find(r => r?.id === requestId);
+      const request = pendingRequests.find(r => r?.id === requestId);
       if (request?.clientId) {
         const campaign = campaigns.find(c => c?.id === request.campaignId);
         
@@ -247,16 +249,18 @@ const RequestsPageContent: React.FC = () => {
             campaign_id: request.campaignId || null
           });
 
-        // Update campaign status to in_progress
+        // Update campaign status to approved
         if (campaign?.id && updateCampaignStatus) {
-          await updateCampaignStatus(campaign.id, 'in_progress', 'Request approved by admin');
+          await updateCampaignStatus(campaign.id, 'approved', 'Request approved by admin');
         }
       }
 
       if (refreshNotifications) {
         await refreshNotifications();
       }
-      window.location.reload(); // Refresh to show updated data
+      
+      // Refresh requests data
+      await refreshRequests();
     } catch (error) {
       console.error('Error approving request:', error);
       setError('Failed to approve request. Please try again.');
@@ -284,7 +288,7 @@ const RequestsPageContent: React.FC = () => {
       if (error) throw error;
 
       // Find the request and create notification
-      const request = requests.find(r => r?.id === requestId);
+      const request = pendingRequests.find(r => r?.id === requestId);
       if (request?.clientId) {
         const campaign = campaigns.find(c => c?.id === request.campaignId);
         
@@ -308,7 +312,9 @@ const RequestsPageContent: React.FC = () => {
       if (refreshNotifications) {
         await refreshNotifications();
       }
-      window.location.reload(); // Refresh to show updated data
+      
+      // Refresh requests data
+      await refreshRequests();
     } catch (error) {
       console.error('Error rejecting request:', error);
       setError('Failed to reject request. Please try again.');
@@ -328,7 +334,7 @@ const RequestsPageContent: React.FC = () => {
   };
 
   // Filter and search logic with null checks
-  const filteredRequests = (requests || []).filter(request => {
+  const filteredRequests = (pendingRequests || []).filter(request => {
     if (!request) return false;
     
     const user = requestUsers[request.clientId] || {};
@@ -349,7 +355,7 @@ const RequestsPageContent: React.FC = () => {
       return false;
     }
 
-    // Status filter
+    // Status filter (for pending requests, this will mostly be 'pending')
     if (filters.status && request.status !== filters.status) {
       return false;
     }
@@ -485,10 +491,87 @@ const RequestsPageContent: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header with Stats */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Campaign Requests</h1>
-          <p className="text-gray-600">Manage client audience segment requests and campaign approvals</p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+                <FileText size={28} className="mr-3 text-blue-600" />
+                Campaign Requests
+              </h1>
+              <p className="text-gray-600">Review and approve pending campaign submissions</p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/campaigns')}
+              icon={<TrendingUp size={18} />}
+            >
+              View Active Campaigns
+            </Button>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-yellow-100 rounded-lg">
+                    <Clock size={20} className="text-yellow-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Pending Review</p>
+                    <p className="text-2xl font-bold text-gray-900">{pendingRequests.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Users size={20} className="text-blue-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Total Audiences</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {pendingRequests.reduce((sum, req) => sum + (req.audiences?.length || 0), 0)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Building size={20} className="text-green-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Companies</p>
+                    <p className="text-2xl font-bold text-gray-900">{getUniqueAgencies().length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <TrendingUp size={20} className="text-purple-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Total Budget</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      ${pendingRequests.reduce((sum, req) => sum + (req.budget || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Filters and Search */}
@@ -533,8 +616,6 @@ const RequestsPageContent: React.FC = () => {
                 <option value="">All Statuses</option>
                 <option value="pending">Pending</option>
                 <option value="reviewed">Under Review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
               </select>
 
               {/* Items per page */}
@@ -568,14 +649,18 @@ const RequestsPageContent: React.FC = () => {
               const campaign = campaigns.find(c => c?.id === request.campaignId);
               
               return (
-                <Card key={request.id} className="overflow-hidden">
+                <Card key={request.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="p-0">
                     <div className="p-6">
                       <div className="flex justify-between items-start flex-wrap gap-4">
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {getCampaignName(request.campaignId)}
-                          </h3>
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              {getCampaignName(request.campaignId)}
+                            </h3>
+                            {getStatusBadge(request.status)}
+                          </div>
+                          
                           <div className="flex items-center mt-2 space-x-4">
                             <div className="flex items-center text-sm text-gray-600">
                               <User size={14} className="mr-1" />
@@ -595,14 +680,12 @@ const RequestsPageContent: React.FC = () => {
                           <div className="mt-3 p-3 bg-gray-50 rounded-md">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-medium text-gray-700">Current Status</p>
+                                <p className="text-sm font-medium text-gray-700">Campaign Status</p>
                                 <div className="flex items-center mt-1">
-                                  {getStatusBadge(request.status)}
-                                  {campaign && (
-                                    <span className="ml-2 text-sm text-gray-500">
-                                      Campaign: {campaign.status?.replace('_', ' ') || 'Unknown'}
-                                    </span>
-                                  )}
+                                  <Badge variant="primary">{campaign?.status?.replace('_', ' ') || 'Unknown'}</Badge>
+                                  <span className="ml-2 text-sm text-gray-500">
+                                    Submitted {formatDate(request.createdAt)}
+                                  </span>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -743,16 +826,17 @@ const RequestsPageContent: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <FileText size={64} className="mx-auto mb-4 text-gray-300" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
                 ? 'No requests match your filters'
-                : 'No requests yet'
+                : 'No pending requests'
               }
             </h3>
             <p className="text-gray-600">
               {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
                 ? 'Try adjusting your search criteria or filters'
-                : "You'll see client campaign requests here when they're submitted"
+                : "All caught up! No campaign requests are waiting for review."
               }
             </p>
           </div>
