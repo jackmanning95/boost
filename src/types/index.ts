@@ -132,6 +132,8 @@ export interface CampaignFilters {
     start: string;
     end: string;
   };
+  agency?: string; // For admin filtering by company
+  statusCategory?: string; // For filtering by status category (upcoming/active/past)
 }
 
 // New types for better organization

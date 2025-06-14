@@ -64,7 +64,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
-    dateRange: { start: '', end: '' }
+    dateRange: { start: '', end: '' },
+    agency: '',
+    statusCategory: ''
   });
 
   // Helper function to create notifications for relevant users
@@ -789,7 +791,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      if (!campaign.name.toLowerCase().includes(searchLower)) {
+      const searchableText = `${campaign.name} ${campaign.users?.name || ''} ${campaign.users?.companies?.name || ''}`.toLowerCase();
+      if (!searchableText.includes(searchLower)) {
         return false;
       }
     }
@@ -797,6 +800,19 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Status filter
     if (filters.status && campaign.status !== filters.status) {
       return false;
+    }
+
+    // Agency filter (admin only)
+    if (filters.agency && campaign.users?.companies?.name !== filters.agency) {
+      return false;
+    }
+
+    // Status category filter
+    if (filters.statusCategory) {
+      const category = getCampaignStatusCategory(campaign.status);
+      if (category !== filters.statusCategory) {
+        return false;
+      }
     }
 
     // Date range filter
@@ -824,8 +840,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <CampaignContext.Provider value={{
       campaigns,
-      activeCampaign,
       requests,
+      activeCampaign,
       comments,
       workflowHistory,
       activityLog,
