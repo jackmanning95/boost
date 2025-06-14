@@ -24,7 +24,8 @@ import {
   Eye,
   MessageSquare,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertCircle
 } from 'lucide-react';
 import { AudienceRequest } from '../types';
 
@@ -35,9 +36,52 @@ interface RequestFilters {
   status: string;
 }
 
-const RequestsPage: React.FC = () => {
-  const { requests, campaigns, updateCampaignStatus } = useCampaign();
-  const { isAdmin } = useAuth();
+// Error Boundary Component
+class RequestsErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('RequestsPage Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Layout>
+          <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
+            <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
+            <h2 className="text-xl font-semibold text-red-900 mb-2">Something went wrong</h2>
+            <p className="text-red-700 mb-4">
+              There was an error loading the requests page. Please try refreshing the page.
+            </p>
+            <Button 
+              variant="primary" 
+              onClick={() => window.location.reload()}
+            >
+              Refresh Page
+            </Button>
+          </div>
+        </Layout>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const RequestsPageContent: React.FC = () => {
+  const { requests = [], campaigns = [], updateCampaignStatus } = useCampaign();
+  const { isAdmin, user } = useAuth();
   const { refreshNotifications } = useNotifications();
   const navigate = useNavigate();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
@@ -52,6 +96,8 @@ const RequestsPage: React.FC = () => {
   });
   const [requestUsers, setRequestUsers] = useState<Record<string, any>>({});
   const [companies, setCompanies] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Redirect if user is not admin
   if (!isAdmin) {
@@ -62,8 +108,18 @@ const RequestsPage: React.FC = () => {
   useEffect(() => {
     const fetchRequestData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
+        // Ensure requests is an array
+        if (!Array.isArray(requests)) {
+          console.warn('Requests is not an array:', requests);
+          setLoading(false);
+          return;
+        }
+
         // Get unique client IDs from requests
-        const clientIds = [...new Set(requests.map(r => r.clientId))];
+        const clientIds = [...new Set(requests.map(r => r?.clientId).filter(Boolean))];
         
         if (clientIds.length > 0) {
           // Fetch user data
@@ -81,33 +137,43 @@ const RequestsPage: React.FC = () => {
             `)
             .in('id', clientIds);
 
-          if (usersError) throw usersError;
+          if (usersError) {
+            console.error('Error fetching users:', usersError);
+            throw usersError;
+          }
 
-          // Create lookup objects
+          // Create lookup objects with null checks
           const userLookup: Record<string, any> = {};
           const companyLookup: Record<string, string> = {};
 
-          users?.forEach(user => {
-            userLookup[user.id] = user;
-            if (user.companies) {
-              companyLookup[user.company_id] = user.companies.name;
-            }
-          });
+          if (Array.isArray(users)) {
+            users.forEach(user => {
+              if (user?.id) {
+                userLookup[user.id] = user;
+                if (user.companies?.name && user.company_id) {
+                  companyLookup[user.company_id] = user.companies.name;
+                }
+              }
+            });
+          }
 
           setRequestUsers(userLookup);
           setCompanies(companyLookup);
         }
       } catch (error) {
         console.error('Error fetching request data:', error);
+        setError('Failed to load request data. Please try refreshing the page.');
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (requests.length > 0) {
-      fetchRequestData();
-    }
+    fetchRequestData();
   }, [requests]);
 
   const handleApprove = async (requestId: string) => {
+    if (!requestId) return;
+    
     setIsUpdating(requestId);
     try {
       const { error } = await supabase
@@ -121,9 +187,9 @@ const RequestsPage: React.FC = () => {
       if (error) throw error;
 
       // Find the request and create notification
-      const request = requests.find(r => r.id === requestId);
-      if (request) {
-        const campaign = campaigns.find(c => c.id === request.campaignId);
+      const request = requests.find(r => r?.id === requestId);
+      if (request?.clientId) {
+        const campaign = campaigns.find(c => c?.id === request.campaignId);
         
         // Create notification for client
         await supabase
@@ -133,25 +199,30 @@ const RequestsPage: React.FC = () => {
             title: 'Campaign Request Approved',
             message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been approved and is now in progress.`,
             read: false,
-            campaign_id: request.campaignId
+            campaign_id: request.campaignId || null
           });
 
         // Update campaign status to in_progress
-        if (campaign) {
+        if (campaign?.id && updateCampaignStatus) {
           await updateCampaignStatus(campaign.id, 'in_progress', 'Request approved by admin');
         }
       }
 
-      await refreshNotifications();
+      if (refreshNotifications) {
+        await refreshNotifications();
+      }
       window.location.reload(); // Refresh to show updated data
     } catch (error) {
       console.error('Error approving request:', error);
+      setError('Failed to approve request. Please try again.');
     } finally {
       setIsUpdating(null);
     }
   };
 
   const handleReject = async (requestId: string) => {
+    if (!requestId) return;
+    
     const reason = prompt('Please provide a reason for rejection (optional):');
     
     setIsUpdating(requestId);
@@ -168,9 +239,9 @@ const RequestsPage: React.FC = () => {
       if (error) throw error;
 
       // Find the request and create notification
-      const request = requests.find(r => r.id === requestId);
-      if (request) {
-        const campaign = campaigns.find(c => c.id === request.campaignId);
+      const request = requests.find(r => r?.id === requestId);
+      if (request?.clientId) {
+        const campaign = campaigns.find(c => c?.id === request.campaignId);
         
         // Create notification for client
         await supabase
@@ -180,37 +251,44 @@ const RequestsPage: React.FC = () => {
             title: 'Campaign Request Rejected',
             message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
             read: false,
-            campaign_id: request.campaignId
+            campaign_id: request.campaignId || null
           });
 
         // Update campaign status to failed
-        if (campaign) {
+        if (campaign?.id && updateCampaignStatus) {
           await updateCampaignStatus(campaign.id, 'failed', reason || 'Request rejected by admin');
         }
       }
 
-      await refreshNotifications();
+      if (refreshNotifications) {
+        await refreshNotifications();
+      }
       window.location.reload(); // Refresh to show updated data
     } catch (error) {
       console.error('Error rejecting request:', error);
+      setError('Failed to reject request. Please try again.');
     } finally {
       setIsUpdating(null);
     }
   };
 
   const handleViewCampaign = (campaignId: string) => {
-    navigate(`/campaigns/${campaignId}`);
+    if (campaignId) {
+      navigate(`/campaigns/${campaignId}`);
+    }
   };
 
   const handleViewDetails = (requestId: string) => {
     setSelectedRequest(requestId === selectedRequest ? null : requestId);
   };
 
-  // Filter and search logic
-  const filteredRequests = requests.filter(request => {
-    const user = requestUsers[request.clientId];
+  // Filter and search logic with null checks
+  const filteredRequests = (requests || []).filter(request => {
+    if (!request) return false;
+    
+    const user = requestUsers[request.clientId] || {};
     const companyName = user?.companies?.name || '';
-    const campaignName = getCampaignName(request.campaignId);
+    const campaignName = getCampaignName(request.campaignId) || '';
     
     // Search filter
     if (filters.search) {
@@ -241,37 +319,45 @@ const RequestsPage: React.FC = () => {
 
   // Sort requests by creation date (newest first)
   const sortedRequests = [...paginatedRequests].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => {
+      const dateA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    }
   );
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="warning">Pending Review</Badge>;
-      case 'reviewed':
-        return <Badge variant="primary">Under Review</Badge>;
-      case 'approved':
-        return <Badge variant="success">Approved</Badge>;
-      case 'rejected':
-        return <Badge variant="danger">Rejected</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
-    }
+    const statusMap = {
+      pending: { variant: 'warning' as const, label: 'Pending Review' },
+      reviewed: { variant: 'primary' as const, label: 'Under Review' },
+      approved: { variant: 'success' as const, label: 'Approved' },
+      rejected: { variant: 'danger' as const, label: 'Rejected' }
+    };
+
+    const config = statusMap[status as keyof typeof statusMap] || { variant: 'default' as const, label: status || 'Unknown' };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
   
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Unknown Date';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
   
   const getCampaignName = (campaignId: string) => {
-    const campaign = campaigns.find(c => c.id === campaignId);
-    return campaign ? campaign.name : 'Unknown Campaign';
+    if (!campaignId) return 'Unknown Campaign';
+    const campaign = campaigns.find(c => c?.id === campaignId);
+    return campaign?.name || 'Unknown Campaign';
   };
 
   const getUniqueAgencies = () => {
@@ -285,9 +371,9 @@ const RequestsPage: React.FC = () => {
   };
 
   const renderRequestDetails = (request: AudienceRequest) => {
-    if (request.id !== selectedRequest) return null;
+    if (!request || request.id !== selectedRequest) return null;
 
-    const user = requestUsers[request.clientId];
+    const user = requestUsers[request.clientId] || {};
 
     return (
       <div className="mt-6 border-t border-gray-200 pt-6 space-y-6">
@@ -323,22 +409,22 @@ const RequestsPage: React.FC = () => {
         <div>
           <h4 className="text-lg font-medium mb-4 flex items-center">
             <Users size={20} className="mr-2 text-blue-600" />
-            Selected Audiences ({request.audiences.length})
+            Selected Audiences ({request.audiences?.length || 0})
           </h4>
           <div className="space-y-3">
-            {request.audiences.map(audience => (
-              <div key={audience.id} className="bg-gray-50 rounded-md p-4">
+            {(request.audiences || []).map((audience, index) => (
+              <div key={audience?.id || index} className="bg-gray-50 rounded-md p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h5 className="font-medium">{audience.name}</h5>
-                    <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
-                    {audience.dataSupplier && (
+                    <h5 className="font-medium">{audience?.name || 'Unknown Audience'}</h5>
+                    <p className="text-sm text-gray-600 mt-1">{audience?.description || 'No description'}</p>
+                    {audience?.dataSupplier && (
                       <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
                     )}
                   </div>
                   <div className="text-right text-sm ml-4">
                     <p className="text-gray-500">Est. Reach</p>
-                    <p className="font-medium">{audience.reach?.toLocaleString() || 'N/A'}</p>
+                    <p className="font-medium">{audience?.reach?.toLocaleString() || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -366,6 +452,34 @@ const RequestsPage: React.FC = () => {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#509fe0]"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
+          <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
+          <h2 className="text-xl font-semibold text-red-900 mb-2">Error Loading Requests</h2>
+          <p className="text-red-700 mb-4">{error}</p>
+          <Button 
+            variant="primary" 
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout>
@@ -447,8 +561,10 @@ const RequestsPage: React.FC = () => {
         {sortedRequests.length > 0 ? (
           <div className="space-y-6">
             {sortedRequests.map(request => {
-              const user = requestUsers[request.clientId];
-              const campaign = campaigns.find(c => c.id === request.campaignId);
+              if (!request) return null;
+              
+              const user = requestUsers[request.clientId] || {};
+              const campaign = campaigns.find(c => c?.id === request.campaignId);
               
               return (
                 <Card key={request.id} className="overflow-hidden">
@@ -483,7 +599,7 @@ const RequestsPage: React.FC = () => {
                                   {getStatusBadge(request.status)}
                                   {campaign && (
                                     <span className="ml-2 text-sm text-gray-500">
-                                      Campaign: {campaign.status.replace('_', ' ')}
+                                      Campaign: {campaign.status?.replace('_', ' ') || 'Unknown'}
                                     </span>
                                   )}
                                 </div>
@@ -538,7 +654,7 @@ const RequestsPage: React.FC = () => {
                           <p className="text-xs text-gray-500">Selected Audiences</p>
                           <div className="flex items-center">
                             <Users size={16} className="text-gray-400 mr-1" />
-                            <p className="font-medium">{request.audiences.length} segments</p>
+                            <p className="font-medium">{request.audiences?.length || 0} segments</p>
                           </div>
                         </div>
                         
@@ -554,18 +670,18 @@ const RequestsPage: React.FC = () => {
                         
                         <div>
                           <p className="text-xs text-gray-500">Budget</p>
-                          <p className="font-medium">${request.budget.toLocaleString()}</p>
+                          <p className="font-medium">${(request.budget || 0).toLocaleString()}</p>
                         </div>
                       </div>
                       
-                      {(request.platforms.social.length > 0 || request.platforms.programmatic.length > 0) && (
+                      {(request.platforms?.social?.length > 0 || request.platforms?.programmatic?.length > 0) && (
                         <div className="mt-4">
                           <p className="text-xs text-gray-500 mb-1">Platforms</p>
                           <div className="flex flex-wrap gap-1">
-                            {request.platforms.social.map(platform => (
+                            {(request.platforms.social || []).map(platform => (
                               <Badge key={platform} variant="default" className="text-xs">{platform}</Badge>
                             ))}
-                            {request.platforms.programmatic.map(platform => (
+                            {(request.platforms.programmatic || []).map(platform => (
                               <Badge key={platform} variant="secondary" className="text-xs">{platform}</Badge>
                             ))}
                           </div>
@@ -642,6 +758,14 @@ const RequestsPage: React.FC = () => {
         )}
       </div>
     </Layout>
+  );
+};
+
+const RequestsPage: React.FC = () => {
+  return (
+    <RequestsErrorBoundary>
+      <RequestsPageContent />
+    </RequestsErrorBoundary>
   );
 };
 
