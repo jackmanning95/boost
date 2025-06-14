@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../../context/NotificationContext';
-import { Bell, Check, CheckCheck, X, Trash2, ExternalLink } from 'lucide-react';
+import { Bell, Check, CheckCheck, X, Trash2, ExternalLink, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 
@@ -49,8 +49,8 @@ const NotificationDropdown: React.FC = () => {
     }
 
     // Navigate to campaign if campaignId exists
-    if (notification.campaignId) {
-      navigate(`/campaigns/${notification.campaignId}`);
+    if (notification.campaign_id) {
+      navigate(`/campaigns/${notification.campaign_id}`);
       setIsOpen(false);
     }
   };
@@ -69,6 +69,25 @@ const NotificationDropdown: React.FC = () => {
     await refreshNotifications();
   };
 
+  // Group notifications by date
+  const groupedNotifications = notifications.reduce((groups, notification) => {
+    const date = new Date(notification.createdAt).toDateString();
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(notification);
+    return groups;
+  }, {} as Record<string, typeof notifications>);
+
+  const getNotificationIcon = (title: string) => {
+    if (title.includes('Approved')) return '✅';
+    if (title.includes('Rejected')) return '❌';
+    if (title.includes('Comment')) return '💬';
+    if (title.includes('Update')) return '📝';
+    if (title.includes('Created')) return '🆕';
+    return '🔔';
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -77,7 +96,7 @@ const NotificationDropdown: React.FC = () => {
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium animate-pulse">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -119,59 +138,75 @@ const NotificationDropdown: React.FC = () => {
 
           <div className="max-h-80 overflow-y-auto">
             {notifications.length > 0 ? (
-              <div className="divide-y divide-gray-200">
-                {notifications.map(notification => (
-                  <div
-                    key={notification.id}
-                    className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                      !notification.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                    }`}
-                    onClick={() => handleNotificationClick(notification)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <p className={`font-medium text-gray-900 ${!notification.read ? 'font-semibold' : ''}`}>
-                            {notification.title}
-                          </p>
-                          {!notification.read && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          )}
+              <div>
+                {Object.entries(groupedNotifications).map(([date, dayNotifications]) => (
+                  <div key={date}>
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                      <p className="text-xs font-medium text-gray-600">
+                        {new Date(date).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {dayNotifications.map(notification => (
+                        <div
+                          key={notification.id}
+                          className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors group ${
+                            !notification.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                          }`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="text-lg">{getNotificationIcon(notification.title)}</span>
+                                <p className={`font-medium text-gray-900 ${!notification.read ? 'font-semibold' : ''}`}>
+                                  {notification.title}
+                                </p>
+                                {!notification.read && (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                {notification.message}
+                              </p>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center text-xs text-gray-500">
+                                  <Clock size={12} className="mr-1" />
+                                  <span>{formatDate(notification.createdAt)}</span>
+                                </div>
+                                {notification.campaign_id && (
+                                  <span className="text-xs text-blue-600 font-medium">
+                                    View Campaign →
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!notification.read && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => handleMarkAsRead(e, notification.id)}
+                                  icon={<Check size={14} />}
+                                  title="Mark as read"
+                                />
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleDeleteNotification(e, notification.id)}
+                                icon={<Trash2 size={14} />}
+                                title="Delete notification"
+                                className="text-red-600 hover:text-red-700"
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-gray-500">
-                            {formatDate(notification.createdAt)}
-                          </p>
-                          {notification.campaignId && (
-                            <span className="text-xs text-blue-600 font-medium">
-                              View Campaign →
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-1 ml-2">
-                        {!notification.read && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleMarkAsRead(e, notification.id)}
-                            icon={<Check size={14} />}
-                            title="Mark as read"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          />
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => handleDeleteNotification(e, notification.id)}
-                          icon={<Trash2 size={14} />}
-                          title="Delete notification"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700"
-                        />
-                      </div>
+                      ))}
                     </div>
                   </div>
                 ))}

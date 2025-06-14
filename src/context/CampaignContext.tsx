@@ -26,6 +26,7 @@ interface CampaignContextType {
   fetchActivityLog: (campaignId: string) => Promise<void>;
   setFilters: (filters: Partial<CampaignFilters>) => void;
   filteredCampaigns: Campaign[];
+  refreshRequests: () => Promise<void>;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
@@ -140,13 +141,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         // Fetch requests for admin users
         if (isAdmin) {
-          const { data: requestData, error: requestError } = await supabase
-            .from('audience_requests')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (requestError) throw requestError;
-          setRequests(requestData || []);
+          await refreshRequests();
         }
       } catch (error) {
         console.error('Error fetching campaign data:', error);
@@ -204,6 +199,20 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       workflowSubscription.unsubscribe();
     };
   }, [user, isAdmin]);
+
+  const refreshRequests = async () => {
+    try {
+      const { data: requestData, error: requestError } = await supabase
+        .from('audience_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (requestError) throw requestError;
+      setRequests(requestData || []);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    }
+  };
 
   const initializeCampaign = async (name: string) => {
     if (!user) return;
@@ -444,9 +453,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         notificationTargets.push(...teamIds);
       }
 
+      const statusLabel = status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
       await createNotification(
         'Campaign Status Updated',
-        `Your campaign "${campaign.name}" status has been updated to ${status.replace('_', ' ')}.${notes ? ` Note: ${notes}` : ''}`,
+        `Your campaign "${campaign.name}" status has been updated to ${statusLabel}.${notes ? ` Note: ${notes}` : ''}`,
         [...new Set(notificationTargets)], // Remove duplicates
         campaignId
       );
@@ -771,7 +781,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       fetchWorkflowHistory,
       fetchActivityLog,
       setFilters,
-      filteredCampaigns
+      filteredCampaigns,
+      refreshRequests
     }}>
       {children}
     </CampaignContext.Provider>

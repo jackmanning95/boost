@@ -1,64 +1,255 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import Input from '../components/ui/Input';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, Users, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
+import { useNotifications } from '../context/NotificationContext';
+import { supabase } from '../lib/supabase';
+import { 
+  Calendar, 
+  Clock, 
+  Users, 
+  CheckCircle, 
+  XCircle, 
+  ChevronRight, 
+  Search,
+  Filter,
+  Building,
+  User,
+  Mail,
+  Eye,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
 import { AudienceRequest } from '../types';
 
+interface RequestFilters {
+  search: string;
+  agency: string;
+  advertiser: string;
+  status: string;
+}
+
 const RequestsPage: React.FC = () => {
-  const { requests, campaigns } = useCampaign();
+  const { requests, campaigns, updateCampaignStatus } = useCampaign();
   const { isAdmin } = useAuth();
+  const { refreshNotifications } = useNotifications();
+  const navigate = useNavigate();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [filters, setFilters] = useState<RequestFilters>({
+    search: '',
+    agency: '',
+    advertiser: '',
+    status: ''
+  });
+  const [requestUsers, setRequestUsers] = useState<Record<string, any>>({});
+  const [companies, setCompanies] = useState<Record<string, string>>({});
   
   // Redirect if user is not admin
   if (!isAdmin) {
     return <Navigate to="/campaigns" replace />;
   }
 
+  // Fetch user and company data for requests
+  useEffect(() => {
+    const fetchRequestData = async () => {
+      try {
+        // Get unique client IDs from requests
+        const clientIds = [...new Set(requests.map(r => r.clientId))];
+        
+        if (clientIds.length > 0) {
+          // Fetch user data
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select(`
+              id,
+              name,
+              email,
+              company_id,
+              companies!users_company_id_fkey (
+                id,
+                name
+              )
+            `)
+            .in('id', clientIds);
+
+          if (usersError) throw usersError;
+
+          // Create lookup objects
+          const userLookup: Record<string, any> = {};
+          const companyLookup: Record<string, string> = {};
+
+          users?.forEach(user => {
+            userLookup[user.id] = user;
+            if (user.companies) {
+              companyLookup[user.company_id] = user.companies.name;
+            }
+          });
+
+          setRequestUsers(userLookup);
+          setCompanies(companyLookup);
+        }
+      } catch (error) {
+        console.error('Error fetching request data:', error);
+      }
+    };
+
+    if (requests.length > 0) {
+      fetchRequestData();
+    }
+  }, [requests]);
+
   const handleApprove = async (requestId: string) => {
+    setIsUpdating(requestId);
     try {
-      // In a real app, this would make an API call to update the request status
-      console.log('Approving request:', requestId);
-      // Update local state or trigger a refresh
+      const { error } = await supabase
+        .from('audience_requests')
+        .update({ 
+          status: 'approved',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      // Find the request and create notification
+      const request = requests.find(r => r.id === requestId);
+      if (request) {
+        const campaign = campaigns.find(c => c.id === request.campaignId);
+        
+        // Create notification for client
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: request.clientId,
+            title: 'Campaign Request Approved',
+            message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been approved and is now in progress.`,
+            read: false,
+            campaign_id: request.campaignId
+          });
+
+        // Update campaign status to in_progress
+        if (campaign) {
+          await updateCampaignStatus(campaign.id, 'in_progress', 'Request approved by admin');
+        }
+      }
+
+      await refreshNotifications();
+      window.location.reload(); // Refresh to show updated data
     } catch (error) {
       console.error('Error approving request:', error);
+    } finally {
+      setIsUpdating(null);
     }
   };
 
   const handleReject = async (requestId: string) => {
+    const reason = prompt('Please provide a reason for rejection (optional):');
+    
+    setIsUpdating(requestId);
     try {
-      // In a real app, this would make an API call to update the request status
-      console.log('Rejecting request:', requestId);
-      // Update local state or trigger a refresh
+      const { error } = await supabase
+        .from('audience_requests')
+        .update({ 
+          status: 'rejected',
+          notes: reason || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      // Find the request and create notification
+      const request = requests.find(r => r.id === requestId);
+      if (request) {
+        const campaign = campaigns.find(c => c.id === request.campaignId);
+        
+        // Create notification for client
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: request.clientId,
+            title: 'Campaign Request Rejected',
+            message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
+            read: false,
+            campaign_id: request.campaignId
+          });
+
+        // Update campaign status to failed
+        if (campaign) {
+          await updateCampaignStatus(campaign.id, 'failed', reason || 'Request rejected by admin');
+        }
+      }
+
+      await refreshNotifications();
+      window.location.reload(); // Refresh to show updated data
     } catch (error) {
       console.error('Error rejecting request:', error);
+    } finally {
+      setIsUpdating(null);
     }
+  };
+
+  const handleViewCampaign = (campaignId: string) => {
+    navigate(`/campaigns/${campaignId}`);
   };
 
   const handleViewDetails = (requestId: string) => {
     setSelectedRequest(requestId === selectedRequest ? null : requestId);
   };
-  
+
+  // Filter and search logic
+  const filteredRequests = requests.filter(request => {
+    const user = requestUsers[request.clientId];
+    const companyName = user?.companies?.name || '';
+    const campaignName = getCampaignName(request.campaignId);
+    
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const searchableText = `${campaignName} ${user?.name || ''} ${companyName}`.toLowerCase();
+      if (!searchableText.includes(searchLower)) {
+        return false;
+      }
+    }
+
+    // Agency filter
+    if (filters.agency && !companyName.toLowerCase().includes(filters.agency.toLowerCase())) {
+      return false;
+    }
+
+    // Status filter
+    if (filters.status && request.status !== filters.status) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
+
   // Sort requests by creation date (newest first)
-  const sortedRequests = [...requests].sort(
+  const sortedRequests = [...paginatedRequests].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  
-  const getClientName = (clientId: string) => {
-    // In a real app, you would fetch client details from the API
-    return clientId === '2' ? 'Demo Client' : 'Unknown Client';
-  };
-  
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="primary">Pending</Badge>;
+        return <Badge variant="warning">Pending Review</Badge>;
       case 'reviewed':
-        return <Badge variant="warning">Under Review</Badge>;
+        return <Badge variant="primary">Under Review</Badge>;
       case 'approved':
         return <Badge variant="success">Approved</Badge>;
       case 'rejected':
@@ -72,7 +263,9 @@ const RequestsPage: React.FC = () => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
   
@@ -81,27 +274,94 @@ const RequestsPage: React.FC = () => {
     return campaign ? campaign.name : 'Unknown Campaign';
   };
 
+  const getUniqueAgencies = () => {
+    const agencies = new Set<string>();
+    Object.values(requestUsers).forEach(user => {
+      if (user?.companies?.name) {
+        agencies.add(user.companies.name);
+      }
+    });
+    return Array.from(agencies).sort();
+  };
+
   const renderRequestDetails = (request: AudienceRequest) => {
     if (request.id !== selectedRequest) return null;
 
+    const user = requestUsers[request.clientId];
+
     return (
-      <div className="mt-6 border-t border-gray-200 pt-6">
-        <h4 className="text-lg font-medium mb-4">Selected Audiences</h4>
-        <div className="space-y-3">
-          {request.audiences.map(audience => (
-            <div key={audience.id} className="bg-gray-50 rounded-md p-4">
-              <h5 className="font-medium">{audience.name}</h5>
-              <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-sm text-gray-500">
-                  {audience.dataSupplier}
-                </span>
-                <span className="text-sm font-medium">
-                  {audience.reach?.toLocaleString()} users
-                </span>
-              </div>
+      <div className="mt-6 border-t border-gray-200 pt-6 space-y-6">
+        {/* Submitter Information */}
+        <div className="bg-blue-50 rounded-lg p-4">
+          <h4 className="text-lg font-medium mb-3 flex items-center">
+            <User size={20} className="mr-2 text-blue-600" />
+            Request Submitted By
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">Full Name</p>
+              <p className="font-medium">{user?.name || 'Unknown User'}</p>
             </div>
-          ))}
+            <div>
+              <p className="text-sm text-gray-500">Email</p>
+              <p className="font-medium flex items-center">
+                <Mail size={14} className="mr-1 text-gray-400" />
+                {user?.email || 'Unknown Email'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Company</p>
+              <p className="font-medium flex items-center">
+                <Building size={14} className="mr-1 text-gray-400" />
+                {user?.companies?.name || 'Unknown Company'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Selected Audiences */}
+        <div>
+          <h4 className="text-lg font-medium mb-4 flex items-center">
+            <Users size={20} className="mr-2 text-blue-600" />
+            Selected Audiences ({request.audiences.length})
+          </h4>
+          <div className="space-y-3">
+            {request.audiences.map(audience => (
+              <div key={audience.id} className="bg-gray-50 rounded-md p-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h5 className="font-medium">{audience.name}</h5>
+                    <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
+                    {audience.dataSupplier && (
+                      <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
+                    )}
+                  </div>
+                  <div className="text-right text-sm ml-4">
+                    <p className="text-gray-500">Est. Reach</p>
+                    <p className="font-medium">{audience.reach?.toLocaleString() || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Campaign Actions */}
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <Button
+            variant="outline"
+            onClick={() => handleViewCampaign(request.campaignId)}
+            icon={<Eye size={16} />}
+          >
+            View Full Campaign
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/campaigns/${request.campaignId}`)}
+            icon={<MessageSquare size={16} />}
+          >
+            Add Comments
+          </Button>
         </div>
       </div>
     );
@@ -109,129 +369,278 @@ const RequestsPage: React.FC = () => {
   
   return (
     <Layout>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Audience Requests</h1>
-        <p className="text-gray-600">Manage client audience segment requests</p>
-      </div>
-      
-      {sortedRequests.length > 0 ? (
-        <div className="space-y-6">
-          {sortedRequests.map(request => (
-            <Card key={request.id} className="overflow-hidden">
-              <CardContent className="p-0">
-                <div className="p-6">
-                  <div className="flex justify-between items-start flex-wrap gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {getCampaignName(request.campaignId)}
-                      </h3>
-                      <div className="flex items-center mt-1">
-                        <span className="text-sm font-medium text-gray-600 mr-2">
-                          {getClientName(request.clientId)}
-                        </span>
-                        <Clock size={14} className="text-gray-400 mr-1" />
-                        <span className="text-sm text-gray-500">
-                          {formatDate(request.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      {getStatusBadge(request.status)}
-                      
-                      {request.status === 'pending' && (
-                        <div className="flex space-x-2">
-                          <Button 
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Campaign Requests</h1>
+          <p className="text-gray-600">Manage client audience segment requests and campaign approvals</p>
+        </div>
+
+        {/* Filters and Search */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Filter size={20} className="mr-2" />
+              Filters & Search
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              {/* Search */}
+              <div className="relative">
+                <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Search campaigns, users, companies..."
+                  value={filters.search}
+                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Agency Filter */}
+              <select
+                value={filters.agency}
+                onChange={(e) => setFilters(prev => ({ ...prev, agency: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Agencies</option>
+                {getUniqueAgencies().map(agency => (
+                  <option key={agency} value={agency}>{agency}</option>
+                ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="reviewed">Under Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              {/* Items per page */}
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value={10}>10 per page</option>
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+              </select>
+            </div>
+
+            {/* Results summary */}
+            <div className="text-sm text-gray-600">
+              Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
+            </div>
+          </CardContent>
+        </Card>
+        
+        {sortedRequests.length > 0 ? (
+          <div className="space-y-6">
+            {sortedRequests.map(request => {
+              const user = requestUsers[request.clientId];
+              const campaign = campaigns.find(c => c.id === request.campaignId);
+              
+              return (
+                <Card key={request.id} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="p-6">
+                      <div className="flex justify-between items-start flex-wrap gap-4">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {getCampaignName(request.campaignId)}
+                          </h3>
+                          <div className="flex items-center mt-2 space-x-4">
+                            <div className="flex items-center text-sm text-gray-600">
+                              <User size={14} className="mr-1" />
+                              <span className="font-medium">{user?.name || 'Unknown User'}</span>
+                            </div>
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Building size={14} className="mr-1" />
+                              <span>{user?.companies?.name || 'Unknown Company'}</span>
+                            </div>
+                            <div className="flex items-center text-sm text-gray-500">
+                              <Clock size={14} className="mr-1" />
+                              <span>{formatDate(request.createdAt)}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Campaign Status Preview */}
+                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-700">Current Status</p>
+                                <div className="flex items-center mt-1">
+                                  {getStatusBadge(request.status)}
+                                  {campaign && (
+                                    <span className="ml-2 text-sm text-gray-500">
+                                      Campaign: {campaign.status.replace('_', ' ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-gray-500">Last Updated</p>
+                                <p className="text-sm font-medium">
+                                  {formatDate(campaign?.updatedAt || request.createdAt)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3">
+                          {request.status === 'pending' && (
+                            <div className="flex space-x-2">
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                icon={<XCircle size={16} />}
+                                onClick={() => handleReject(request.id)}
+                                disabled={isUpdating === request.id}
+                              >
+                                Reject
+                              </Button>
+                              <Button 
+                                variant="success"
+                                size="sm"
+                                icon={<CheckCircle size={16} />}
+                                onClick={() => handleApprove(request.id)}
+                                isLoading={isUpdating === request.id}
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          )}
+                          
+                          <Button
                             variant="outline"
                             size="sm"
-                            icon={<XCircle size={16} />}
-                            onClick={() => handleReject(request.id)}
+                            onClick={() => handleViewCampaign(request.campaignId)}
+                            icon={<Eye size={16} />}
                           >
-                            Reject
-                          </Button>
-                          <Button 
-                            variant="success"
-                            size="sm"
-                            icon={<CheckCircle size={16} />}
-                            onClick={() => handleApprove(request.id)}
-                          >
-                            Approve
+                            View Campaign
                           </Button>
                         </div>
+                      </div>
+                      
+                      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500">Selected Audiences</p>
+                          <div className="flex items-center">
+                            <Users size={16} className="text-gray-400 mr-1" />
+                            <p className="font-medium">{request.audiences.length} segments</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-xs text-gray-500">Campaign Timeline</p>
+                          <div className="flex items-center">
+                            <Calendar size={16} className="text-gray-400 mr-1" />
+                            <p className="font-medium">
+                              {formatDate(request.startDate)} - {formatDate(request.endDate)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-xs text-gray-500">Budget</p>
+                          <p className="font-medium">${request.budget.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      
+                      {(request.platforms.social.length > 0 || request.platforms.programmatic.length > 0) && (
+                        <div className="mt-4">
+                          <p className="text-xs text-gray-500 mb-1">Platforms</p>
+                          <div className="flex flex-wrap gap-1">
+                            {request.platforms.social.map(platform => (
+                              <Badge key={platform} variant="default" className="text-xs">{platform}</Badge>
+                            ))}
+                            {request.platforms.programmatic.map(platform => (
+                              <Badge key={platform} variant="secondary" className="text-xs">{platform}</Badge>
+                            ))}
+                          </div>
+                        </div>
                       )}
-                    </div>
-                  </div>
-                  
-                  <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Selected Audiences</p>
-                      <div className="flex items-center">
-                        <Users size={16} className="text-gray-400 mr-1" />
-                        <p className="font-medium">{request.audiences.length} segments</p>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Campaign Timeline</p>
-                      <div className="flex items-center">
-                        <Calendar size={16} className="text-gray-400 mr-1" />
-                        <p className="font-medium">
-                          {formatDate(request.startDate)} - {formatDate(request.endDate)}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Budget</p>
-                      <p className="font-medium">${request.budget.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  
-                  {(request.platforms.social.length > 0 || request.platforms.programmatic.length > 0) && (
-                    <div className="mt-4">
-                      <p className="text-xs text-gray-500 mb-1">Platforms</p>
-                      <div className="flex flex-wrap gap-1">
-                        {request.platforms.social.map(platform => (
-                          <Badge key={platform} variant="default" className="text-xs">{platform}</Badge>
-                        ))}
-                        {request.platforms.programmatic.map(platform => (
-                          <Badge key={platform} variant="secondary" className="text-xs">{platform}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {request.notes && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                      <p className="text-xs text-gray-500 mb-1">Notes</p>
-                      <p className="text-sm">{request.notes}</p>
-                    </div>
-                  )}
+                      
+                      {request.notes && (
+                        <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                          <p className="text-xs text-yellow-700 mb-1 font-medium">Client Notes</p>
+                          <p className="text-sm text-yellow-800">{request.notes}</p>
+                        </div>
+                      )}
 
-                  {renderRequestDetails(request)}
+                      {renderRequestDetails(request)}
+                    </div>
+                    
+                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewDetails(request.id)}
+                        icon={selectedRequest === request.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      >
+                        {selectedRequest === request.id ? 'Hide Details' : 'View Details'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-8">
+                <div className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
                 </div>
-                
-                <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
-                  <Button 
-                    variant="outline" 
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleViewDetails(request.id)}
-                    icon={<ChevronRight size={16} className={`transform transition-transform ${selectedRequest === request.id ? 'rotate-90' : ''}`} />}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
                   >
-                    {selectedRequest === request.id ? 'Hide Details' : 'View Details'}
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No requests yet</h3>
-          <p className="text-gray-600">
-            You'll see client audience requests here when they're submitted
-          </p>
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
+                ? 'No requests match your filters'
+                : 'No requests yet'
+              }
+            </h3>
+            <p className="text-gray-600">
+              {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
+                ? 'Try adjusting your search criteria or filters'
+                : "You'll see client campaign requests here when they're submitted"
+              }
+            </p>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 };
