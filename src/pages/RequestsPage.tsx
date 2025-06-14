@@ -104,6 +104,51 @@ const RequestsPageContent: React.FC = () => {
     return <Navigate to="/campaigns" replace />;
   }
 
+  // Helper functions - MOVED TO TOP to avoid hoisting issues
+  const getCampaignName = (campaignId: string) => {
+    if (!campaignId) return 'Unknown Campaign';
+    const campaign = campaigns.find(c => c?.id === campaignId);
+    return campaign?.name || 'Unknown Campaign';
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Unknown Date';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap = {
+      pending: { variant: 'warning' as const, label: 'Pending Review' },
+      reviewed: { variant: 'primary' as const, label: 'Under Review' },
+      approved: { variant: 'success' as const, label: 'Approved' },
+      rejected: { variant: 'danger' as const, label: 'Rejected' }
+    };
+
+    const config = statusMap[status as keyof typeof statusMap] || { variant: 'default' as const, label: status || 'Unknown' };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const getUniqueAgencies = () => {
+    const agencies = new Set<string>();
+    Object.values(requestUsers).forEach(user => {
+      if (user?.companies?.name) {
+        agencies.add(user.companies.name);
+      }
+    });
+    return Array.from(agencies).sort();
+  };
+
   // Fetch user and company data for requests
   useEffect(() => {
     const fetchRequestData = async () => {
@@ -325,50 +370,6 @@ const RequestsPageContent: React.FC = () => {
       return dateB - dateA;
     }
   );
-
-  const getStatusBadge = (status: string) => {
-    const statusMap = {
-      pending: { variant: 'warning' as const, label: 'Pending Review' },
-      reviewed: { variant: 'primary' as const, label: 'Under Review' },
-      approved: { variant: 'success' as const, label: 'Approved' },
-      rejected: { variant: 'danger' as const, label: 'Rejected' }
-    };
-
-    const config = statusMap[status as keyof typeof statusMap] || { variant: 'default' as const, label: status || 'Unknown' };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-  
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Unknown Date';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return 'Invalid Date';
-    }
-  };
-  
-  const getCampaignName = (campaignId: string) => {
-    if (!campaignId) return 'Unknown Campaign';
-    const campaign = campaigns.find(c => c?.id === campaignId);
-    return campaign?.name || 'Unknown Campaign';
-  };
-
-  const getUniqueAgencies = () => {
-    const agencies = new Set<string>();
-    Object.values(requestUsers).forEach(user => {
-      if (user?.companies?.name) {
-        agencies.add(user.companies.name);
-      }
-    });
-    return Array.from(agencies).sort();
-  };
 
   const renderRequestDetails = (request: AudienceRequest) => {
     if (!request || request.id !== selectedRequest) return null;
