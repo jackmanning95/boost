@@ -339,24 +339,30 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       console.log('Approving request:', requestId, 'for campaign:', request.campaignId);
 
-      // FIXED: Check if campaign exists, if not create it
+      // FIXED: Create campaign with proper data structure
       let campaignId = request.campaignId;
       let campaign;
 
-      // Try to find existing campaign
+      // Check if campaign already exists
       const { data: existingCampaign, error: campaignFetchError } = await supabase
         .from('campaigns')
         .select('id, name, client_id')
         .eq('id', request.campaignId)
         .single();
 
-      if (campaignFetchError || !existingCampaign) {
+      if (campaignFetchError && campaignFetchError.code !== 'PGRST116') {
+        // PGRST116 is "not found" error, which is expected
+        console.error('Unexpected error fetching campaign:', campaignFetchError);
+        throw campaignFetchError;
+      }
+
+      if (!existingCampaign) {
         console.log('Campaign not found, creating new campaign for request:', requestId);
         
-        // Create new campaign from request data
+        // Create new campaign from request data with proper structure
         const newCampaignData = {
           id: request.campaignId, // Use the same ID from the request
-          name: `Campaign for Request ${requestId}`, // Default name, can be updated later
+          name: `Campaign ${new Date().toLocaleDateString()}`, // Default name
           client_id: request.clientId,
           audiences: request.audiences || [],
           platforms: request.platforms || { social: [], programmatic: [] },
@@ -367,7 +373,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           approved_at: timestamp,
           created_at: timestamp,
           updated_at: timestamp,
-          request_id: requestId
+          request_id: requestId,
+          archived: false
         };
 
         const { data: newCampaign, error: createError } = await supabase
@@ -378,7 +385,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (createError) {
           console.error('Error creating campaign:', createError);
-          throw new Error('Failed to create campaign: ' + createError.message);
+          throw new Error(`Failed to create campaign: ${createError.message}`);
         }
 
         campaign = newCampaign;
@@ -422,45 +429,53 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       // Add workflow history entry with proper campaign_id
-      const { error: workflowError } = await supabase
-        .from('campaign_workflow_history')
-        .insert({
-          campaign_id: campaignId, // Now we have a valid campaign_id
-          user_id: user.id,
-          from_status: 'pending_review',
-          to_status: 'approved',
-          notes: notes || 'Request approved by admin',
-          created_at: timestamp
-        });
+      try {
+        const { error: workflowError } = await supabase
+          .from('campaign_workflow_history')
+          .insert({
+            campaign_id: campaignId, // Now we have a valid campaign_id
+            user_id: user.id,
+            from_status: 'pending_review',
+            to_status: 'approved',
+            notes: notes || 'Request approved by admin',
+            created_at: timestamp
+          });
 
-      if (workflowError) {
-        console.error('Workflow history error:', workflowError);
-        // Don't throw here, as the main operation succeeded
+        if (workflowError) {
+          console.error('Workflow history error:', workflowError);
+          // Don't throw here, as the main operation succeeded
+        }
+      } catch (workflowErr) {
+        console.error('Non-critical workflow history error:', workflowErr);
       }
 
       // Create notification for client and team
-      const notificationTargets = [request.clientId];
-      
-      // Get campaign details for notification
-      if (campaign.client_id) {
-        const { data: clientUser } = await supabase
-          .from('users')
-          .select('company_id')
-          .eq('id', campaign.client_id)
-          .single();
+      try {
+        const notificationTargets = [request.clientId];
+        
+        // Get campaign details for notification
+        if (campaign.client_id) {
+          const { data: clientUser } = await supabase
+            .from('users')
+            .select('company_id')
+            .eq('id', campaign.client_id)
+            .single();
 
-        if (clientUser?.company_id) {
-          const teamIds = await getCompanyTeamIds(clientUser.company_id);
-          notificationTargets.push(...teamIds);
+          if (clientUser?.company_id) {
+            const teamIds = await getCompanyTeamIds(clientUser.company_id);
+            notificationTargets.push(...teamIds);
+          }
         }
-      }
 
-      await createNotification(
-        'Campaign Request Approved! 🎉',
-        `Great news! Your campaign "${campaign.name}" has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
-        [...new Set(notificationTargets)], // Remove duplicates
-        campaignId
-      );
+        await createNotification(
+          'Campaign Request Approved! 🎉',
+          `Great news! Your campaign request has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
+          [...new Set(notificationTargets)], // Remove duplicates
+          campaignId
+        );
+      } catch (notificationErr) {
+        console.error('Non-critical notification error:', notificationErr);
+      }
 
       // Refresh data
       await refreshRequests();
@@ -539,46 +554,54 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
 
         // Add workflow history entry with proper campaign_id
-        const { error: workflowError } = await supabase
-          .from('campaign_workflow_history')
-          .insert({
-            campaign_id: request.campaignId,
-            user_id: user.id,
-            from_status: 'pending_review',
-            to_status: 'failed',
-            notes: reason || 'Request rejected by admin',
-            created_at: timestamp
-          });
+        try {
+          const { error: workflowError } = await supabase
+            .from('campaign_workflow_history')
+            .insert({
+              campaign_id: request.campaignId,
+              user_id: user.id,
+              from_status: 'pending_review',
+              to_status: 'failed',
+              notes: reason || 'Request rejected by admin',
+              created_at: timestamp
+            });
 
-        if (workflowError) {
-          console.error('Workflow history error:', workflowError);
-          // Don't throw here, as the main operation succeeded
+          if (workflowError) {
+            console.error('Workflow history error:', workflowError);
+            // Don't throw here, as the main operation succeeded
+          }
+        } catch (workflowErr) {
+          console.error('Non-critical workflow history error:', workflowErr);
         }
       }
 
       // Create notification for client and team
-      const notificationTargets = [request.clientId];
-      
-      if (campaign?.client_id) {
-        const { data: clientUser } = await supabase
-          .from('users')
-          .select('company_id')
-          .eq('id', campaign.client_id)
-          .single();
+      try {
+        const notificationTargets = [request.clientId];
+        
+        if (campaign?.client_id) {
+          const { data: clientUser } = await supabase
+            .from('users')
+            .select('company_id')
+            .eq('id', campaign.client_id)
+            .single();
 
-        if (clientUser?.company_id) {
-          const teamIds = await getCompanyTeamIds(clientUser.company_id);
-          notificationTargets.push(...teamIds);
+          if (clientUser?.company_id) {
+            const teamIds = await getCompanyTeamIds(clientUser.company_id);
+            notificationTargets.push(...teamIds);
+          }
         }
-      }
 
-      const campaignName = campaign?.name || `Request ${requestId}`;
-      await createNotification(
-        'Campaign Request Needs Attention',
-        `Your campaign "${campaignName}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
-        [...new Set(notificationTargets)], // Remove duplicates
-        request.campaignId
-      );
+        const campaignName = campaign?.name || `Request ${requestId}`;
+        await createNotification(
+          'Campaign Request Needs Attention',
+          `Your campaign request requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
+          [...new Set(notificationTargets)], // Remove duplicates
+          request.campaignId
+        );
+      } catch (notificationErr) {
+        console.error('Non-critical notification error:', notificationErr);
+      }
 
       // Refresh data
       await refreshRequests();
@@ -776,7 +799,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           end_date: newCampaign.endDate,
           status: newCampaign.status,
           created_at: timestamp,
-          updated_at: timestamp
+          updated_at: timestamp,
+          archived: false
         }])
         .select()
         .single();
@@ -975,20 +999,24 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (campaignError) throw campaignError;
 
       // Add workflow history entry with proper campaign_id
-      const { error: historyError } = await supabase
-        .from('campaign_workflow_history')
-        .insert({
-          campaign_id: campaignId, // Ensure this is not null
-          user_id: user.id,
-          from_status: campaign.status,
-          to_status: status,
-          notes,
-          created_at: timestamp
-        });
+      try {
+        const { error: historyError } = await supabase
+          .from('campaign_workflow_history')
+          .insert({
+            campaign_id: campaignId, // Ensure this is not null
+            user_id: user.id,
+            from_status: campaign.status,
+            to_status: status,
+            notes,
+            created_at: timestamp
+          });
 
-      if (historyError) {
-        console.error('Workflow history error:', historyError);
-        // Don't throw here, as the main operation succeeded
+        if (historyError) {
+          console.error('Workflow history error:', historyError);
+          // Don't throw here, as the main operation succeeded
+        }
+      } catch (historyErr) {
+        console.error('Non-critical workflow history error:', historyErr);
       }
 
       // Create notification for client and team
@@ -1056,7 +1084,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           end_date: newRequest.endDate,
           notes: newRequest.notes,
           status: newRequest.status,
-          created_at: timestamp
+          created_at: timestamp,
+          archived: false
         }]);
 
       if (error) throw error;
