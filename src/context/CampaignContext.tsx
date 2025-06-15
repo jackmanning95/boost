@@ -51,6 +51,10 @@ interface CampaignContextType {
   // New: Status categorization
   getCampaignStatusCategory: (status: string) => CampaignStatusCategory;
   getCampaignsByCategory: (category: CampaignStatusCategory) => Campaign[];
+  
+  // Archive/Delete functionality
+  archiveRequest: (requestId: string) => Promise<void>;
+  deleteRequest: (requestId: string) => Promise<void>;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
@@ -450,6 +454,39 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     } catch (error) {
       console.error('Error rejecting request:', error);
+      throw error;
+    }
+  };
+
+  const archiveRequest = async (requestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('audience_requests')
+        .update({ 
+          archived: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await refreshRequests();
+    } catch (error) {
+      console.error('Error archiving request:', error);
+      throw error;
+    }
+  };
+
+  const deleteRequest = async (requestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('audience_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await refreshRequests();
+    } catch (error) {
+      console.error('Error deleting request:', error);
       throw error;
     }
   };
@@ -1062,7 +1099,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activeCampaigns,
       completedCampaigns,
       getCampaignStatusCategory,
-      getCampaignsByCategory
+      getCampaignsByCategory,
+      archiveRequest,
+      deleteRequest
     }}>
       {children}
     </CampaignContext.Provider>
