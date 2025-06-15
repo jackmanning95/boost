@@ -349,10 +349,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { timestamp } = createTimestamp();
       
-      // Find the request to get campaign info
+      // FIXED: Ensure the request exists in local state before proceeding
       const request = requests.find(r => r.id === requestId);
       if (!request) {
-        throw new Error('Request not found');
+        throw new Error('Request not found in local state - data inconsistency detected');
       }
 
       // FIXED: Add explicit validation for required fields
@@ -360,95 +360,48 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error('Request is missing client_id - cannot create campaign');
       }
 
-      if (!request.campaignId) {
-        throw new Error('Request is missing campaign_id - cannot proceed');
-      }
+      console.log('Approving request:', requestId, 'for client:', request.clientId);
 
-      console.log('Approving request:', requestId, 'for campaign:', request.campaignId, 'client:', request.clientId);
+      // FIXED: Create campaign without referencing request_id initially to avoid foreign key constraint
+      const newCampaignData = {
+        name: `Campaign ${new Date().toLocaleDateString()}`,
+        client_id: request.clientId,
+        audiences: request.audiences || [],
+        platforms: request.platforms || { social: [], programmatic: [] },
+        budget: request.budget || 0,
+        start_date: request.startDate,
+        end_date: request.endDate,
+        status: 'approved',
+        approved_at: timestamp,
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived: false
+        // REMOVED: request_id reference to avoid foreign key constraint
+      };
 
-      // FIXED: Create campaign with proper data structure and let Supabase generate the ID
-      let campaignId = request.campaignId;
-      let campaign;
-
-      // Check if campaign already exists using the request's campaign_id
-      const { data: existingCampaign, error: campaignFetchError } = await supabase
+      const { data: newCampaign, error: createError } = await supabase
         .from('campaigns')
-        .select('id, name, client_id')
-        .eq('id', request.campaignId)
+        .insert([newCampaignData])
+        .select()
         .single();
 
-      if (campaignFetchError && campaignFetchError.code !== 'PGRST116') {
-        // PGRST116 is "not found" error, which is expected
-        console.error('Unexpected error fetching campaign:', campaignFetchError);
-        throw campaignFetchError;
+      if (createError) {
+        console.error('Error creating campaign:', createError);
+        throw new Error(`Failed to create campaign: ${createError.message}`);
       }
 
-      if (!existingCampaign) {
-        console.log('Campaign not found, creating new campaign for request:', requestId);
-        
-        // FIXED: Don't manually set the ID - let Supabase generate it with gen_random_uuid()
-        const newCampaignData = {
-          // Remove the manual id assignment - let the database generate it
-          name: `Campaign ${new Date().toLocaleDateString()}`,
-          client_id: request.clientId, // Use the validated clientId
-          audiences: request.audiences || [],
-          platforms: request.platforms || { social: [], programmatic: [] },
-          budget: request.budget || 0,
-          start_date: request.startDate,
-          end_date: request.endDate,
-          status: 'approved',
-          approved_at: timestamp,
-          created_at: timestamp,
-          updated_at: timestamp,
-          request_id: requestId,
-          archived: false
-        };
+      const campaignId = newCampaign.id;
+      console.log('Created new campaign with ID:', campaignId);
 
-        const { data: newCampaign, error: createError } = await supabase
-          .from('campaigns')
-          .insert([newCampaignData])
-          .select()
-          .single();
+      // FIXED: Now update the campaign to include the request_id reference after both records exist
+      const { error: campaignUpdateError } = await supabase
+        .from('campaigns')
+        .update({ request_id: requestId })
+        .eq('id', campaignId);
 
-        if (createError) {
-          console.error('Error creating campaign:', createError);
-          throw new Error(`Failed to create campaign: ${createError.message}`);
-        }
-
-        campaign = newCampaign;
-        campaignId = newCampaign.id;
-        console.log('Created new campaign with ID:', campaignId);
-
-        // FIXED: Update the request to reference the newly created campaign
-        const { error: requestUpdateError } = await supabase
-          .from('audience_requests')
-          .update({ campaign_id: campaignId })
-          .eq('id', requestId);
-
-        if (requestUpdateError) {
-          console.error('Error updating request with campaign_id:', requestUpdateError);
-          // Don't throw here as the campaign was created successfully
-        }
-      } else {
-        // Update existing campaign to approved status
-        const { error: campaignUpdateError } = await supabase
-          .from('campaigns')
-          .update({ 
-            status: 'approved',
-            approved_at: timestamp,
-            updated_at: timestamp,
-            request_id: requestId
-          })
-          .eq('id', existingCampaign.id);
-
-        if (campaignUpdateError) {
-          console.error('Error updating campaign:', campaignUpdateError);
-          throw campaignUpdateError;
-        }
-
-        campaign = existingCampaign;
-        campaignId = existingCampaign.id;
-        console.log('Updated existing campaign:', campaignId);
+      if (campaignUpdateError) {
+        console.error('Error updating campaign with request_id:', campaignUpdateError);
+        // Don't throw here as the campaign was created successfully
       }
 
       // Update request status to approved
@@ -471,7 +424,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { error: workflowError } = await supabase
           .from('campaign_workflow_history')
           .insert({
-            campaign_id: campaignId, // Now we have a valid campaign_id
+            campaign_id: campaignId,
             user_id: user.id,
             from_status: 'pending_review',
             to_status: 'approved',
@@ -492,17 +445,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const notificationTargets = [request.clientId];
         
         // Get campaign details for notification
-        if (campaign.client_id) {
-          const { data: clientUser } = await supabase
-            .from('users')
-            .select('company_id')
-            .eq('id', campaign.client_id)
-            .single();
+        const { data: clientUser } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', request.clientId)
+          .single();
 
-          if (clientUser?.company_id) {
-            const teamIds = await getCompanyTeamIds(clientUser.company_id);
-            notificationTargets.push(...teamIds);
-          }
+        if (clientUser?.company_id) {
+          const teamIds = await getCompanyTeamIds(clientUser.company_id);
+          notificationTargets.push(...teamIds);
         }
 
         await createNotification(
@@ -551,10 +502,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { timestamp } = createTimestamp();
       
-      // Find the request to get campaign info
+      // FIXED: Ensure the request exists in local state before proceeding
       const request = requests.find(r => r.id === requestId);
       if (!request) {
-        throw new Error('Request not found');
+        throw new Error('Request not found in local state - data inconsistency detected');
       }
 
       // FIXED: Add validation for required fields
@@ -569,9 +520,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .from('campaigns')
           .select('id, name, client_id')
           .eq('id', request.campaignId)
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to avoid errors when no rows found
 
-        if (!campaignFetchError) {
+        if (!campaignFetchError && campaignData) {
           campaign = campaignData;
         }
       }
@@ -1102,9 +1053,14 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const submitCampaignRequest = async (notes?: string) => {
     if (!activeCampaign || !user) return;
 
-    // Ensure authenticated user is available
+    // FIXED: Ensure authenticated user and valid campaign ID are available
     if (!user?.id) {
       console.error("submitCampaignRequest: No authenticated user found.");
+      return;
+    }
+
+    if (!activeCampaign.id) {
+      console.error("submitCampaignRequest: No valid campaign ID found.");
       return;
     }
 
