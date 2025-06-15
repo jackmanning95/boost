@@ -317,7 +317,25 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .order('created_at', { ascending: false });
 
       if (requestError) throw requestError;
-      setRequests(requestData || []);
+      
+      // Transform the data to match TypeScript interface (snake_case to camelCase)
+      const transformedRequests: AudienceRequest[] = (requestData || []).map(request => ({
+        id: request.id,
+        campaignId: request.campaign_id,
+        clientId: request.client_id,
+        audiences: request.audiences || [],
+        platforms: request.platforms || { social: [], programmatic: [] },
+        budget: request.budget || 0,
+        startDate: request.start_date,
+        endDate: request.end_date,
+        notes: request.notes,
+        status: request.status,
+        createdAt: request.created_at,
+        updatedAt: request.updated_at,
+        archived: request.archived || false
+      }));
+      
+      setRequests(transformedRequests);
     } catch (error) {
       console.error('Error fetching requests:', error);
     }
@@ -337,7 +355,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error('Request not found');
       }
 
-      console.log('Approving request:', requestId, 'for campaign:', request.campaignId);
+      // FIXED: Add explicit validation for required fields
+      if (!request.clientId) {
+        throw new Error('Request is missing client_id - cannot create campaign');
+      }
+
+      if (!request.campaignId) {
+        throw new Error('Request is missing campaign_id - cannot proceed');
+      }
+
+      console.log('Approving request:', requestId, 'for campaign:', request.campaignId, 'client:', request.clientId);
 
       // FIXED: Create campaign with proper data structure and let Supabase generate the ID
       let campaignId = request.campaignId;
@@ -363,7 +390,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const newCampaignData = {
           // Remove the manual id assignment - let the database generate it
           name: `Campaign ${new Date().toLocaleDateString()}`,
-          client_id: request.clientId,
+          client_id: request.clientId, // Use the validated clientId
           audiences: request.audiences || [],
           platforms: request.platforms || { social: [], programmatic: [] },
           budget: request.budget || 0,
@@ -530,12 +557,24 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error('Request not found');
       }
 
-      // Check if campaign exists
-      const { data: campaign, error: campaignFetchError } = await supabase
-        .from('campaigns')
-        .select('id, name, client_id')
-        .eq('id', request.campaignId)
-        .single();
+      // FIXED: Add validation for required fields
+      if (!request.clientId) {
+        throw new Error('Request is missing client_id');
+      }
+
+      // Check if campaign exists (only if campaignId is present)
+      let campaign = null;
+      if (request.campaignId) {
+        const { data: campaignData, error: campaignFetchError } = await supabase
+          .from('campaigns')
+          .select('id, name, client_id')
+          .eq('id', request.campaignId)
+          .single();
+
+        if (!campaignFetchError) {
+          campaign = campaignData;
+        }
+      }
 
       // Update request status to rejected
       const { error: requestError } = await supabase
@@ -550,7 +589,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (requestError) throw requestError;
 
       // If campaign exists, update it to failed status
-      if (campaign && !campaignFetchError) {
+      if (campaign && request.campaignId) {
         const { error: campaignError } = await supabase
           .from('campaigns')
           .update({ 
@@ -608,7 +647,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           'Campaign Request Needs Attention',
           `Your campaign request requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
           [...new Set(notificationTargets)], // Remove duplicates
-          request.campaignId
+          request.campaignId || undefined
         );
       } catch (notificationErr) {
         console.error('Non-critical notification error:', notificationErr);
@@ -1122,8 +1161,23 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
       
-      // Update the request object with the generated ID
-      const createdRequest = { ...newRequest, id: data.id };
+      // Update the request object with the generated ID and transform to camelCase
+      const createdRequest: AudienceRequest = {
+        id: data.id,
+        campaignId: data.campaign_id,
+        clientId: data.client_id,
+        audiences: data.audiences || [],
+        platforms: data.platforms || { social: [], programmatic: [] },
+        budget: data.budget || 0,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        notes: data.notes,
+        status: data.status,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        archived: data.archived || false
+      };
+      
       setRequests(prev => [createdRequest, ...prev]);
     } catch (error) {
       console.error('Error submitting request:', error);
