@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, User, LogOut, Shield, Crown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import Button from '../ui/Button';
 import NotificationDropdown from '../notifications/NotificationDropdown';
 
 const Header: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin, isCompanyAdmin } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -18,9 +18,22 @@ const Header: React.FC = () => {
   const navItems = [
     { label: 'Audiences', path: '/audiences', show: !!user },
     { label: 'Campaigns', path: '/campaigns', show: !!user },
-    { label: 'Requests', path: '/requests', show: !!user && isAdmin },
+    { label: 'Requests', path: '/requests', show: !!user && isSuperAdmin },
+    { label: 'Admin', path: '/admin', show: !!user && (isCompanyAdmin || isSuperAdmin) },
     { label: 'Settings', path: '/settings', show: !!user },
   ].filter(item => item.show);
+
+  const getUserRoleIcon = () => {
+    if (isSuperAdmin) return <Crown size={16} className="text-yellow-500" />;
+    if (isCompanyAdmin) return <Shield size={16} className="text-blue-500" />;
+    return <User size={16} className="text-gray-500" />;
+  };
+
+  const getUserRoleLabel = () => {
+    if (isSuperAdmin) return 'Super Admin';
+    if (isCompanyAdmin) return 'Company Admin';
+    return 'User';
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -58,11 +71,32 @@ const Header: React.FC = () => {
                 
                 <div className="relative ml-3 flex items-center">
                   <div className="flex items-center space-x-2">
-                    <span className="hidden md:block text-sm font-medium text-gray-700">
-                      {user.name}
-                    </span>
-                    <div className="bg-[#509fe0] text-white rounded-full h-8 w-8 flex items-center justify-center">
+                    <div className="hidden md:block text-right">
+                      <div className="text-sm font-medium text-gray-700 flex items-center">
+                        {getUserRoleIcon()}
+                        <span className="ml-1">{user.name}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center">
+                        <span>{getUserRoleLabel()}</span>
+                        {user.companyName && (
+                          <>
+                            <span className="mx-1">•</span>
+                            <span>{user.companyName}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-[#509fe0] text-white rounded-full h-8 w-8 flex items-center justify-center relative">
                       <User size={18} />
+                      {(isCompanyAdmin || isSuperAdmin) && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border border-white">
+                          {isSuperAdmin ? (
+                            <Crown size={8} className="text-yellow-800 absolute inset-0 m-auto" />
+                          ) : (
+                            <Shield size={8} className="text-blue-800 absolute inset-0 m-auto" />
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -95,6 +129,20 @@ const Header: React.FC = () => {
         {isMobileMenuOpen && user && (
           <div className="md:hidden pb-4">
             <div className="space-y-1 px-2 pt-2 pb-3">
+              {/* User info on mobile */}
+              <div className="px-3 py-2 border-b border-gray-200 mb-2">
+                <div className="flex items-center space-x-2">
+                  {getUserRoleIcon()}
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {getUserRoleLabel()}
+                      {user.companyName && ` • ${user.companyName}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               {navItems.map((item) => (
                 <Link
                   key={item.path}

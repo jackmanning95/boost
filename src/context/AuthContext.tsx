@@ -9,6 +9,8 @@ interface AuthContextType {
   signUp: (data: SignUpData) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  isCompanyAdmin: boolean;
   updateUserProfile: (updates: Partial<User>) => Promise<void>;
 }
 
@@ -75,7 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         *,
         companies (
           id,
-          name
+          name,
+          account_id
         )
       `)
       .eq('id', userId)
@@ -136,10 +139,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        // Create or find company
+        // Determine if user should be super admin
+        const isSuperAdmin = email.endsWith('@boostdata.io');
         let companyId: string | null = null;
         
-        if (companyName && companyName.trim()) {
+        // Only create/find company if not super admin
+        if (!isSuperAdmin && companyName && companyName.trim()) {
           // Try to create new company
           const { data: company, error: companyError } = await supabase
             .from('companies')
@@ -161,24 +166,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // If no company provided or company creation failed, use default
-        if (!companyId) {
-          const { data: defaultCompany } = await supabase
-            .from('companies')
-            .select('id')
-            .eq('name', 'Default Company')
-            .single();
-            
-          companyId = defaultCompany?.id || null;
-        }
-
+        // Create user profile
         const { error: profileError } = await supabase
           .from('users')
           .insert({
             id: data.user.id,
             email: data.user.email,
             name,
-            role: 'client',
+            role: isSuperAdmin ? 'super_admin' : 'user', // Will be auto-updated to 'admin' by trigger if first in company
             company_id: companyId,
             platform_ids: {}
           });
@@ -229,7 +224,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = user?.role === 'admin';
+  // Role checks
+  const isSuperAdmin = user?.role === 'super_admin' || user?.email?.endsWith('@boostdata.io') || false;
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
+  const isCompanyAdmin = user?.role === 'admin' && !isSuperAdmin;
 
   return (
     <AuthContext.Provider value={{ 
@@ -239,6 +237,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUp, 
       logout, 
       isAdmin,
+      isSuperAdmin,
+      isCompanyAdmin,
       updateUserProfile 
     }}>
       {children}

@@ -7,10 +7,17 @@ import Button from '../components/ui/Button';
 import { ArrowRight, Database, Users, Layers, Target, Sparkles } from 'lucide-react';
 
 const HomePage: React.FC = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isSuperAdmin, isCompanyAdmin } = useAuth();
   
   if (user) {
-    return <Navigate to={isAdmin ? '/requests' : '/audiences'} replace />;
+    // Redirect based on user role
+    if (isSuperAdmin) {
+      return <Navigate to="/admin" replace />;
+    } else if (isCompanyAdmin) {
+      return <Navigate to="/admin" replace />;
+    } else {
+      return <Navigate to="/audiences" replace />;
+    }
   }
   
   return (

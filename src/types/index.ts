@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'client';
+  role: 'admin' | 'user' | 'super_admin';
   platformIds: {
     [key: string]: string;
   };
@@ -13,8 +13,33 @@ export interface User {
 export interface Company {
   id: string;
   name: string;
+  accountId?: string;
   createdAt: string;
   updatedAt: string;
+  userCount?: number;
+  adminCount?: number;
+}
+
+export interface CompanyUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  companyId: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLogin?: string;
+}
+
+export interface UserInvitation {
+  id: string;
+  email: string;
+  companyId: string;
+  role: 'admin' | 'user';
+  invitedBy: string;
+  status: 'pending' | 'accepted' | 'expired';
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface AudienceSegment {
@@ -49,6 +74,7 @@ export interface Campaign {
     company_id: string;
     companies?: {
       name: string;
+      account_id?: string;
     };
   };
 }
