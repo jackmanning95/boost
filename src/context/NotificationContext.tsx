@@ -32,9 +32,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       console.log('NotificationContext: Fetching notifications');
       setLoading(true);
+      
+      // Use campaign_id instead of campaignId for database compatibility
       const { data, error: fetchError } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, campaign_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50); // Limit to recent 50 notifications
@@ -45,7 +47,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       console.log('NotificationContext: Notifications fetched:', data?.length || 0);
-      setNotifications(data || []);
+      
+      // Map database fields to frontend interface
+      const mappedNotifications = (data || []).map(notification => ({
+        ...notification,
+        campaignId: notification.campaign_id // Map for frontend compatibility
+      }));
+      
+      setNotifications(mappedNotifications);
       setError(null);
     } catch (err) {
       console.error('NotificationContext: Error fetching notifications:', err);
@@ -70,7 +79,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         filter: `user_id=eq.${user.id}`
       }, payload => {
         console.log('New notification received:', payload);
-        setNotifications(prev => [payload.new as Notification, ...prev]);
+        const newNotification = {
+          ...payload.new as Notification,
+          campaignId: payload.new.campaign_id // Map for frontend compatibility
+        };
+        setNotifications(prev => [newNotification, ...prev]);
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -79,8 +92,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         filter: `user_id=eq.${user.id}`
       }, payload => {
         console.log('Notification updated:', payload);
+        const updatedNotification = {
+          ...payload.new as Notification,
+          campaignId: payload.new.campaign_id // Map for frontend compatibility
+        };
         setNotifications(prev =>
-          prev.map(n => n.id === payload.new.id ? payload.new as Notification : n)
+          prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
         );
       })
       .on('postgres_changes', {
@@ -106,7 +123,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('NotificationContext: Marking notification as read:', id);
       const { error: updateError } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ 
+          read: true,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (updateError) throw updateError;
@@ -125,7 +145,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('NotificationContext: Marking all notifications as read');
       const { error: updateError } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ 
+          read: true,
+          updated_at: new Date().toISOString()
+        })
         .eq('user_id', user?.id)
         .eq('read', false);
 

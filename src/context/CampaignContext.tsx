@@ -83,6 +83,27 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     statusCategory: ''
   });
 
+  // Helper function to get user's timezone
+  const getUserTimezone = () => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch (error) {
+      console.warn('Could not detect timezone, using UTC');
+      return 'UTC';
+    }
+  };
+
+  // Helper function to create timezone-aware timestamp
+  const createTimestamp = () => {
+    const now = new Date();
+    const timezone = getUserTimezone();
+    return {
+      timestamp: now.toISOString(),
+      timezone,
+      userLocalTime: now.toLocaleString('en-US', { timeZone: timezone })
+    };
+  };
+
   // Helper function to create notifications for relevant users
   const createNotification = async (
     title: string, 
@@ -91,12 +112,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     campaignId?: string
   ) => {
     try {
+      const { timestamp } = createTimestamp();
+      
       const notifications = targetUserIds.map(userId => ({
         user_id: userId,
         title,
         message,
         read: false,
-        campaign_id: campaignId || null
+        campaign_id: campaignId || null,
+        created_at: timestamp
       }));
 
       const { error } = await supabase
@@ -300,59 +324,91 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const approveRequest = async (requestId: string, notes?: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Only admins can approve requests');
+    }
+
     try {
+      const { timestamp } = createTimestamp();
+      
+      // Find the request to get campaign info
+      const request = requests.find(r => r.id === requestId);
+      if (!request) {
+        throw new Error('Request not found');
+      }
+
+      // Ensure campaign exists and get its ID
+      const { data: campaign, error: campaignFetchError } = await supabase
+        .from('campaigns')
+        .select('id, name, client_id')
+        .eq('id', request.campaignId)
+        .single();
+
+      if (campaignFetchError || !campaign) {
+        throw new Error(`Campaign not found for request ${requestId}`);
+      }
+
       // Update request status to approved
       const { error: requestError } = await supabase
         .from('audience_requests')
         .update({ 
           status: 'approved',
           notes: notes || null,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', requestId);
 
       if (requestError) throw requestError;
-
-      // Find the request to get campaign info
-      const request = requests.find(r => r.id === requestId);
-      if (!request) return;
 
       // Update the associated campaign status to approved
       const { error: campaignError } = await supabase
         .from('campaigns')
         .update({ 
           status: 'approved',
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          approved_at: timestamp,
+          updated_at: timestamp
         })
         .eq('id', request.campaignId);
 
       if (campaignError) throw campaignError;
 
-      // Add workflow history entry
-      await supabase
+      // Add workflow history entry with proper campaign_id
+      const { error: workflowError } = await supabase
         .from('campaign_workflow_history')
         .insert({
-          campaign_id: request.campaignId,
-          user_id: user?.id,
+          campaign_id: request.campaignId, // Ensure this is not null
+          user_id: user.id,
           from_status: 'pending_review',
           to_status: 'approved',
-          notes: notes || 'Request approved by admin'
+          notes: notes || 'Request approved by admin',
+          created_at: timestamp
         });
+
+      if (workflowError) {
+        console.error('Workflow history error:', workflowError);
+        // Don't throw here, as the main operation succeeded
+      }
 
       // Create notification for client and team
       const notificationTargets = [request.clientId];
       
       // Get campaign details for notification
-      const campaign = campaigns.find(c => c.id === request.campaignId);
-      if (campaign?.users?.company_id) {
-        const teamIds = await getCompanyTeamIds(campaign.users.company_id);
-        notificationTargets.push(...teamIds);
+      if (campaign.client_id) {
+        const { data: clientUser } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', campaign.client_id)
+          .single();
+
+        if (clientUser?.company_id) {
+          const teamIds = await getCompanyTeamIds(clientUser.company_id);
+          notificationTargets.push(...teamIds);
+        }
       }
 
       await createNotification(
         'Campaign Request Approved! 🎉',
-        `Great news! Your campaign "${campaign?.name || 'Unknown Campaign'}" has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
+        `Great news! Your campaign "${campaign.name}" has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
         [...new Set(notificationTargets)], // Remove duplicates
         request.campaignId
       );
@@ -384,58 +440,89 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const rejectRequest = async (requestId: string, reason?: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Only admins can reject requests');
+    }
+
     try {
+      const { timestamp } = createTimestamp();
+      
+      // Find the request to get campaign info
+      const request = requests.find(r => r.id === requestId);
+      if (!request) {
+        throw new Error('Request not found');
+      }
+
+      // Ensure campaign exists
+      const { data: campaign, error: campaignFetchError } = await supabase
+        .from('campaigns')
+        .select('id, name, client_id')
+        .eq('id', request.campaignId)
+        .single();
+
+      if (campaignFetchError || !campaign) {
+        throw new Error(`Campaign not found for request ${requestId}`);
+      }
+
       // Update request status to rejected
       const { error: requestError } = await supabase
         .from('audience_requests')
         .update({ 
           status: 'rejected',
           notes: reason || null,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', requestId);
 
       if (requestError) throw requestError;
-
-      // Find the request to get campaign info
-      const request = requests.find(r => r.id === requestId);
-      if (!request) return;
 
       // Update the associated campaign status to failed
       const { error: campaignError } = await supabase
         .from('campaigns')
         .update({ 
           status: 'failed',
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', request.campaignId);
 
       if (campaignError) throw campaignError;
 
-      // Add workflow history entry
-      await supabase
+      // Add workflow history entry with proper campaign_id
+      const { error: workflowError } = await supabase
         .from('campaign_workflow_history')
         .insert({
-          campaign_id: request.campaignId,
-          user_id: user?.id,
+          campaign_id: request.campaignId, // Ensure this is not null
+          user_id: user.id,
           from_status: 'pending_review',
           to_status: 'failed',
-          notes: reason || 'Request rejected by admin'
+          notes: reason || 'Request rejected by admin',
+          created_at: timestamp
         });
+
+      if (workflowError) {
+        console.error('Workflow history error:', workflowError);
+        // Don't throw here, as the main operation succeeded
+      }
 
       // Create notification for client and team
       const notificationTargets = [request.clientId];
       
-      // Get campaign details for notification
-      const campaign = campaigns.find(c => c.id === request.campaignId);
-      if (campaign?.users?.company_id) {
-        const teamIds = await getCompanyTeamIds(campaign.users.company_id);
-        notificationTargets.push(...teamIds);
+      if (campaign.client_id) {
+        const { data: clientUser } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', campaign.client_id)
+          .single();
+
+        if (clientUser?.company_id) {
+          const teamIds = await getCompanyTeamIds(clientUser.company_id);
+          notificationTargets.push(...teamIds);
+        }
       }
 
       await createNotification(
         'Campaign Request Needs Attention',
-        `Your campaign "${campaign?.name || 'Unknown Campaign'}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
+        `Your campaign "${campaign.name}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
         [...new Set(notificationTargets)], // Remove duplicates
         request.campaignId
       );
@@ -468,11 +555,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const archiveRequest = async (requestId: string) => {
     try {
+      const { timestamp } = createTimestamp();
+      
       const { error } = await supabase
         .from('audience_requests')
         .update({ 
           archived: true,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', requestId);
 
@@ -501,11 +590,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const unarchiveRequest = async (requestId: string) => {
     try {
+      const { timestamp } = createTimestamp();
+      
       const { error } = await supabase
         .from('audience_requests')
         .update({ 
           archived: false,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', requestId);
 
@@ -549,11 +640,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const archiveCampaign = async (campaignId: string) => {
     try {
+      const { timestamp } = createTimestamp();
+      
       const { error } = await supabase
         .from('campaigns')
         .update({ 
           archived: true,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', campaignId);
 
@@ -561,7 +654,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Update local state
       setCampaigns(prev => 
-        prev.map(c => c.id === campaignId ? { ...c, archived: true, updatedAt: new Date().toISOString() } : c)
+        prev.map(c => c.id === campaignId ? { ...c, archived: true, updatedAt: timestamp } : c)
       );
     } catch (error) {
       console.error('Error archiving campaign:', error);
@@ -571,11 +664,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const unarchiveCampaign = async (campaignId: string) => {
     try {
+      const { timestamp } = createTimestamp();
+      
       const { error } = await supabase
         .from('campaigns')
         .update({ 
           archived: false,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
         .eq('id', campaignId);
 
@@ -583,7 +678,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Update local state
       setCampaigns(prev => 
-        prev.map(c => c.id === campaignId ? { ...c, archived: false, updatedAt: new Date().toISOString() } : c)
+        prev.map(c => c.id === campaignId ? { ...c, archived: false, updatedAt: timestamp } : c)
       );
     } catch (error) {
       console.error('Error unarchiving campaign:', error);
@@ -594,6 +689,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initializeCampaign = async (name: string) => {
     if (!user) return;
 
+    const { timestamp } = createTimestamp();
     const currentDate = new Date().toISOString().split('T')[0];
 
     const newCampaign: Campaign = {
@@ -609,8 +705,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       startDate: currentDate,
       endDate: currentDate,
       status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: timestamp,
+      updatedAt: timestamp
     };
 
     try {
@@ -625,7 +721,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           budget: newCampaign.budget,
           start_date: newCampaign.startDate,
           end_date: newCampaign.endDate,
-          status: newCampaign.status
+          status: newCampaign.status,
+          created_at: timestamp,
+          updated_at: timestamp
         }])
         .select()
         .single();
@@ -664,17 +762,18 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
+      const { timestamp } = createTimestamp();
       const updatedCampaign = {
         ...activeCampaign,
         audiences: [...activeCampaign.audiences, audience],
-        updatedAt: new Date().toISOString()
+        updatedAt: timestamp
       };
 
       const { error } = await supabase
         .from('campaigns')
         .update({
           audiences: updatedCampaign.audiences,
-          updated_at: updatedCampaign.updatedAt
+          updated_at: timestamp
         })
         .eq('id', activeCampaign.id);
 
@@ -695,7 +794,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           action_details: {
             audience_name: audience.name,
             audience_id: audience.id
-          }
+          },
+          created_at: timestamp
         });
 
       console.log('Successfully added audience:', audience.id);
@@ -711,18 +811,19 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     try {
+      const { timestamp } = createTimestamp();
       const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
       const updatedCampaign = {
         ...activeCampaign,
         audiences: activeCampaign.audiences.filter(a => a.id !== audienceId),
-        updatedAt: new Date().toISOString()
+        updatedAt: timestamp
       };
 
       const { error } = await supabase
         .from('campaigns')
         .update({
           audiences: updatedCampaign.audiences,
-          updated_at: updatedCampaign.updatedAt
+          updated_at: timestamp
         })
         .eq('id', activeCampaign.id);
 
@@ -744,7 +845,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             action_details: {
               audience_name: removedAudience.name,
               audience_id: removedAudience.id
-            }
+            },
+            created_at: timestamp
           });
       }
 
@@ -758,14 +860,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!activeCampaign) return;
 
     try {
+      const { timestamp } = createTimestamp();
       const updatedCampaign = {
         ...activeCampaign,
         ...details,
-        updatedAt: new Date().toISOString()
+        updatedAt: timestamp
       };
 
       const supabaseUpdate: Record<string, any> = {
-        updated_at: updatedCampaign.updatedAt
+        updated_at: timestamp
       };
 
       if ('name' in details) supabaseUpdate.name = details.name;
@@ -796,17 +899,18 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!user || !isAdmin) return;
 
     try {
+      const { timestamp } = createTimestamp();
       const campaign = campaigns.find(c => c.id === campaignId);
       if (!campaign) return;
 
       const updateData: any = { 
         status,
-        updated_at: new Date().toISOString()
+        updated_at: timestamp
       };
 
       // Add approved_at timestamp when approving
       if (status === 'approved' && campaign.status !== 'approved') {
-        updateData.approved_at = new Date().toISOString();
+        updateData.approved_at = timestamp;
       }
 
       // Update campaign status
@@ -817,18 +921,22 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (campaignError) throw campaignError;
 
-      // Add workflow history entry
+      // Add workflow history entry with proper campaign_id
       const { error: historyError } = await supabase
         .from('campaign_workflow_history')
         .insert({
-          campaign_id: campaignId,
+          campaign_id: campaignId, // Ensure this is not null
           user_id: user.id,
           from_status: campaign.status,
           to_status: status,
-          notes
+          notes,
+          created_at: timestamp
         });
 
-      if (historyError) throw historyError;
+      if (historyError) {
+        console.error('Workflow history error:', historyError);
+        // Don't throw here, as the main operation succeeded
+      }
 
       // Create notification for client and team
       const notificationTargets = [campaign.clientId];
@@ -866,6 +974,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     try {
+      const { timestamp } = createTimestamp();
+      
       const newRequest: AudienceRequest = {
         id: `request-${Date.now()}`,
         campaignId: activeCampaign.id,
@@ -877,7 +987,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         endDate: activeCampaign.endDate,
         notes,
         status: 'pending',
-        createdAt: new Date().toISOString()
+        createdAt: timestamp
       };
 
       const { error } = await supabase
@@ -892,7 +1002,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           start_date: newRequest.startDate,
           end_date: newRequest.endDate,
           notes: newRequest.notes,
-          status: newRequest.status
+          status: newRequest.status,
+          created_at: timestamp
         }]);
 
       if (error) throw error;
@@ -974,13 +1085,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     try {
+      const { timestamp } = createTimestamp();
+      
       const { error } = await supabase
         .from('campaign_comments')
         .insert({
           campaign_id: campaignId,
           user_id: user.id,
           parent_comment_id: parentCommentId,
-          content
+          content,
+          created_at: timestamp
         });
 
       if (error) throw error;
@@ -995,7 +1109,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           action_details: {
             comment_content: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
             is_reply: !!parentCommentId
-          }
+          },
+          created_at: timestamp
         });
 
       // Create notification for relevant users
