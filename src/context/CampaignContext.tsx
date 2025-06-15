@@ -114,7 +114,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { timestamp } = createTimestamp();
       
-      const notifications = targetUserIds.map(userId => ({
+      // FIXED: Filter out null, undefined, and empty string user IDs
+      const validUserIds = targetUserIds.filter(userId => userId && typeof userId === 'string' && userId.trim() !== '');
+      
+      if (validUserIds.length === 0) {
+        console.warn('No valid user IDs provided for notification');
+        return;
+      }
+      
+      const notifications = validUserIds.map(userId => ({
         user_id: userId,
         title,
         message,
@@ -444,12 +452,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const notificationTargets = [request.clientId];
         
-        // Get campaign details for notification
+        // FIXED: Use maybeSingle() instead of single() to handle cases where user doesn't exist
         const { data: clientUser } = await supabase
           .from('users')
           .select('company_id')
           .eq('id', request.clientId)
-          .single();
+          .maybeSingle();
 
         if (clientUser?.company_id) {
           const teamIds = await getCompanyTeamIds(clientUser.company_id);
@@ -581,11 +589,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const notificationTargets = [request.clientId];
         
         if (campaign?.client_id) {
+          // FIXED: Use maybeSingle() instead of single() to handle cases where user doesn't exist
           const { data: clientUser } = await supabase
             .from('users')
             .select('company_id')
             .eq('id', campaign.client_id)
-            .single();
+            .maybeSingle();
 
           if (clientUser?.company_id) {
             const teamIds = await getCompanyTeamIds(clientUser.company_id);
@@ -1302,11 +1311,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchActivityLog = async (campaignId: string) => {
     try {
+      // FIXED: Remove the explicit foreign key hint and let Supabase infer the relationship
       const { data, error } = await supabase
         .from('campaign_activity_log')
         .select(`
           *,
-          users!campaign_activity_log_user_id_fkey (name, role)
+          users (name, role)
         `)
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: false });
