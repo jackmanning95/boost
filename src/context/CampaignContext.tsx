@@ -337,15 +337,73 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error('Request not found');
       }
 
-      // Ensure campaign exists and get its ID
-      const { data: campaign, error: campaignFetchError } = await supabase
+      console.log('Approving request:', requestId, 'for campaign:', request.campaignId);
+
+      // FIXED: Check if campaign exists, if not create it
+      let campaignId = request.campaignId;
+      let campaign;
+
+      // Try to find existing campaign
+      const { data: existingCampaign, error: campaignFetchError } = await supabase
         .from('campaigns')
         .select('id, name, client_id')
         .eq('id', request.campaignId)
         .single();
 
-      if (campaignFetchError || !campaign) {
-        throw new Error(`Campaign not found for request ${requestId}`);
+      if (campaignFetchError || !existingCampaign) {
+        console.log('Campaign not found, creating new campaign for request:', requestId);
+        
+        // Create new campaign from request data
+        const newCampaignData = {
+          id: request.campaignId, // Use the same ID from the request
+          name: `Campaign for Request ${requestId}`, // Default name, can be updated later
+          client_id: request.clientId,
+          audiences: request.audiences || [],
+          platforms: request.platforms || { social: [], programmatic: [] },
+          budget: request.budget || 0,
+          start_date: request.startDate,
+          end_date: request.endDate,
+          status: 'approved',
+          approved_at: timestamp,
+          created_at: timestamp,
+          updated_at: timestamp,
+          request_id: requestId
+        };
+
+        const { data: newCampaign, error: createError } = await supabase
+          .from('campaigns')
+          .insert([newCampaignData])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating campaign:', createError);
+          throw new Error('Failed to create campaign: ' + createError.message);
+        }
+
+        campaign = newCampaign;
+        campaignId = newCampaign.id;
+        console.log('Created new campaign:', campaignId);
+      } else {
+        // Update existing campaign to approved status
+        const { error: campaignUpdateError } = await supabase
+          .from('campaigns')
+          .update({ 
+            status: 'approved',
+            approved_at: timestamp,
+            updated_at: timestamp,
+            request_id: requestId
+          })
+          .eq('id', existingCampaign.id);
+
+        if (campaignUpdateError) {
+          console.error('Error updating campaign:', campaignUpdateError);
+          throw campaignUpdateError;
+        }
+
+        campaign = existingCampaign;
+        campaignId = existingCampaign.id;
+        console.log('Updated existing campaign:', campaignId);
       }
 
       // Update request status to approved
@@ -358,25 +416,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         })
         .eq('id', requestId);
 
-      if (requestError) throw requestError;
-
-      // Update the associated campaign status to approved
-      const { error: campaignError } = await supabase
-        .from('campaigns')
-        .update({ 
-          status: 'approved',
-          approved_at: timestamp,
-          updated_at: timestamp
-        })
-        .eq('id', request.campaignId);
-
-      if (campaignError) throw campaignError;
+      if (requestError) {
+        console.error('Error updating request:', requestError);
+        throw requestError;
+      }
 
       // Add workflow history entry with proper campaign_id
       const { error: workflowError } = await supabase
         .from('campaign_workflow_history')
         .insert({
-          campaign_id: request.campaignId, // Ensure this is not null
+          campaign_id: campaignId, // Now we have a valid campaign_id
           user_id: user.id,
           from_status: 'pending_review',
           to_status: 'approved',
@@ -410,7 +459,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'Campaign Request Approved! 🎉',
         `Great news! Your campaign "${campaign.name}" has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
         [...new Set(notificationTargets)], // Remove duplicates
-        request.campaignId
+        campaignId
       );
 
       // Refresh data
@@ -433,6 +482,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setCampaigns(updatedCampaigns);
       }
 
+      console.log('Request approved successfully:', requestId);
+
     } catch (error) {
       console.error('Error approving request:', error);
       throw error;
@@ -453,16 +504,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw new Error('Request not found');
       }
 
-      // Ensure campaign exists
+      // Check if campaign exists
       const { data: campaign, error: campaignFetchError } = await supabase
         .from('campaigns')
         .select('id, name, client_id')
         .eq('id', request.campaignId)
         .single();
-
-      if (campaignFetchError || !campaign) {
-        throw new Error(`Campaign not found for request ${requestId}`);
-      }
 
       // Update request status to rejected
       const { error: requestError } = await supabase
@@ -476,38 +523,43 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (requestError) throw requestError;
 
-      // Update the associated campaign status to failed
-      const { error: campaignError } = await supabase
-        .from('campaigns')
-        .update({ 
-          status: 'failed',
-          updated_at: timestamp
-        })
-        .eq('id', request.campaignId);
+      // If campaign exists, update it to failed status
+      if (campaign && !campaignFetchError) {
+        const { error: campaignError } = await supabase
+          .from('campaigns')
+          .update({ 
+            status: 'failed',
+            updated_at: timestamp
+          })
+          .eq('id', request.campaignId);
 
-      if (campaignError) throw campaignError;
+        if (campaignError) {
+          console.error('Error updating campaign status:', campaignError);
+          // Don't throw here, as the main operation succeeded
+        }
 
-      // Add workflow history entry with proper campaign_id
-      const { error: workflowError } = await supabase
-        .from('campaign_workflow_history')
-        .insert({
-          campaign_id: request.campaignId, // Ensure this is not null
-          user_id: user.id,
-          from_status: 'pending_review',
-          to_status: 'failed',
-          notes: reason || 'Request rejected by admin',
-          created_at: timestamp
-        });
+        // Add workflow history entry with proper campaign_id
+        const { error: workflowError } = await supabase
+          .from('campaign_workflow_history')
+          .insert({
+            campaign_id: request.campaignId,
+            user_id: user.id,
+            from_status: 'pending_review',
+            to_status: 'failed',
+            notes: reason || 'Request rejected by admin',
+            created_at: timestamp
+          });
 
-      if (workflowError) {
-        console.error('Workflow history error:', workflowError);
-        // Don't throw here, as the main operation succeeded
+        if (workflowError) {
+          console.error('Workflow history error:', workflowError);
+          // Don't throw here, as the main operation succeeded
+        }
       }
 
       // Create notification for client and team
       const notificationTargets = [request.clientId];
       
-      if (campaign.client_id) {
+      if (campaign?.client_id) {
         const { data: clientUser } = await supabase
           .from('users')
           .select('company_id')
@@ -520,9 +572,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
+      const campaignName = campaign?.name || `Request ${requestId}`;
       await createNotification(
         'Campaign Request Needs Attention',
-        `Your campaign "${campaign.name}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
+        `Your campaign "${campaignName}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
         [...new Set(notificationTargets)], // Remove duplicates
         request.campaignId
       );
