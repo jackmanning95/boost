@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ChevronRight, Mail } from 'lucide-react';
+import { ChevronRight, Mail, Building } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 
@@ -31,7 +31,7 @@ const SignUpForm: React.FC = () => {
     setError('');
 
     // Validate form
-    if (!formData.email || !formData.password || !formData.name) {
+    if (!formData.email || !formData.password || !formData.name || !formData.companyName) {
       setError('Please fill in all required fields');
       return;
     }
@@ -46,6 +46,11 @@ const SignUpForm: React.FC = () => {
       return;
     }
 
+    if (formData.companyName.trim().length < 2) {
+      setError('Company name must be at least 2 characters long');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -53,7 +58,7 @@ const SignUpForm: React.FC = () => {
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        companyName: formData.companyName
+        companyName: formData.companyName.trim()
       });
       setIsSuccess(true);
     } catch (err) {
@@ -69,14 +74,27 @@ const SignUpForm: React.FC = () => {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-6">
           <Mail size={32} />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
-        <p className="text-gray-600 mb-6">
-          We've sent a verification link to {formData.email}.<br />
-          Please click the link to verify your email address.
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Boost!</h2>
+        <p className="text-gray-600 mb-4">
+          Your account has been created successfully.
         </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start">
+            <Building size={20} className="text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-blue-900 mb-1">Company Admin Status</h3>
+              <p className="text-sm text-blue-700">
+                {formData.email.endsWith('@boostdata.io') 
+                  ? 'You have been granted Super Admin privileges with access to all platform features.'
+                  : `You are now the administrator for "${formData.companyName}" and can invite team members.`
+                }
+              </p>
+            </div>
+          </div>
+        </div>
         <Link to="/login">
-          <Button variant="outline">
-            Return to Sign In
+          <Button variant="primary" icon={<ChevronRight size={18} />}>
+            Continue to Sign In
           </Button>
         </Link>
       </div>
@@ -123,6 +141,8 @@ const SignUpForm: React.FC = () => {
           value={formData.companyName}
           onChange={handleChange}
           placeholder="Acme Inc."
+          required
+          helpText="If this company doesn't exist, it will be created and you'll become the admin."
         />
         
         <Input
@@ -144,6 +164,21 @@ const SignUpForm: React.FC = () => {
           placeholder="••••••••"
           required
         />
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <Building size={20} className="text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-900 mb-1">Company Admin Benefits</h3>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Invite and manage team members</li>
+                <li>• View all company campaigns and requests</li>
+                <li>• Assign admin roles to other team members</li>
+                <li>• Manage company account settings</li>
+              </ul>
+            </div>
+          </div>
+        </div>
         
         <Button
           type="submit"

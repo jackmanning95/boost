@@ -102,7 +102,7 @@ const RequestsPageContent: React.FC = () => {
     deleteRequest,
     unarchiveRequest
   } = useCampaign();
-  const { isAdmin, user } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const { refreshNotifications } = useNotifications();
   const navigate = useNavigate();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
@@ -122,8 +122,8 @@ const RequestsPageContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Redirect if user is not admin
-  if (!isAdmin) {
+  // Redirect if user is not super admin
+  if (!isSuperAdmin) {
     return <Navigate to="/campaigns" replace />;
   }
 
@@ -193,7 +193,7 @@ const RequestsPageContent: React.FC = () => {
         const clientIds = [...new Set(allRequests.map(r => r?.clientId).filter(Boolean))];
         
         if (clientIds.length > 0) {
-          // Fetch user data
+          // Fetch user data with company information
           const { data: users, error: usersError } = await supabase
             .from('users')
             .select(`
@@ -203,7 +203,8 @@ const RequestsPageContent: React.FC = () => {
               company_id,
               companies!users_company_id_fkey (
                 id,
-                name
+                name,
+                account_id
               )
             `)
             .in('id', clientIds);
@@ -433,6 +434,11 @@ const RequestsPageContent: React.FC = () => {
               <p className="font-medium flex items-center">
                 <Building size={14} className="mr-1 text-gray-400" />
                 {user?.companies?.name || 'Unknown Company'}
+                {user?.companies?.account_id && (
+                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                    ID: {user.companies.account_id}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -525,7 +531,7 @@ const RequestsPageContent: React.FC = () => {
                 <FileText size={28} className="mr-3 text-blue-600" />
                 Campaign Requests
               </h1>
-              <p className="text-gray-600">Review and manage campaign submissions</p>
+              <p className="text-gray-600">Review and manage campaign submissions from all companies</p>
             </div>
             <div className="flex gap-3">
               <Button
@@ -682,7 +688,7 @@ const RequestsPageContent: React.FC = () => {
                 onChange={(e) => setFilters(prev => ({ ...prev, agency: e.target.value }))}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">All Agencies</option>
+                <option value="">All Companies</option>
                 {getUniqueAgencies().map(agency => (
                   <option key={agency} value={agency}>{agency}</option>
                 ))}
@@ -829,6 +835,11 @@ const RequestsPageContent: React.FC = () => {
                               <div className="flex items-center text-sm text-gray-600">
                                 <Building size={14} className="mr-1" />
                                 <span>{user?.companies?.name || 'Unknown Company'}</span>
+                                {user?.companies?.account_id && (
+                                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                    ID: {user.companies.account_id}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center text-sm text-gray-500">
                                 <Clock size={14} className="mr-1" />
