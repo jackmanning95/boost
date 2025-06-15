@@ -77,8 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         *,
         companies (
           id,
-          name,
-          account_id
+          name
         )
       `)
       .eq('id', userId)
