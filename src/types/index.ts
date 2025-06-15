@@ -43,6 +43,7 @@ export interface Campaign {
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;
+  archived?: boolean;
   users?: {
     name: string;
     company_id: string;
@@ -112,6 +113,7 @@ export interface AudienceRequest {
   status: 'pending' | 'reviewed' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;
+  archived?: boolean;
 }
 
 export interface Notification {

@@ -23,7 +23,14 @@ import {
   Activity,
   BarChart3,
   PlayCircle,
-  CheckCircle2
+  CheckCircle2,
+  Trash2,
+  Archive,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  AlertTriangle,
+  MoreVertical
 } from 'lucide-react';
 
 interface ClientFilters {
@@ -42,7 +49,10 @@ const CampaignsPage: React.FC = () => {
     loading,
     getCampaignStatusCategory,
     activeCampaigns,
-    completedCampaigns
+    completedCampaigns,
+    deleteCampaign,
+    archiveCampaign,
+    unarchiveCampaign
   } = useCampaign();
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +60,8 @@ const CampaignsPage: React.FC = () => {
   const [newCampaignName, setNewCampaignName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
   const [clientFilters, setClientFilters] = useState<ClientFilters>({
     search: '',
     advertiser: '',
@@ -76,13 +88,109 @@ const CampaignsPage: React.FC = () => {
     navigate(`/campaigns/${campaignId}`);
   };
 
+  // Selection handlers
+  const handleSelectCampaign = (campaignId: string, checked: boolean) => {
+    const newSelected = new Set(selectedCampaignIds);
+    if (checked) {
+      newSelected.add(campaignId);
+    } else {
+      newSelected.delete(campaignId);
+    }
+    setSelectedCampaignIds(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(displayCampaigns.map(c => c.id));
+      setSelectedCampaignIds(allIds);
+    } else {
+      setSelectedCampaignIds(new Set());
+    }
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = async () => {
+    if (selectedCampaignIds.size === 0) return;
+    
+    if (!confirm(`Permanently delete ${selectedCampaignIds.size} selected campaign(s)? This action cannot be undone.`)) return;
+    
+    try {
+      await Promise.all(Array.from(selectedCampaignIds).map(id => deleteCampaign(id)));
+      setSelectedCampaignIds(new Set());
+    } catch (error) {
+      console.error('Error deleting campaigns:', error);
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedCampaignIds.size === 0) return;
+    
+    if (!confirm(`Archive ${selectedCampaignIds.size} selected campaign(s)?`)) return;
+    
+    try {
+      await Promise.all(Array.from(selectedCampaignIds).map(id => archiveCampaign(id)));
+      setSelectedCampaignIds(new Set());
+    } catch (error) {
+      console.error('Error archiving campaigns:', error);
+    }
+  };
+
+  const handleBulkUnarchive = async () => {
+    if (selectedCampaignIds.size === 0) return;
+    
+    try {
+      await Promise.all(Array.from(selectedCampaignIds).map(id => unarchiveCampaign(id)));
+      setSelectedCampaignIds(new Set());
+    } catch (error) {
+      console.error('Error unarchiving campaigns:', error);
+    }
+  };
+
+  // Individual action handlers
+  const handleDeleteCampaign = async (campaignId: string, campaignName: string) => {
+    if (!confirm(`Are you sure you want to permanently delete "${campaignName}"? This action cannot be undone.`)) return;
+    
+    try {
+      await deleteCampaign(campaignId);
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+    }
+  };
+
+  const handleArchiveCampaign = async (campaignId: string) => {
+    try {
+      await archiveCampaign(campaignId);
+    } catch (error) {
+      console.error('Error archiving campaign:', error);
+    }
+  };
+
+  const handleUnarchiveCampaign = async (campaignId: string) => {
+    try {
+      await unarchiveCampaign(campaignId);
+    } catch (error) {
+      console.error('Error unarchiving campaign:', error);
+    }
+  };
+
   // Client-side filtering for non-admin users
   const getFilteredCampaigns = () => {
+    let baseCampaigns = isAdmin ? filteredCampaigns : filteredCampaigns;
+
+    // Filter by archived status
+    baseCampaigns = baseCampaigns.filter(campaign => {
+      if (showArchived) {
+        return campaign.archived === true;
+      } else {
+        return !campaign.archived;
+      }
+    });
+
     if (isAdmin) {
-      return filteredCampaigns; // Use existing admin filters
+      return baseCampaigns; // Use existing admin filters
     }
 
-    return filteredCampaigns.filter(campaign => {
+    return baseCampaigns.filter(campaign => {
       // Search filter
       if (clientFilters.search) {
         const searchLower = clientFilters.search.toLowerCase();
@@ -136,9 +244,11 @@ const CampaignsPage: React.FC = () => {
   // Calculate topline figures
   const getToplineStats = () => {
     const allCampaigns = isAdmin ? campaigns : campaigns.filter(c => c.clientId === user?.id);
+    const nonArchivedCampaigns = allCampaigns.filter(c => !c.archived);
     
-    const activeCampaignsList = allCampaigns.filter(c => getStatusCategory(c.status) === 'active');
-    const upcomingCampaignsList = allCampaigns.filter(c => getStatusCategory(c.status) === 'upcoming');
+    const activeCampaignsList = nonArchivedCampaigns.filter(c => getStatusCategory(c.status) === 'active');
+    const upcomingCampaignsList = nonArchivedCampaigns.filter(c => getStatusCategory(c.status) === 'upcoming');
+    const archivedCount = allCampaigns.filter(c => c.archived).length;
     
     // Calculate total audiences for active & upcoming campaigns
     const totalAudiences = [...activeCampaignsList, ...upcomingCampaignsList]
@@ -151,6 +261,7 @@ const CampaignsPage: React.FC = () => {
     return {
       activeCampaigns: activeCampaignsList.length,
       upcomingCampaigns: upcomingCampaignsList.length,
+      archivedCampaigns: archivedCount,
       totalAudiences,
       totalBudget
     };
@@ -205,6 +316,75 @@ const CampaignsPage: React.FC = () => {
       day: 'numeric'
     });
   };
+
+  // Campaign actions dropdown component
+  const CampaignActionsDropdown: React.FC<{ campaign: any }> = ({ campaign }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const isSelected = selectedCampaignIds.has(campaign.id);
+
+    return (
+      <div className="relative">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsOpen(!isOpen)}
+          icon={<MoreVertical size={16} />}
+        />
+        
+        {isOpen && (
+          <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+            <div className="py-1">
+              <button
+                onClick={() => {
+                  handleViewCampaign(campaign.id);
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+              >
+                <Eye size={14} className="mr-2" />
+                View Details
+              </button>
+              
+              {!campaign.archived ? (
+                <button
+                  onClick={() => {
+                    handleArchiveCampaign(campaign.id);
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                >
+                  <Archive size={14} className="mr-2" />
+                  Archive
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    handleUnarchiveCampaign(campaign.id);
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                >
+                  <RotateCcw size={14} className="mr-2" />
+                  Unarchive
+                </button>
+              )}
+              
+              <button
+                onClick={() => {
+                  handleDeleteCampaign(campaign.id, campaign.name);
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+              >
+                <Trash2 size={14} className="mr-2" />
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
   
   return (
     <Layout>
@@ -216,30 +396,51 @@ const CampaignsPage: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900 flex items-center">
                 <BarChart3 size={28} className="mr-3 text-blue-600" />
                 Campaigns
+                {showArchived && (
+                  <Badge variant="outline" className="ml-3">
+                    <Archive size={14} className="mr-1" />
+                    Archived
+                  </Badge>
+                )}
               </h1>
               <p className="text-gray-600">
                 {isAdmin ? 'Manage all client campaigns and track performance' : 'Manage your audience campaigns and track progress'}
               </p>
             </div>
             
-            {!isAdmin && (
-              <div className="flex gap-4">
-                <Button 
-                  variant="outline"
-                  onClick={handleStartWithAudiences}
-                  icon={<Users size={18} />}
-                >
-                  Start with Audiences
-                </Button>
-                <Button 
-                  variant="primary" 
-                  onClick={() => setShowNewCampaignForm(true)}
-                  icon={<Plus size={18} />}
-                >
-                  New Campaign
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-4">
+              {/* Archive Toggle */}
+              <Button
+                variant={showArchived ? "primary" : "outline"}
+                onClick={() => {
+                  setShowArchived(!showArchived);
+                  setSelectedCampaignIds(new Set());
+                  setCurrentPage(1);
+                }}
+                icon={showArchived ? <RotateCcw size={18} /> : <Archive size={18} />}
+              >
+                {showArchived ? `Show Active (${stats.archivedCampaigns} Archived)` : `Show Archived (${stats.archivedCampaigns})`}
+              </Button>
+
+              {!isAdmin && (
+                <>
+                  <Button 
+                    variant="outline"
+                    onClick={handleStartWithAudiences}
+                    icon={<Users size={18} />}
+                  >
+                    Start with Audiences
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => setShowNewCampaignForm(true)}
+                    icon={<Plus size={18} />}
+                  >
+                    New Campaign
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Topline Stats */}
@@ -367,9 +568,60 @@ const CampaignsPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Results summary */}
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, displayCampaigns.length)} of {displayCampaigns.length} campaigns
+              {/* Results summary and bulk actions */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, displayCampaigns.length)} of {displayCampaigns.length} campaigns
+                </div>
+                
+                {/* Bulk Actions */}
+                {paginatedCampaigns.length > 0 && (
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedCampaignIds.size === paginatedCampaigns.length && paginatedCampaigns.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-600">
+                        Select All ({selectedCampaignIds.size} selected)
+                      </span>
+                    </div>
+                    
+                    {selectedCampaignIds.size > 0 && (
+                      <div className="flex space-x-2">
+                        {showArchived ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleBulkUnarchive}
+                            icon={<RotateCcw size={16} />}
+                          >
+                            Unarchive ({selectedCampaignIds.size})
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleBulkArchive}
+                            icon={<Archive size={16} />}
+                          >
+                            Archive ({selectedCampaignIds.size})
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={handleBulkDelete}
+                          icon={<Trash2 size={16} />}
+                        >
+                          Delete ({selectedCampaignIds.size})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -436,9 +688,60 @@ const CampaignsPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Results summary */}
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, displayCampaigns.length)} of {displayCampaigns.length} campaigns
+              {/* Results summary and bulk actions */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, displayCampaigns.length)} of {displayCampaigns.length} campaigns
+                </div>
+                
+                {/* Bulk Actions */}
+                {paginatedCampaigns.length > 0 && (
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedCampaignIds.size === paginatedCampaigns.length && paginatedCampaigns.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-600">
+                        Select All ({selectedCampaignIds.size} selected)
+                      </span>
+                    </div>
+                    
+                    {selectedCampaignIds.size > 0 && (
+                      <div className="flex space-x-2">
+                        {showArchived ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleBulkUnarchive}
+                            icon={<RotateCcw size={16} />}
+                          >
+                            Unarchive ({selectedCampaignIds.size})
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleBulkArchive}
+                            icon={<Archive size={16} />}
+                          >
+                            Archive ({selectedCampaignIds.size})
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={handleBulkDelete}
+                          icon={<Trash2 size={16} />}
+                        >
+                          Delete ({selectedCampaignIds.size})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -480,125 +783,150 @@ const CampaignsPage: React.FC = () => {
         ) : paginatedCampaigns.length > 0 ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-6">
-              {paginatedCampaigns.map(campaign => (
-                <Card key={campaign.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-0">
-                    <div className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">{campaign.name}</h3>
-                            {getStatusBadge(campaign.status)}
-                            <Badge variant="outline" className="text-xs">
-                              {getStatusCategory(campaign.status)}
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex items-center mt-1">
-                            <Clock size={16} className="text-gray-400 mr-1" />
-                            <span className="text-sm text-gray-500">
-                              Created on {formatDate(campaign.createdAt)}
-                            </span>
-                            {isAdmin && campaign.users && (
-                              <>
-                                <span className="mx-2 text-gray-300">•</span>
-                                <Building size={14} className="text-gray-400 mr-1" />
-                                <span className="text-sm text-gray-500">
-                                  {campaign.users.name} ({campaign.users.companies?.name})
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Enhanced Status Preview with Last Update */}
-                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex items-center space-x-2">
-                                  <CheckCircle2 size={16} className="text-green-500" />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {getLastUpdate(campaign)}
-                                  </span>
-                                </div>
+              {paginatedCampaigns.map(campaign => {
+                const isSelected = selectedCampaignIds.has(campaign.id);
+                
+                return (
+                  <Card key={campaign.id} className={`hover:shadow-md transition-shadow ${
+                    campaign.archived ? 'border-gray-300 bg-gray-50' : ''
+                  } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
+                    <CardContent className="p-0">
+                      <div className="p-6">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-start space-x-3 flex-1">
+                            {/* Selection Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleSelectCampaign(campaign.id, e.target.checked)}
+                              className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-3 mb-2">
+                                <h3 className="text-lg font-semibold text-gray-900">{campaign.name}</h3>
+                                {getStatusBadge(campaign.status)}
+                                <Badge variant="outline" className="text-xs">
+                                  {getStatusCategory(campaign.status)}
+                                </Badge>
+                                {campaign.archived && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <Archive size={12} className="mr-1" />
+                                    Archived
+                                  </Badge>
+                                )}
                               </div>
-                              <div className="text-right">
-                                <p className="text-xs text-gray-500">Performance</p>
-                                <div className="flex items-center space-x-1">
-                                  <TrendingUp size={14} className="text-green-500" />
-                                  <p className="text-sm font-medium text-green-600">On Track</p>
+                              
+                              <div className="flex items-center mt-1">
+                                <Clock size={16} className="text-gray-400 mr-1" />
+                                <span className="text-sm text-gray-500">
+                                  Created on {formatDate(campaign.createdAt)}
+                                </span>
+                                {isAdmin && campaign.users && (
+                                  <>
+                                    <span className="mx-2 text-gray-300">•</span>
+                                    <Building size={14} className="text-gray-400 mr-1" />
+                                    <span className="text-sm text-gray-500">
+                                      {campaign.users.name} ({campaign.users.companies?.name})
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Enhanced Status Preview with Last Update */}
+                              <div className={`mt-3 p-3 rounded-md ${
+                                campaign.archived ? 'bg-gray-100 border border-gray-200' : 'bg-gray-50'
+                              }`}>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="flex items-center space-x-2">
+                                      <CheckCircle2 size={16} className="text-green-500" />
+                                      <span className="text-sm font-medium text-gray-700">
+                                        {campaign.archived ? `Archived on ${formatDate(campaign.updatedAt)}` : getLastUpdate(campaign)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500">Performance</p>
+                                    <div className="flex items-center space-x-1">
+                                      <TrendingUp size={14} className="text-green-500" />
+                                      <p className="text-sm font-medium text-green-600">On Track</p>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
+                          <div className="flex items-center space-x-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewCampaign(campaign.id)}
+                              icon={<Eye size={16} />}
+                            >
+                              View Details
+                            </Button>
+                            {campaign.status === 'draft' && !isAdmin && (
+                              <Link to="/audiences">
+                                <Button variant="primary" size="sm">Continue</Button>
+                              </Link>
+                            )}
+                            <CampaignActionsDropdown campaign={campaign} />
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewCampaign(campaign.id)}
-                            icon={<Eye size={16} />}
-                          >
-                            View Details
-                          </Button>
-                          {campaign.status === 'draft' && !isAdmin && (
-                            <Link to="/audiences">
-                              <Button variant="primary" size="sm">Continue</Button>
-                            </Link>
+                        
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500">Selected Audiences</p>
+                            <div className="flex items-center">
+                              <Users size={14} className="text-gray-400 mr-1" />
+                              <p className="font-medium">{campaign.audiences.length}</p>
+                            </div>
+                          </div>
+                          {campaign.startDate && campaign.endDate && (
+                            <div>
+                              <p className="text-xs text-gray-500">Timeline</p>
+                              <p className="font-medium flex items-center">
+                                <Calendar size={14} className="mr-1 text-gray-400" />
+                                {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
+                              </p>
+                            </div>
                           )}
-                        </div>
-                      </div>
-                      
-                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-xs text-gray-500">Selected Audiences</p>
-                          <div className="flex items-center">
-                            <Users size={14} className="text-gray-400 mr-1" />
-                            <p className="font-medium">{campaign.audiences.length}</p>
-                          </div>
-                        </div>
-                        {campaign.startDate && campaign.endDate && (
+                          {campaign.budget > 0 && (
+                            <div>
+                              <p className="text-xs text-gray-500">Budget</p>
+                              <p className="font-medium flex items-center">
+                                <DollarSign size={14} className="mr-1 text-gray-400" />
+                                ${campaign.budget.toLocaleString()}
+                              </p>
+                            </div>
+                          )}
                           <div>
-                            <p className="text-xs text-gray-500">Timeline</p>
-                            <p className="font-medium flex items-center">
-                              <Calendar size={14} className="mr-1 text-gray-400" />
-                              {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
+                            <p className="text-xs text-gray-500">Est. Reach</p>
+                            <p className="font-medium">
+                              {campaign.audiences.reduce((sum, aud) => sum + (aud.reach || 0), 0).toLocaleString()}
                             </p>
                           </div>
-                        )}
-                        {campaign.budget > 0 && (
-                          <div>
-                            <p className="text-xs text-gray-500">Budget</p>
-                            <p className="font-medium flex items-center">
-                              <DollarSign size={14} className="mr-1 text-gray-400" />
-                              ${campaign.budget.toLocaleString()}
-                            </p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xs text-gray-500">Est. Reach</p>
-                          <p className="font-medium">
-                            {campaign.audiences.reduce((sum, aud) => sum + (aud.reach || 0), 0).toLocaleString()}
-                          </p>
                         </div>
+                        
+                        {campaign.platforms.social.length > 0 || campaign.platforms.programmatic.length > 0 ? (
+                          <div className="mt-4">
+                            <p className="text-xs text-gray-500 mb-1">Platforms</p>
+                            <div className="flex flex-wrap gap-1">
+                              {campaign.platforms.social.map(platform => (
+                                <Badge key={platform} variant="default" className="text-xs">{platform}</Badge>
+                              ))}
+                              {campaign.platforms.programmatic.map(platform => (
+                                <Badge key={platform} variant="secondary" className="text-xs">{platform}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                      
-                      {campaign.platforms.social.length > 0 || campaign.platforms.programmatic.length > 0 ? (
-                        <div className="mt-4">
-                          <p className="text-xs text-gray-500 mb-1">Platforms</p>
-                          <div className="flex flex-wrap gap-1">
-                            {campaign.platforms.social.map(platform => (
-                              <Badge key={platform} variant="default" className="text-xs">{platform}</Badge>
-                            ))}
-                            {campaign.platforms.programmatic.map(platform => (
-                              <Badge key={platform} variant="secondary" className="text-xs">{platform}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
             {/* Pagination */}
@@ -630,16 +958,22 @@ const CampaignsPage: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <BarChart3 size={64} className="mx-auto mb-4 text-gray-300" />
+            {showArchived ? (
+              <Archive size={64} className="mx-auto mb-4 text-gray-300" />
+            ) : (
+              <BarChart3 size={64} className="mx-auto mb-4 text-gray-300" />
+            )}
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {(isAdmin ? (filters.search || filters.status || filters.dateRange.start || filters.dateRange.end) : 
+              {showArchived ? 'No archived campaigns' : 
+               (isAdmin ? (filters.search || filters.status || filters.dateRange.start || filters.dateRange.end) : 
                 (clientFilters.search || clientFilters.advertiser || clientFilters.status))
                 ? 'No campaigns match your filters'
                 : 'No campaigns yet'
               }
             </h3>
             <p className="text-gray-600 mb-6">
-              {(isAdmin ? (filters.search || filters.status || filters.dateRange.start || filters.dateRange.end) : 
+              {showArchived ? 'No campaigns have been archived yet.' :
+               (isAdmin ? (filters.search || filters.status || filters.dateRange.start || filters.dateRange.end) : 
                 (clientFilters.search || clientFilters.advertiser || clientFilters.status))
                 ? 'Try adjusting your search criteria or filters'
                 : isAdmin 
@@ -648,7 +982,7 @@ const CampaignsPage: React.FC = () => {
               }
             </p>
             
-            {!isAdmin && !(clientFilters.search || clientFilters.advertiser || clientFilters.status) && !showNewCampaignForm && (
+            {!isAdmin && !showArchived && !(clientFilters.search || clientFilters.advertiser || clientFilters.status) && !showNewCampaignForm && (
               <div className="flex justify-center gap-4">
                 <Button 
                   variant="outline"

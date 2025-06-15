@@ -57,6 +57,11 @@ interface CampaignContextType {
   archiveRequest: (requestId: string) => Promise<void>;
   deleteRequest: (requestId: string) => Promise<void>;
   unarchiveRequest: (requestId: string) => Promise<void>;
+  
+  // Campaign Archive/Delete functionality
+  deleteCampaign: (campaignId: string) => Promise<void>;
+  archiveCampaign: (campaignId: string) => Promise<void>;
+  unarchiveCampaign: (campaignId: string) => Promise<void>;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
@@ -508,6 +513,80 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await refreshRequests();
     } catch (error) {
       console.error('Error unarchiving request:', error);
+      throw error;
+    }
+  };
+
+  // Campaign Archive/Delete functionality
+  const deleteCampaign = async (campaignId: string) => {
+    try {
+      // Delete associated requests first
+      await supabase
+        .from('audience_requests')
+        .delete()
+        .eq('campaign_id', campaignId);
+
+      // Delete the campaign
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      // Update local state
+      setCampaigns(prev => prev.filter(c => c.id !== campaignId));
+      
+      // Clear active campaign if it was deleted
+      if (activeCampaign?.id === campaignId) {
+        setActiveCampaign(null);
+      }
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+      throw error;
+    }
+  };
+
+  const archiveCampaign = async (campaignId: string) => {
+    try {
+      const { error } = await supabase
+        .from('campaigns')
+        .update({ 
+          archived: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      // Update local state
+      setCampaigns(prev => 
+        prev.map(c => c.id === campaignId ? { ...c, archived: true, updatedAt: new Date().toISOString() } : c)
+      );
+    } catch (error) {
+      console.error('Error archiving campaign:', error);
+      throw error;
+    }
+  };
+
+  const unarchiveCampaign = async (campaignId: string) => {
+    try {
+      const { error } = await supabase
+        .from('campaigns')
+        .update({ 
+          archived: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      // Update local state
+      setCampaigns(prev => 
+        prev.map(c => c.id === campaignId ? { ...c, archived: false, updatedAt: new Date().toISOString() } : c)
+      );
+    } catch (error) {
+      console.error('Error unarchiving campaign:', error);
       throw error;
     }
   };
@@ -1124,7 +1203,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       getCampaignsByCategory,
       archiveRequest,
       deleteRequest,
-      unarchiveRequest
+      unarchiveRequest,
+      deleteCampaign,
+      archiveCampaign,
+      unarchiveCampaign
     }}>
       {children}
     </CampaignContext.Provider>
