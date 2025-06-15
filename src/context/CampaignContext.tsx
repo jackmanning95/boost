@@ -171,9 +171,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Computed values for separated data access
   const pendingRequests = requests.filter(request => request.status === 'pending');
   const rejectedRequests = requests.filter(request => request.status === 'rejected');
+  
+  // FIXED: Only show campaigns that have been approved by admin
   const approvedCampaigns = campaigns.filter(campaign => 
-    ['approved', 'in_progress', 'waiting_on_client', 'delivered', 'live', 'paused'].includes(campaign.status)
+    ['approved', 'in_progress', 'waiting_on_client', 'delivered', 'live', 'paused', 'completed'].includes(campaign.status)
   );
+  
   const activeCampaigns = getCampaignsByCategory('active');
   const completedCampaigns = getCampaignsByCategory('completed');
 
@@ -185,8 +188,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setLoading(true);
         
-        // Fetch campaigns with user data using explicit foreign key
-        const { data: campaignData, error: campaignError } = await supabase
+        // For non-admin users, only fetch their own campaigns that are approved or in progress
+        // For admin users, fetch all campaigns
+        let campaignQuery = supabase
           .from('campaigns')
           .select(`
             *,
@@ -197,6 +201,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             )
           `)
           .order('created_at', { ascending: false });
+
+        // If not admin, only show user's own campaigns
+        if (!isAdmin) {
+          campaignQuery = campaignQuery.eq('client_id', user.id);
+        }
+
+        const { data: campaignData, error: campaignError } = await campaignQuery;
 
         if (campaignError) throw campaignError;
         setCampaigns(campaignData || []);
@@ -749,7 +760,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (error) throw error;
 
-      // Update campaign status
+      // Update campaign status to submitted
       await updateCampaignDetails({ status: 'submitted' });
       
       // Create notification for admins
@@ -958,7 +969,17 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setFiltersState(prev => ({ ...prev, ...newFilters }));
   }, []);
 
+  // FIXED: Filter campaigns based on user role and approval status
   const filteredCampaigns = campaigns.filter(campaign => {
+    // For non-admin users, only show approved campaigns (campaigns that have been through the approval process)
+    if (!isAdmin) {
+      // Only show campaigns that are approved or beyond (not draft, submitted, or pending_review)
+      const approvedStatuses = ['approved', 'in_progress', 'waiting_on_client', 'delivered', 'live', 'paused', 'completed'];
+      if (!approvedStatuses.includes(campaign.status)) {
+        return false;
+      }
+    }
+
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
