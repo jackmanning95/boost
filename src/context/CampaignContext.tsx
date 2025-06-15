@@ -1067,9 +1067,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { timestamp } = createTimestamp();
       
-      // FIXED: Don't manually set the ID - let Supabase generate it
+      // FIXED: Generate a unique ID for the audience request
+      const requestId = crypto.randomUUID();
+      
       const newRequest: AudienceRequest = {
-        id: '', // This will be set by the database
+        id: requestId, // Use the generated ID
         campaignId: activeCampaign.id,
         clientId: user.id,
         audiences: activeCampaign.audiences,
@@ -1085,7 +1087,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error } = await supabase
         .from('audience_requests')
         .insert([{
-          // Don't include id - let the database generate it
+          id: requestId, // FIXED: Include the generated ID
           campaign_id: newRequest.campaignId,
           client_id: newRequest.clientId,
           audiences: newRequest.audiences,
@@ -1117,7 +1119,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
       
-      // Update the request object with the generated ID and transform to camelCase
+      // Transform the returned data to camelCase
       const createdRequest: AudienceRequest = {
         id: data.id,
         campaignId: data.campaign_id,
