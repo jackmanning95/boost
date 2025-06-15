@@ -44,6 +44,7 @@ interface CampaignContextType {
   // New: Separated data access
   pendingRequests: AudienceRequest[];
   rejectedRequests: AudienceRequest[];
+  archivedRequests: AudienceRequest[];
   approvedCampaigns: Campaign[];
   activeCampaigns: Campaign[];
   completedCampaigns: Campaign[];
@@ -55,6 +56,7 @@ interface CampaignContextType {
   // Archive/Delete functionality
   archiveRequest: (requestId: string) => Promise<void>;
   deleteRequest: (requestId: string) => Promise<void>;
+  unarchiveRequest: (requestId: string) => Promise<void>;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
@@ -173,8 +175,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [campaigns, getCampaignStatusCategory]);
 
   // Computed values for separated data access
-  const pendingRequests = requests.filter(request => request.status === 'pending');
-  const rejectedRequests = requests.filter(request => request.status === 'rejected');
+  const pendingRequests = requests.filter(request => request.status === 'pending' && !request.archived);
+  const rejectedRequests = requests.filter(request => request.status === 'rejected' && !request.archived);
+  const archivedRequests = requests.filter(request => request.archived === true);
   
   // FIXED: Only show campaigns that have been approved by admin
   const approvedCampaigns = campaigns.filter(campaign => 
@@ -487,6 +490,24 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await refreshRequests();
     } catch (error) {
       console.error('Error deleting request:', error);
+      throw error;
+    }
+  };
+
+  const unarchiveRequest = async (requestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('audience_requests')
+        .update({ 
+          archived: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await refreshRequests();
+    } catch (error) {
+      console.error('Error unarchiving request:', error);
       throw error;
     }
   };
@@ -1095,13 +1116,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       rejectRequest,
       pendingRequests,
       rejectedRequests,
+      archivedRequests,
       approvedCampaigns,
       activeCampaigns,
       completedCampaigns,
       getCampaignStatusCategory,
       getCampaignsByCategory,
       archiveRequest,
-      deleteRequest
+      deleteRequest,
+      unarchiveRequest
     }}>
       {children}
     </CampaignContext.Provider>

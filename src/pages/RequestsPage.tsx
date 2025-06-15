@@ -29,7 +29,12 @@ import {
   TrendingUp,
   FileText,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Archive,
+  Trash2,
+  RotateCcw,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { AudienceRequest } from '../types';
 
@@ -87,20 +92,25 @@ const RequestsPageContent: React.FC = () => {
   const { 
     pendingRequests, 
     rejectedRequests, 
+    archivedRequests,
     campaigns, 
     updateCampaignStatus, 
     refreshRequests,
     approveRequest,
-    rejectRequest
+    rejectRequest,
+    archiveRequest,
+    deleteRequest,
+    unarchiveRequest
   } = useCampaign();
   const { isAdmin, user } = useAuth();
   const { refreshNotifications } = useNotifications();
   const navigate = useNavigate();
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [activeTab, setActiveTab] = useState<'pending' | 'rejected'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'rejected' | 'archived'>('pending');
   const [filters, setFilters] = useState<RequestFilters>({
     search: '',
     agency: '',
@@ -170,7 +180,7 @@ const RequestsPageContent: React.FC = () => {
         setError(null);
 
         // Get all requests for user data fetching
-        const allRequests = [...pendingRequests, ...rejectedRequests];
+        const allRequests = [...pendingRequests, ...rejectedRequests, ...archivedRequests];
 
         // Ensure requests is an array
         if (!Array.isArray(allRequests)) {
@@ -230,7 +240,7 @@ const RequestsPageContent: React.FC = () => {
     };
 
     fetchRequestData();
-  }, [pendingRequests, rejectedRequests]);
+  }, [pendingRequests, rejectedRequests, archivedRequests]);
 
   const handleApprove = async (requestId: string) => {
     if (!requestId) return;
@@ -283,8 +293,71 @@ const RequestsPageContent: React.FC = () => {
     setSelectedRequest(requestId === selectedRequest ? null : requestId);
   };
 
+  // Selection handlers
+  const handleSelectRequest = (requestId: string, checked: boolean) => {
+    const newSelected = new Set(selectedRequestIds);
+    if (checked) {
+      newSelected.add(requestId);
+    } else {
+      newSelected.delete(requestId);
+    }
+    setSelectedRequestIds(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(currentRequests.map(r => r.id));
+      setSelectedRequestIds(allIds);
+    } else {
+      setSelectedRequestIds(new Set());
+    }
+  };
+
+  // Bulk action handlers
+  const handleBulkArchive = async () => {
+    if (selectedRequestIds.size === 0) return;
+    
+    if (!confirm(`Archive ${selectedRequestIds.size} selected request(s)?`)) return;
+    
+    try {
+      await Promise.all(Array.from(selectedRequestIds).map(id => archiveRequest(id)));
+      setSelectedRequestIds(new Set());
+    } catch (error) {
+      console.error('Error archiving requests:', error);
+      setError('Failed to archive some requests. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRequestIds.size === 0) return;
+    
+    if (!confirm(`Permanently delete ${selectedRequestIds.size} selected request(s)? This action cannot be undone.`)) return;
+    
+    try {
+      await Promise.all(Array.from(selectedRequestIds).map(id => deleteRequest(id)));
+      setSelectedRequestIds(new Set());
+    } catch (error) {
+      console.error('Error deleting requests:', error);
+      setError('Failed to delete some requests. Please try again.');
+    }
+  };
+
+  const handleBulkUnarchive = async () => {
+    if (selectedRequestIds.size === 0) return;
+    
+    try {
+      await Promise.all(Array.from(selectedRequestIds).map(id => unarchiveRequest(id)));
+      setSelectedRequestIds(new Set());
+    } catch (error) {
+      console.error('Error unarchiving requests:', error);
+      setError('Failed to unarchive some requests. Please try again.');
+    }
+  };
+
   // Get current requests based on active tab
-  const currentRequests = activeTab === 'pending' ? pendingRequests : rejectedRequests;
+  const currentRequests = activeTab === 'pending' ? pendingRequests : 
+                          activeTab === 'rejected' ? rejectedRequests : 
+                          archivedRequests;
 
   // Filter and search logic with null checks
   const filteredRequests = (currentRequests || []).filter(request => {
@@ -505,14 +578,12 @@ const RequestsPageContent: React.FC = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Users size={20} className="text-blue-600" />
+                  <div className="p-2 bg-gray-100 rounded-lg">
+                    <Archive size={20} className="text-gray-600" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-500">Total Audiences</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {currentRequests.reduce((sum, req) => sum + (req.audiences?.length || 0), 0)}
-                    </p>
+                    <p className="text-sm font-medium text-gray-500">Archived</p>
+                    <p className="text-2xl font-bold text-gray-900">{archivedRequests.length}</p>
                   </div>
                 </div>
               </CardContent>
@@ -540,6 +611,7 @@ const RequestsPageContent: React.FC = () => {
                 onClick={() => {
                   setActiveTab('pending');
                   setCurrentPage(1);
+                  setSelectedRequestIds(new Set());
                 }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'pending'
@@ -553,6 +625,7 @@ const RequestsPageContent: React.FC = () => {
                 onClick={() => {
                   setActiveTab('rejected');
                   setCurrentPage(1);
+                  setSelectedRequestIds(new Set());
                 }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'rejected'
@@ -562,6 +635,21 @@ const RequestsPageContent: React.FC = () => {
               >
                 <AlertTriangle size={16} className="inline mr-1" />
                 Rejected Requests ({rejectedRequests.length})
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('archived');
+                  setCurrentPage(1);
+                  setSelectedRequestIds(new Set());
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'archived'
+                    ? 'border-gray-500 text-gray-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Archive size={16} className="inline mr-1" />
+                Archived Requests ({archivedRequests.length})
               </button>
             </nav>
           </div>
@@ -609,8 +697,14 @@ const RequestsPageContent: React.FC = () => {
                 <option value="">All Statuses</option>
                 {activeTab === 'pending' ? (
                   <option value="pending">Pending</option>
-                ) : (
+                ) : activeTab === 'rejected' ? (
                   <option value="rejected">Rejected</option>
+                ) : (
+                  <>
+                    <option value="pending">Pending</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="approved">Approved</option>
+                  </>
                 )}
               </select>
 
@@ -629,9 +723,60 @@ const RequestsPageContent: React.FC = () => {
               </select>
             </div>
 
-            {/* Results summary */}
-            <div className="text-sm text-gray-600">
-              Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} {activeTab} requests
+            {/* Results summary and bulk actions */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} {activeTab} requests
+              </div>
+              
+              {/* Bulk Actions */}
+              {sortedRequests.length > 0 && (
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedRequestIds.size === sortedRequests.length && sortedRequests.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-600">
+                      Select All ({selectedRequestIds.size} selected)
+                    </span>
+                  </div>
+                  
+                  {selectedRequestIds.size > 0 && (
+                    <div className="flex space-x-2">
+                      {activeTab === 'archived' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleBulkUnarchive}
+                          icon={<RotateCcw size={16} />}
+                        >
+                          Unarchive ({selectedRequestIds.size})
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleBulkArchive}
+                          icon={<Archive size={16} />}
+                        >
+                          Archive ({selectedRequestIds.size})
+                        </Button>
+                      )}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        icon={<Trash2 size={16} />}
+                      >
+                        Delete ({selectedRequestIds.size})
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -643,69 +788,92 @@ const RequestsPageContent: React.FC = () => {
               
               const user = requestUsers[request.clientId] || {};
               const campaign = campaigns.find(c => c?.id === request.campaignId);
+              const isSelected = selectedRequestIds.has(request.id);
               
               return (
                 <Card key={request.id} className={`overflow-hidden hover:shadow-lg transition-shadow ${
-                  activeTab === 'rejected' ? 'border-red-200 bg-red-50' : ''
-                }`}>
+                  activeTab === 'rejected' ? 'border-red-200 bg-red-50' : 
+                  activeTab === 'archived' ? 'border-gray-300 bg-gray-50' : ''
+                } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
                   <CardContent className="p-0">
                     <div className="p-6">
                       <div className="flex justify-between items-start flex-wrap gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {getCampaignName(request.campaignId)}
-                            </h3>
-                            {getStatusBadge(request.status)}
-                            {activeTab === 'rejected' && (
-                              <AlertTriangle size={16} className="text-red-500" />
-                            )}
-                          </div>
+                        <div className="flex items-start space-x-3 flex-1">
+                          {/* Selection Checkbox */}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleSelectRequest(request.id, e.target.checked)}
+                            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
                           
-                          <div className="flex items-center mt-2 space-x-4">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <User size={14} className="mr-1" />
-                              <span className="font-medium">{user?.name || 'Unknown User'}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h3 className="text-lg font-semibold text-gray-900">
+                                {getCampaignName(request.campaignId)}
+                              </h3>
+                              {getStatusBadge(request.status)}
+                              {activeTab === 'rejected' && (
+                                <AlertTriangle size={16} className="text-red-500" />
+                              )}
+                              {activeTab === 'archived' && (
+                                <Archive size={16} className="text-gray-500" />
+                              )}
                             </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Building size={14} className="mr-1" />
-                              <span>{user?.companies?.name || 'Unknown Company'}</span>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Clock size={14} className="mr-1" />
-                              <span>{formatDate(request.createdAt)}</span>
-                            </div>
-                          </div>
-                          
-                          {/* Campaign Status Preview */}
-                          <div className={`mt-3 p-3 rounded-md ${
-                            activeTab === 'rejected' ? 'bg-red-100 border border-red-200' : 'bg-gray-50'
-                          }`}>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium text-gray-700">
-                                  {activeTab === 'rejected' ? 'Rejection Reason' : 'Campaign Status'}
-                                </p>
-                                <div className="flex items-center mt-1">
-                                  {activeTab === 'rejected' ? (
-                                    <p className="text-sm text-red-700">
-                                      {request.notes || 'No reason provided'}
-                                    </p>
-                                  ) : (
-                                    <>
-                                      <Badge variant="primary">{campaign?.status?.replace('_', ' ') || 'Unknown'}</Badge>
-                                      <span className="ml-2 text-sm text-gray-500">
-                                        Submitted {formatDate(request.createdAt)}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
+                            
+                            <div className="flex items-center mt-2 space-x-4">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <User size={14} className="mr-1" />
+                                <span className="font-medium">{user?.name || 'Unknown User'}</span>
                               </div>
-                              <div className="text-right">
-                                <p className="text-sm text-gray-500">Last Updated</p>
-                                <p className="text-sm font-medium">
-                                  {formatDate(request.updatedAt || request.createdAt)}
-                                </p>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Building size={14} className="mr-1" />
+                                <span>{user?.companies?.name || 'Unknown Company'}</span>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-500">
+                                <Clock size={14} className="mr-1" />
+                                <span>{formatDate(request.createdAt)}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Campaign Status Preview */}
+                            <div className={`mt-3 p-3 rounded-md ${
+                              activeTab === 'rejected' ? 'bg-red-100 border border-red-200' : 
+                              activeTab === 'archived' ? 'bg-gray-100 border border-gray-200' :
+                              'bg-gray-50'
+                            }`}>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700">
+                                    {activeTab === 'rejected' ? 'Rejection Reason' : 
+                                     activeTab === 'archived' ? 'Archive Status' :
+                                     'Campaign Status'}
+                                  </p>
+                                  <div className="flex items-center mt-1">
+                                    {activeTab === 'rejected' ? (
+                                      <p className="text-sm text-red-700">
+                                        {request.notes || 'No reason provided'}
+                                      </p>
+                                    ) : activeTab === 'archived' ? (
+                                      <p className="text-sm text-gray-700">
+                                        Archived on {formatDate(request.updatedAt || request.createdAt)}
+                                      </p>
+                                    ) : (
+                                      <>
+                                        <Badge variant="primary">{campaign?.status?.replace('_', ' ') || 'Unknown'}</Badge>
+                                        <span className="ml-2 text-sm text-gray-500">
+                                          Submitted {formatDate(request.createdAt)}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm text-gray-500">Last Updated</p>
+                                  <p className="text-sm font-medium">
+                                    {formatDate(request.updatedAt || request.createdAt)}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -733,6 +901,17 @@ const RequestsPageContent: React.FC = () => {
                                 Approve
                               </Button>
                             </div>
+                          )}
+                          
+                          {activeTab === 'archived' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => unarchiveRequest(request.id)}
+                              icon={<RotateCcw size={16} />}
+                            >
+                              Unarchive
+                            </Button>
                           )}
                           
                           <Button
@@ -841,6 +1020,8 @@ const RequestsPageContent: React.FC = () => {
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             {activeTab === 'rejected' ? (
               <AlertTriangle size={64} className="mx-auto mb-4 text-red-300" />
+            ) : activeTab === 'archived' ? (
+              <Archive size={64} className="mx-auto mb-4 text-gray-300" />
             ) : (
               <FileText size={64} className="mx-auto mb-4 text-gray-300" />
             )}
@@ -855,7 +1036,9 @@ const RequestsPageContent: React.FC = () => {
                 ? 'Try adjusting your search criteria or filters'
                 : activeTab === 'pending'
                   ? "All caught up! No campaign requests are waiting for review."
-                  : "No campaigns have been rejected yet."
+                  : activeTab === 'rejected'
+                    ? "No campaigns have been rejected yet."
+                    : "No requests have been archived yet."
               }
             </p>
           </div>
