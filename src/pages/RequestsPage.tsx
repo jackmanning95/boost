@@ -27,7 +27,9 @@ import {
   ChevronUp,
   AlertCircle,
   TrendingUp,
-  FileText
+  FileText,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { AudienceRequest } from '../types';
 
@@ -82,7 +84,15 @@ class RequestsErrorBoundary extends React.Component<
 }
 
 const RequestsPageContent: React.FC = () => {
-  const { pendingRequests, campaigns, updateCampaignStatus, refreshRequests } = useCampaign();
+  const { 
+    pendingRequests, 
+    rejectedRequests, 
+    campaigns, 
+    updateCampaignStatus, 
+    refreshRequests,
+    approveRequest,
+    rejectRequest
+  } = useCampaign();
   const { isAdmin, user } = useAuth();
   const { refreshNotifications } = useNotifications();
   const navigate = useNavigate();
@@ -90,6 +100,7 @@ const RequestsPageContent: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [activeTab, setActiveTab] = useState<'pending' | 'rejected'>('pending');
   const [filters, setFilters] = useState<RequestFilters>({
     search: '',
     agency: '',
@@ -158,15 +169,18 @@ const RequestsPageContent: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        // Ensure pendingRequests is an array
-        if (!Array.isArray(pendingRequests)) {
-          console.warn('Pending requests is not an array:', pendingRequests);
+        // Get all requests for user data fetching
+        const allRequests = [...pendingRequests, ...rejectedRequests];
+
+        // Ensure requests is an array
+        if (!Array.isArray(allRequests)) {
+          console.warn('Requests is not an array:', allRequests);
           setLoading(false);
           return;
         }
 
         // Get unique client IDs from requests
-        const clientIds = [...new Set(pendingRequests.map(r => r?.clientId).filter(Boolean))];
+        const clientIds = [...new Set(allRequests.map(r => r?.clientId).filter(Boolean))];
         
         if (clientIds.length > 0) {
           // Fetch user data
@@ -216,51 +230,20 @@ const RequestsPageContent: React.FC = () => {
     };
 
     fetchRequestData();
-  }, [pendingRequests]);
+  }, [pendingRequests, rejectedRequests]);
 
   const handleApprove = async (requestId: string) => {
     if (!requestId) return;
     
+    const notes = prompt('Add approval notes (optional):');
+    
     setIsUpdating(requestId);
     try {
-      const { error } = await supabase
-        .from('audience_requests')
-        .update({ 
-          status: 'approved',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId);
-
-      if (error) throw error;
-
-      // Find the request and create notification
-      const request = pendingRequests.find(r => r?.id === requestId);
-      if (request?.clientId) {
-        const campaign = campaigns.find(c => c?.id === request.campaignId);
-        
-        // Create notification for client
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: request.clientId,
-            title: 'Campaign Request Approved',
-            message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been approved and is now in progress.`,
-            read: false,
-            campaign_id: request.campaignId || null
-          });
-
-        // Update campaign status to approved
-        if (campaign?.id && updateCampaignStatus) {
-          await updateCampaignStatus(campaign.id, 'approved', 'Request approved by admin');
-        }
-      }
+      await approveRequest(requestId, notes || undefined);
 
       if (refreshNotifications) {
         await refreshNotifications();
       }
-      
-      // Refresh requests data
-      await refreshRequests();
     } catch (error) {
       console.error('Error approving request:', error);
       setError('Failed to approve request. Please try again.');
@@ -272,49 +255,16 @@ const RequestsPageContent: React.FC = () => {
   const handleReject = async (requestId: string) => {
     if (!requestId) return;
     
-    const reason = prompt('Please provide a reason for rejection (optional):');
+    const reason = prompt('Please provide a reason for rejection:');
+    if (!reason) return; // User cancelled
     
     setIsUpdating(requestId);
     try {
-      const { error } = await supabase
-        .from('audience_requests')
-        .update({ 
-          status: 'rejected',
-          notes: reason || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId);
-
-      if (error) throw error;
-
-      // Find the request and create notification
-      const request = pendingRequests.find(r => r?.id === requestId);
-      if (request?.clientId) {
-        const campaign = campaigns.find(c => c?.id === request.campaignId);
-        
-        // Create notification for client
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: request.clientId,
-            title: 'Campaign Request Rejected',
-            message: `Your campaign request "${campaign?.name || 'Unknown Campaign'}" has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
-            read: false,
-            campaign_id: request.campaignId || null
-          });
-
-        // Update campaign status to failed
-        if (campaign?.id && updateCampaignStatus) {
-          await updateCampaignStatus(campaign.id, 'failed', reason || 'Request rejected by admin');
-        }
-      }
+      await rejectRequest(requestId, reason);
 
       if (refreshNotifications) {
         await refreshNotifications();
       }
-      
-      // Refresh requests data
-      await refreshRequests();
     } catch (error) {
       console.error('Error rejecting request:', error);
       setError('Failed to reject request. Please try again.');
@@ -333,8 +283,11 @@ const RequestsPageContent: React.FC = () => {
     setSelectedRequest(requestId === selectedRequest ? null : requestId);
   };
 
+  // Get current requests based on active tab
+  const currentRequests = activeTab === 'pending' ? pendingRequests : rejectedRequests;
+
   // Filter and search logic with null checks
-  const filteredRequests = (pendingRequests || []).filter(request => {
+  const filteredRequests = (currentRequests || []).filter(request => {
     if (!request) return false;
     
     const user = requestUsers[request.clientId] || {};
@@ -355,7 +308,7 @@ const RequestsPageContent: React.FC = () => {
       return false;
     }
 
-    // Status filter (for pending requests, this will mostly be 'pending')
+    // Status filter
     if (filters.status && request.status !== filters.status) {
       return false;
     }
@@ -499,15 +452,24 @@ const RequestsPageContent: React.FC = () => {
                 <FileText size={28} className="mr-3 text-blue-600" />
                 Campaign Requests
               </h1>
-              <p className="text-gray-600">Review and approve pending campaign submissions</p>
+              <p className="text-gray-600">Review and manage campaign submissions</p>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/campaigns')}
-              icon={<TrendingUp size={18} />}
-            >
-              View Active Campaigns
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => refreshRequests()}
+                icon={<RefreshCw size={18} />}
+              >
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/campaigns')}
+                icon={<TrendingUp size={18} />}
+              >
+                View Active Campaigns
+              </Button>
+            </div>
           </div>
 
           {/* Quick Stats */}
@@ -529,13 +491,27 @@ const RequestsPageContent: React.FC = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <AlertTriangle size={20} className="text-red-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Rejected</p>
+                    <p className="text-2xl font-bold text-gray-900">{rejectedRequests.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Users size={20} className="text-blue-600" />
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-500">Total Audiences</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {pendingRequests.reduce((sum, req) => sum + (req.audiences?.length || 0), 0)}
+                      {currentRequests.reduce((sum, req) => sum + (req.audiences?.length || 0), 0)}
                     </p>
                   </div>
                 </div>
@@ -555,22 +531,39 @@ const RequestsPageContent: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
 
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <TrendingUp size={20} className="text-purple-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-500">Total Budget</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      ${pendingRequests.reduce((sum, req) => sum + (req.budget || 0), 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Tabs */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="flex space-x-8">
+              <button
+                onClick={() => {
+                  setActiveTab('pending');
+                  setCurrentPage(1);
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'pending'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Pending Requests ({pendingRequests.length})
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('rejected');
+                  setCurrentPage(1);
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'rejected'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <AlertTriangle size={16} className="inline mr-1" />
+                Rejected Requests ({rejectedRequests.length})
+              </button>
+            </nav>
           </div>
         </div>
 
@@ -614,8 +607,11 @@ const RequestsPageContent: React.FC = () => {
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="reviewed">Under Review</option>
+                {activeTab === 'pending' ? (
+                  <option value="pending">Pending</option>
+                ) : (
+                  <option value="rejected">Rejected</option>
+                )}
               </select>
 
               {/* Items per page */}
@@ -635,7 +631,7 @@ const RequestsPageContent: React.FC = () => {
 
             {/* Results summary */}
             <div className="text-sm text-gray-600">
-              Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
+              Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} {activeTab} requests
             </div>
           </CardContent>
         </Card>
@@ -649,7 +645,9 @@ const RequestsPageContent: React.FC = () => {
               const campaign = campaigns.find(c => c?.id === request.campaignId);
               
               return (
-                <Card key={request.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <Card key={request.id} className={`overflow-hidden hover:shadow-lg transition-shadow ${
+                  activeTab === 'rejected' ? 'border-red-200 bg-red-50' : ''
+                }`}>
                   <CardContent className="p-0">
                     <div className="p-6">
                       <div className="flex justify-between items-start flex-wrap gap-4">
@@ -659,6 +657,9 @@ const RequestsPageContent: React.FC = () => {
                               {getCampaignName(request.campaignId)}
                             </h3>
                             {getStatusBadge(request.status)}
+                            {activeTab === 'rejected' && (
+                              <AlertTriangle size={16} className="text-red-500" />
+                            )}
                           </div>
                           
                           <div className="flex items-center mt-2 space-x-4">
@@ -677,21 +678,33 @@ const RequestsPageContent: React.FC = () => {
                           </div>
                           
                           {/* Campaign Status Preview */}
-                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                          <div className={`mt-3 p-3 rounded-md ${
+                            activeTab === 'rejected' ? 'bg-red-100 border border-red-200' : 'bg-gray-50'
+                          }`}>
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-medium text-gray-700">Campaign Status</p>
+                                <p className="text-sm font-medium text-gray-700">
+                                  {activeTab === 'rejected' ? 'Rejection Reason' : 'Campaign Status'}
+                                </p>
                                 <div className="flex items-center mt-1">
-                                  <Badge variant="primary">{campaign?.status?.replace('_', ' ') || 'Unknown'}</Badge>
-                                  <span className="ml-2 text-sm text-gray-500">
-                                    Submitted {formatDate(request.createdAt)}
-                                  </span>
+                                  {activeTab === 'rejected' ? (
+                                    <p className="text-sm text-red-700">
+                                      {request.notes || 'No reason provided'}
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <Badge variant="primary">{campaign?.status?.replace('_', ' ') || 'Unknown'}</Badge>
+                                      <span className="ml-2 text-sm text-gray-500">
+                                        Submitted {formatDate(request.createdAt)}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm text-gray-500">Last Updated</p>
                                 <p className="text-sm font-medium">
-                                  {formatDate(campaign?.updatedAt || request.createdAt)}
+                                  {formatDate(request.updatedAt || request.createdAt)}
                                 </p>
                               </div>
                             </div>
@@ -699,7 +712,7 @@ const RequestsPageContent: React.FC = () => {
                         </div>
                         
                         <div className="flex items-center space-x-3">
-                          {request.status === 'pending' && (
+                          {activeTab === 'pending' && request.status === 'pending' && (
                             <div className="flex space-x-2">
                               <Button 
                                 variant="outline"
@@ -772,7 +785,7 @@ const RequestsPageContent: React.FC = () => {
                         </div>
                       )}
                       
-                      {request.notes && (
+                      {request.notes && activeTab === 'pending' && (
                         <div className="mt-4 p-3 bg-yellow-50 rounded-md border border-yellow-200">
                           <p className="text-xs text-yellow-700 mb-1 font-medium">Client Notes</p>
                           <p className="text-sm text-yellow-800">{request.notes}</p>
@@ -826,17 +839,23 @@ const RequestsPageContent: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <FileText size={64} className="mx-auto mb-4 text-gray-300" />
+            {activeTab === 'rejected' ? (
+              <AlertTriangle size={64} className="mx-auto mb-4 text-red-300" />
+            ) : (
+              <FileText size={64} className="mx-auto mb-4 text-gray-300" />
+            )}
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
-                ? 'No requests match your filters'
-                : 'No pending requests'
+                ? `No ${activeTab} requests match your filters`
+                : `No ${activeTab} requests`
               }
             </h3>
             <p className="text-gray-600">
               {Object.keys(filters).some(key => filters[key as keyof RequestFilters])
                 ? 'Try adjusting your search criteria or filters'
-                : "All caught up! No campaign requests are waiting for review."
+                : activeTab === 'pending'
+                  ? "All caught up! No campaign requests are waiting for review."
+                  : "No campaigns have been rejected yet."
               }
             </p>
           </div>

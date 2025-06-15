@@ -38,9 +38,12 @@ interface CampaignContextType {
   
   // Requests Management
   refreshRequests: () => Promise<void>;
+  approveRequest: (requestId: string, notes?: string) => Promise<void>;
+  rejectRequest: (requestId: string, reason?: string) => Promise<void>;
   
   // New: Separated data access
   pendingRequests: AudienceRequest[];
+  rejectedRequests: AudienceRequest[];
   approvedCampaigns: Campaign[];
   activeCampaigns: Campaign[];
   completedCampaigns: Campaign[];
@@ -167,6 +170,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Computed values for separated data access
   const pendingRequests = requests.filter(request => request.status === 'pending');
+  const rejectedRequests = requests.filter(request => request.status === 'rejected');
   const approvedCampaigns = campaigns.filter(campaign => 
     ['approved', 'in_progress', 'waiting_on_client', 'delivered', 'live', 'paused'].includes(campaign.status)
   );
@@ -269,6 +273,173 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setRequests(requestData || []);
     } catch (error) {
       console.error('Error fetching requests:', error);
+    }
+  };
+
+  const approveRequest = async (requestId: string, notes?: string) => {
+    try {
+      // Update request status to approved
+      const { error: requestError } = await supabase
+        .from('audience_requests')
+        .update({ 
+          status: 'approved',
+          notes: notes || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (requestError) throw requestError;
+
+      // Find the request to get campaign info
+      const request = requests.find(r => r.id === requestId);
+      if (!request) return;
+
+      // Update the associated campaign status to approved
+      const { error: campaignError } = await supabase
+        .from('campaigns')
+        .update({ 
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', request.campaignId);
+
+      if (campaignError) throw campaignError;
+
+      // Add workflow history entry
+      await supabase
+        .from('campaign_workflow_history')
+        .insert({
+          campaign_id: request.campaignId,
+          user_id: user?.id,
+          from_status: 'pending_review',
+          to_status: 'approved',
+          notes: notes || 'Request approved by admin'
+        });
+
+      // Create notification for client and team
+      const notificationTargets = [request.clientId];
+      
+      // Get campaign details for notification
+      const campaign = campaigns.find(c => c.id === request.campaignId);
+      if (campaign?.users?.company_id) {
+        const teamIds = await getCompanyTeamIds(campaign.users.company_id);
+        notificationTargets.push(...teamIds);
+      }
+
+      await createNotification(
+        'Campaign Request Approved! 🎉',
+        `Great news! Your campaign "${campaign?.name || 'Unknown Campaign'}" has been approved and is now active.${notes ? ` Note: ${notes}` : ''}`,
+        [...new Set(notificationTargets)], // Remove duplicates
+        request.campaignId
+      );
+
+      // Refresh data
+      await refreshRequests();
+      
+      // Refresh campaigns to show the updated status
+      const { data: updatedCampaigns } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          users!campaigns_client_id_fkey (
+            name,
+            company_id,
+            companies!users_company_id_fkey (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (updatedCampaigns) {
+        setCampaigns(updatedCampaigns);
+      }
+
+    } catch (error) {
+      console.error('Error approving request:', error);
+      throw error;
+    }
+  };
+
+  const rejectRequest = async (requestId: string, reason?: string) => {
+    try {
+      // Update request status to rejected
+      const { error: requestError } = await supabase
+        .from('audience_requests')
+        .update({ 
+          status: 'rejected',
+          notes: reason || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (requestError) throw requestError;
+
+      // Find the request to get campaign info
+      const request = requests.find(r => r.id === requestId);
+      if (!request) return;
+
+      // Update the associated campaign status to failed
+      const { error: campaignError } = await supabase
+        .from('campaigns')
+        .update({ 
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', request.campaignId);
+
+      if (campaignError) throw campaignError;
+
+      // Add workflow history entry
+      await supabase
+        .from('campaign_workflow_history')
+        .insert({
+          campaign_id: request.campaignId,
+          user_id: user?.id,
+          from_status: 'pending_review',
+          to_status: 'failed',
+          notes: reason || 'Request rejected by admin'
+        });
+
+      // Create notification for client and team
+      const notificationTargets = [request.clientId];
+      
+      // Get campaign details for notification
+      const campaign = campaigns.find(c => c.id === request.campaignId);
+      if (campaign?.users?.company_id) {
+        const teamIds = await getCompanyTeamIds(campaign.users.company_id);
+        notificationTargets.push(...teamIds);
+      }
+
+      await createNotification(
+        'Campaign Request Needs Attention',
+        `Your campaign "${campaign?.name || 'Unknown Campaign'}" requires some adjustments before we can proceed.${reason ? ` Reason: ${reason}` : ''} Please review and resubmit when ready.`,
+        [...new Set(notificationTargets)], // Remove duplicates
+        request.campaignId
+      );
+
+      // Refresh data
+      await refreshRequests();
+      
+      // Refresh campaigns to show the updated status
+      const { data: updatedCampaigns } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          users!campaigns_client_id_fkey (
+            name,
+            company_id,
+            companies!users_company_id_fkey (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (updatedCampaigns) {
+        setCampaigns(updatedCampaigns);
+      }
+
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      throw error;
     }
   };
 
@@ -585,8 +756,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const adminIds = await getAdminUserIds();
       if (adminIds.length > 0) {
         await createNotification(
-          'New Campaign Submitted',
-          `${user.name} has submitted a new campaign: "${activeCampaign.name}".`,
+          'New Campaign Submitted for Review',
+          `${user.name} has submitted a new campaign: "${activeCampaign.name}" for approval.`,
           adminIds,
           activeCampaign.id
         );
@@ -862,7 +1033,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setFilters,
       filteredCampaigns,
       refreshRequests,
+      approveRequest,
+      rejectRequest,
       pendingRequests,
+      rejectedRequests,
       approvedCampaigns,
       activeCampaigns,
       completedCampaigns,
