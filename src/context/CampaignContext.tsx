@@ -339,11 +339,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       console.log('Approving request:', requestId, 'for campaign:', request.campaignId);
 
-      // FIXED: Create campaign with proper data structure
+      // FIXED: Create campaign with proper data structure and let Supabase generate the ID
       let campaignId = request.campaignId;
       let campaign;
 
-      // Check if campaign already exists
+      // Check if campaign already exists using the request's campaign_id
       const { data: existingCampaign, error: campaignFetchError } = await supabase
         .from('campaigns')
         .select('id, name, client_id')
@@ -359,10 +359,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!existingCampaign) {
         console.log('Campaign not found, creating new campaign for request:', requestId);
         
-        // Create new campaign from request data with proper structure
+        // FIXED: Don't manually set the ID - let Supabase generate it with gen_random_uuid()
         const newCampaignData = {
-          id: request.campaignId, // Use the same ID from the request
-          name: `Campaign ${new Date().toLocaleDateString()}`, // Default name
+          // Remove the manual id assignment - let the database generate it
+          name: `Campaign ${new Date().toLocaleDateString()}`,
           client_id: request.clientId,
           audiences: request.audiences || [],
           platforms: request.platforms || { social: [], programmatic: [] },
@@ -390,7 +390,18 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         campaign = newCampaign;
         campaignId = newCampaign.id;
-        console.log('Created new campaign:', campaignId);
+        console.log('Created new campaign with ID:', campaignId);
+
+        // FIXED: Update the request to reference the newly created campaign
+        const { error: requestUpdateError } = await supabase
+          .from('audience_requests')
+          .update({ campaign_id: campaignId })
+          .eq('id', requestId);
+
+        if (requestUpdateError) {
+          console.error('Error updating request with campaign_id:', requestUpdateError);
+          // Don't throw here as the campaign was created successfully
+        }
       } else {
         // Update existing campaign to approved status
         const { error: campaignUpdateError } = await supabase
@@ -428,7 +439,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw requestError;
       }
 
-      // Add workflow history entry with proper campaign_id
+      // Add workflow history entry with valid campaign_id
       try {
         const { error: workflowError } = await supabase
           .from('campaign_workflow_history')
@@ -768,8 +779,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { timestamp } = createTimestamp();
     const currentDate = new Date().toISOString().split('T')[0];
 
+    // FIXED: Don't manually set the ID - let Supabase generate it
     const newCampaign: Campaign = {
-      id: `campaign-${Date.now()}`,
+      id: '', // This will be set by the database
       name,
       clientId: user.id,
       audiences: [],
@@ -789,7 +801,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error } = await supabase
         .from('campaigns')
         .insert([{
-          id: newCampaign.id,
+          // Don't include id - let the database generate it
           name: newCampaign.name,
           client_id: newCampaign.clientId,
           audiences: newCampaign.audiences,
@@ -807,8 +819,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (error) throw error;
 
-      setCampaigns(prev => [newCampaign, ...prev]);
-      setActiveCampaign(newCampaign);
+      // Update the campaign object with the generated ID
+      const createdCampaign = { ...newCampaign, id: data.id };
+
+      setCampaigns(prev => [createdCampaign, ...prev]);
+      setActiveCampaign(createdCampaign);
 
       // Notify team members about new campaign
       if (user.companyId) {
@@ -816,9 +831,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (teamIds.length > 0) {
           await createNotification(
             'New Campaign Created',
-            `${user.name} created a new campaign: "${newCampaign.name}"`,
+            `${user.name} created a new campaign: "${createdCampaign.name}"`,
             teamIds,
-            newCampaign.id
+            createdCampaign.id
           );
         }
       }
@@ -1057,8 +1072,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { timestamp } = createTimestamp();
       
+      // FIXED: Don't manually set the ID - let Supabase generate it
       const newRequest: AudienceRequest = {
-        id: `request-${Date.now()}`,
+        id: '', // This will be set by the database
         campaignId: activeCampaign.id,
         clientId: user.id,
         audiences: activeCampaign.audiences,
@@ -1071,10 +1087,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: timestamp
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('audience_requests')
         .insert([{
-          id: newRequest.id,
+          // Don't include id - let the database generate it
           campaign_id: newRequest.campaignId,
           client_id: newRequest.clientId,
           audiences: newRequest.audiences,
@@ -1086,7 +1102,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           status: newRequest.status,
           created_at: timestamp,
           archived: false
-        }]);
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -1104,7 +1122,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
       
-      setRequests(prev => [newRequest, ...prev]);
+      // Update the request object with the generated ID
+      const createdRequest = { ...newRequest, id: data.id };
+      setRequests(prev => [createdRequest, ...prev]);
     } catch (error) {
       console.error('Error submitting request:', error);
       throw error;
