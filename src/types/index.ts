@@ -18,6 +18,18 @@ export interface Company {
   updatedAt: string;
   userCount?: number;
   adminCount?: number;
+  accountIds?: CompanyAccountId[]; // Multiple account IDs
+}
+
+export interface CompanyAccountId {
+  id: string;
+  companyId: string;
+  platform: string;
+  accountId: string;
+  accountName?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CompanyUser {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import CompanyAccountManager from './CompanyAccountManager';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
 import { Company } from '../../types';
@@ -15,7 +16,8 @@ import {
   Search,
   Calendar,
   Hash,
-  UserCheck
+  UserCheck,
+  ArrowLeft
 } from 'lucide-react';
 
 const CompanyManagement: React.FC = () => {
@@ -24,6 +26,7 @@ const CompanyManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     accountId: ''
@@ -36,6 +39,32 @@ const CompanyManagement: React.FC = () => {
         <Building size={64} className="mx-auto mb-4 text-gray-300" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
         <p className="text-gray-600">Only super administrators can manage companies.</p>
+      </div>
+    );
+  }
+
+  // If viewing a specific company's account IDs
+  if (selectedCompany) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            onClick={() => setSelectedCompany(null)}
+            icon={<ArrowLeft size={18} />}
+          >
+            Back to Companies
+          </Button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Company Details</h2>
+            <p className="text-gray-600">{selectedCompany.name}</p>
+          </div>
+        </div>
+        
+        <CompanyAccountManager 
+          companyId={selectedCompany.id}
+          companyName={selectedCompany.name}
+        />
       </div>
     );
   }
@@ -249,10 +278,11 @@ const CompanyManagement: React.FC = () => {
                   required
                 />
                 <Input
-                  label="Account ID (Optional)"
+                  label="Primary Account ID (Optional)"
                   value={formData.accountId}
                   onChange={(e) => setFormData(prev => ({ ...prev, accountId: e.target.value }))}
-                  placeholder="Enter account ID"
+                  placeholder="Enter primary account ID"
+                  helpText="You can add multiple account IDs after creating the company"
                 />
               </div>
               <div className="flex justify-end space-x-3">
@@ -295,7 +325,7 @@ const CompanyManagement: React.FC = () => {
                       <h3 className="text-lg font-semibold text-gray-900">{company.name}</h3>
                       {company.accountId && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
-                          ID: {company.accountId}
+                          Primary ID: {company.accountId}
                         </span>
                       )}
                     </div>
@@ -315,12 +345,20 @@ const CompanyManagement: React.FC = () => {
                       </div>
                       <div className="flex items-center text-gray-600">
                         <Hash size={14} className="mr-1" />
-                        <span>{company.accountId || 'No Account ID'}</span>
+                        <span>{company.accountId || 'No Primary ID'}</span>
                       </div>
                     </div>
                   </div>
                   
                   <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedCompany(company)}
+                      icon={<Hash size={16} />}
+                    >
+                      Account IDs
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
