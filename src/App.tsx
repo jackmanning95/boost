@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { CompanyProvider } from './context/CompanyContext';
 import { TaxonomyProvider } from './context/TaxonomyContext';
-import { CampaignProvider } from './context/CampaignProvider';
+import { CampaignProvider } from './context/CampaignContext';
 import { NotificationProvider } from './context/NotificationContext';
 
 // Pages
