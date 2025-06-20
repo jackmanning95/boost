@@ -241,41 +241,54 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      // For now, we'll create the user directly since we don't have an invitation system
-      // In a real app, you'd send an email invitation
-      
       // Check if user already exists
       const { data: existingUser } = await supabase
         .from('users')
-        .select('id')
+        .select('id, company_id')
         .eq('email', email)
-        .single();
+        .maybeSingle();
 
       if (existingUser) {
-        throw new Error('User with this email already exists');
-      }
+        if (existingUser.company_id === targetCompanyId) {
+          throw new Error('User is already a member of this company');
+        } else if (existingUser.company_id) {
+          throw new Error('User is already a member of another company');
+        }
+        
+        // User exists but has no company - add them to this company
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            company_id: targetCompanyId,
+            role: role,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingUser.id);
 
-      // Create auth user (this would typically be done via invitation email)
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password: 'temp-password-123', // In real app, user would set this
-        email_confirm: true
-      });
-
-      if (authError) throw authError;
-
-      // Create user profile
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
+        if (updateError) throw updateError;
+      } else {
+        // Create new auth user
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
-          name: email.split('@')[0], // Default name from email
-          role,
-          company_id: targetCompanyId
+          password: 'TempPassword123!', // User should change this on first login
+          email_confirm: true
         });
 
-      if (profileError) throw profileError;
+        if (authError) throw authError;
+
+        // Create user profile
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email,
+            name: email.split('@')[0], // Default name from email
+            role,
+            company_id: targetCompanyId
+          });
+
+        if (profileError) throw profileError;
+      }
 
       // Refresh company users
       await fetchCompanyUsers(targetCompanyId);
@@ -295,7 +308,10 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { error } = await supabase
         .from('users')
-        .update({ role })
+        .update({ 
+          role,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', userId);
 
       if (error) throw error;
@@ -324,9 +340,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
+      // Instead of deleting the user, we'll remove them from the company
       const { error } = await supabase
         .from('users')
-        .delete()
+        .update({
+          company_id: null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', userId);
 
       if (error) throw error;

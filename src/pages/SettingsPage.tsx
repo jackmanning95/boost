@@ -3,12 +3,13 @@ import Layout from '../components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import TeamManagement from '../components/company/TeamManagement';
 import { useAuth } from '../context/AuthContext';
-import { User, Settings, Shield, Save } from 'lucide-react';
+import { User, Settings, Shield, Save, Users, Building } from 'lucide-react';
 import AdvertiserAccountManager, { AdvertiserAccount } from '../components/settings/AdvertiserAccountManager';
 
 const SettingsPage: React.FC = () => {
-  const { user, updateUserProfile } = useAuth();
+  const { user, updateUserProfile, isCompanyAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
@@ -93,8 +94,10 @@ const SettingsPage: React.FC = () => {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: <User size={18} /> },
     { id: 'platforms', label: 'Platform IDs', icon: <Settings size={18} /> },
+    { id: 'team', label: 'Team', icon: <Users size={18} />, show: isCompanyAdmin },
+    { id: 'company', label: 'Company', icon: <Building size={18} />, show: isCompanyAdmin },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-  ];
+  ].filter(tab => tab.show !== false);
   
   return (
     <Layout>
@@ -168,7 +171,7 @@ const SettingsPage: React.FC = () => {
                       
                       <Input
                         label="Role"
-                        value={user.role === 'admin' ? 'Administrator' : 'Client'}
+                        value={user.role === 'admin' ? 'Administrator' : user.role === 'super_admin' ? 'Super Administrator' : 'User'}
                         disabled
                         className="bg-gray-50"
                       />
@@ -207,6 +210,56 @@ const SettingsPage: React.FC = () => {
                 onUpdate={handleUpdateAccount}
                 onDelete={handleDeleteAccount}
               />
+            )}
+
+            {activeTab === 'team' && isCompanyAdmin && (
+              <TeamManagement />
+            )}
+
+            {activeTab === 'company' && isCompanyAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Building size={20} className="mr-2 text-blue-600" />
+                    Company Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Company Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Company Name"
+                          value={user.companyName || ''}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                        <Input
+                          label="Company ID"
+                          value={user.companyId || ''}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-gray-200">
+                      <h3 className="text-lg font-medium mb-4">Account Management</h3>
+                      <p className="text-gray-600 mb-4">
+                        Manage platform account IDs and team member access from the Team tab.
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab('team')}
+                        icon={<Users size={16} />}
+                      >
+                        Manage Team
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             {activeTab === 'security' && (
