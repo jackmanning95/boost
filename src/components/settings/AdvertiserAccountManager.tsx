@@ -34,15 +34,14 @@ const AdvertiserAccountManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('Fetching advertiser accounts for user:', user.id);
-      
- const { data, error } = await supabase
-  .from('advertiser_accounts')
-  .select('id, name, created_at, user_id')  // only fields from advertiser_accounts
-  .eq('user_id', userId)
-  .order('created_at', { ascending: false });
 
+      console.log('Fetching advertiser accounts for user:', user.id);
+
+      const { data, error } = await supabase
+        .from('advertiser_accounts')
+        .select('id, platform, advertiser_name, advertiser_id, created_at, user_id')  // select only advertiser_accounts fields
+        .eq('user_id', user.id)  // use user.id directly here
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching advertiser accounts:', error);
@@ -74,7 +73,7 @@ const AdvertiserAccountManager: React.FC = () => {
 
     try {
       console.log('Adding advertiser account:', accountData);
-      
+
       const { data, error } = await supabase
         .from('advertiser_accounts')
         .insert({
@@ -103,7 +102,7 @@ const AdvertiserAccountManager: React.FC = () => {
   const handleUpdate = async (account: AdvertiserAccount) => {
     try {
       console.log('Updating advertiser account:', account);
-      
+
       const { error } = await supabase
         .from('advertiser_accounts')
         .update({
@@ -135,7 +134,7 @@ const AdvertiserAccountManager: React.FC = () => {
 
     try {
       console.log('Deleting advertiser account:', id);
-      
+
       const { error } = await supabase
         .from('advertiser_accounts')
         .delete()
