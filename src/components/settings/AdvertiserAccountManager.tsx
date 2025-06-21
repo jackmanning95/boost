@@ -37,11 +37,12 @@ const AdvertiserAccountManager: React.FC = () => {
       
       console.log('Fetching advertiser accounts for user:', user.id);
       
-      const { data, error } = await supabase
-        .from('advertiser_accounts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+ const { data, error } = await supabase
+  .from('advertiser_accounts')
+  .select('id, name, created_at, user_id')  // only fields from advertiser_accounts
+  .eq('user_id', userId)
+  .order('created_at', { ascending: false });
+
 
       if (error) {
         console.error('Error fetching advertiser accounts:', error);
