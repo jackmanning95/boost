@@ -19,6 +19,12 @@ const CampaignBuilderPage: React.FC = () => {
   console.log('[CampaignBuilderPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
   console.log('[CampaignBuilderPage] Render - isAdmin:', isAdmin);
   
+  // Redirect admins immediately (they shouldn't be here)
+  if (isAdmin) {
+    console.log('[CampaignBuilderPage] Redirecting admin to campaigns');
+    return <Navigate to="/campaigns" replace />;
+  }
+  
   // ✅ FIXED: Show loading state while campaign operations are in progress
   if (isCampaignOperationLoading) {
     console.log('[CampaignBuilderPage] Showing loading state');
@@ -31,8 +37,11 @@ const CampaignBuilderPage: React.FC = () => {
             <p className="text-gray-600 text-center max-w-md">
               Please wait while we prepare your campaign builder. This should only take a moment.
             </p>
-            <div className="mt-4 text-sm text-gray-500">
-              Loading state: {isCampaignOperationLoading ? 'true' : 'false'}
+            <div className="mt-4 text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
+              <div>Debug Info:</div>
+              <div>• Loading: {isCampaignOperationLoading ? 'true' : 'false'}</div>
+              <div>• Active Campaign: {activeCampaign ? activeCampaign.name : 'null'}</div>
+              <div>• Is Admin: {isAdmin ? 'true' : 'false'}</div>
             </div>
           </div>
         </div>
@@ -41,12 +50,31 @@ const CampaignBuilderPage: React.FC = () => {
   }
   
   // ✅ FIXED: Only redirect if no active campaign AND not loading
-  if (!activeCampaign || isAdmin) {
-    console.log('[CampaignBuilderPage] Redirecting to campaigns - activeCampaign:', !!activeCampaign, 'isAdmin:', isAdmin);
+  // This was the key issue - it was redirecting before the campaign was fully loaded
+  if (!activeCampaign && !isCampaignOperationLoading) {
+    console.log('[CampaignBuilderPage] Redirecting to campaigns - no active campaign and not loading');
     return <Navigate to="/campaigns" replace />;
   }
   
-  console.log('[CampaignBuilderPage] Rendering campaign builder for:', activeCampaign.name);
+  // If we have no campaign but we're still loading, stay here and wait
+  if (!activeCampaign && isCampaignOperationLoading) {
+    console.log('[CampaignBuilderPage] Waiting for campaign to load...');
+    return (
+      <Layout>
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#509fe0] mb-6"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading your campaign...</h2>
+            <p className="text-gray-600 text-center max-w-md">
+              Please wait while we load your campaign details.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  console.log('[CampaignBuilderPage] Rendering campaign builder for:', activeCampaign?.name);
   
   const handleStepComplete = () => {
     console.log('[CampaignBuilderPage] Step completed, moving to review');
@@ -60,7 +88,7 @@ const CampaignBuilderPage: React.FC = () => {
   
   // In a real app, this would check if required fields are filled
   const stepsCompleted = {
-    audiences: activeCampaign.audiences.length > 0,
+    audiences: activeCampaign?.audiences.length > 0,
     details: currentStep === 'review',
     review: false
   };
@@ -69,7 +97,7 @@ const CampaignBuilderPage: React.FC = () => {
     <Layout>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">
-          Campaign: {activeCampaign.name}
+          Campaign: {activeCampaign?.name}
         </h1>
         
         {/* Progress Steps */}
