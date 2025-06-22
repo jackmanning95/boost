@@ -74,28 +74,28 @@ const AudiencesPage: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Ensure campaign is initialized before navigating with debugging and proper waiting
-  const handleNavigateToCampaignBuilder = async () => {
-    console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Starting');
-    console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Current activeCampaign:', activeCampaign);
+  // ✅ FIXED: Navigate directly to campaign form page
+  const handleNavigateToCampaignForm = async () => {
+    console.log('[AudiencesPage] handleNavigateToCampaignForm - Starting');
+    console.log('[AudiencesPage] handleNavigateToCampaignForm - Current activeCampaign:', activeCampaign);
     
     try {
       if (!activeCampaign) {
-        console.log('[AudiencesPage] handleNavigateToCampaignBuilder - No active campaign, initializing');
+        console.log('[AudiencesPage] handleNavigateToCampaignForm - No active campaign, initializing');
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
-        console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Campaign initialized');
+        console.log('[AudiencesPage] handleNavigateToCampaignForm - Campaign initialized');
       }
       
       // ✅ RACE CONDITION FIX: Wait for campaign to be ready before navigating
-      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Waiting for campaign to be ready...');
+      console.log('[AudiencesPage] handleNavigateToCampaignForm - Waiting for campaign to be ready...');
       await waitForCampaignReady();
       
-      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Navigating to /campaign/build');
+      console.log('[AudiencesPage] handleNavigateToCampaignForm - Navigating to /campaign/build');
       navigate('/campaign/build');
     } catch (error) {
-      console.error('[AudiencesPage] handleNavigateToCampaignBuilder - Error:', error);
-      alert('Failed to navigate to campaign builder. Please try again.');
+      console.error('[AudiencesPage] handleNavigateToCampaignForm - Error:', error);
+      alert('Failed to navigate to campaign form. Please try again.');
     }
   };
 
@@ -122,11 +122,11 @@ const AudiencesPage: React.FC = () => {
               <Button 
                 variant="primary"
                 icon={<ShoppingCart size={18} />}
-                onClick={handleNavigateToCampaignBuilder}
+                onClick={handleNavigateToCampaignForm}
                 disabled={isCampaignOperationLoading}
                 isLoading={isCampaignOperationLoading}
               >
-                Selected Audiences ({selectedAudiences.length})
+                Continue to Campaign Form ({selectedAudiences.length})
               </Button>
             </div>
           )}
