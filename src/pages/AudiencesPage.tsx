@@ -45,23 +45,20 @@ const AudiencesPage: React.FC = () => {
       if (!activeCampaign) {
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
-        // Wait a bit for the state to update
         await new Promise(resolve => setTimeout(resolve, 100));
       }
-      
       await addAudienceToCampaign(audience);
     } catch (error) {
       console.error('Error selecting audience:', error);
     }
   };
 
-  // UPDATED: Simplified navigation without the setTimeout hack
-  const handleNavigateToCampaignBuilder = () => {
-    if (!activeCampaign || activeCampaign.audiences.length === 0) {
-      console.warn('No active campaign or audiences selected');
-      return;
+  // ✅ Updated: Ensure campaign is initialized before navigating
+  const handleNavigateToCampaignBuilder = async () => {
+    if (!activeCampaign) {
+      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+      await initializeCampaign(defaultName);
     }
-
     navigate('/campaign/build');
   };
 
@@ -89,7 +86,6 @@ const AudiencesPage: React.FC = () => {
                 variant="primary"
                 icon={<ShoppingCart size={18} />}
                 onClick={handleNavigateToCampaignBuilder}
-                disabled={selectedAudiences.length === 0}
               >
                 Selected Audiences ({selectedAudiences.length})
               </Button>
