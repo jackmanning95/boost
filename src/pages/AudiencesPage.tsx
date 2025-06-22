@@ -16,7 +16,7 @@ const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
-  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign, isCampaignOperationLoading } = useCampaign();
+  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign, isCampaignOperationLoading, waitForCampaignReady } = useCampaign();
   const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
@@ -51,7 +51,7 @@ const AudiencesPage: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Proper async handling with debugging
+  // ✅ FIXED: Use waitForCampaignReady to ensure campaign is available before adding audience
   const handleSelectAudience = async (audience: AudienceSegment) => {
     console.log('[AudiencesPage] handleSelectAudience - Starting for audience:', audience.id);
     try {
@@ -59,14 +59,18 @@ const AudiencesPage: React.FC = () => {
         console.log('[AudiencesPage] handleSelectAudience - No active campaign, initializing');
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
-        // Wait a bit for state to update
-        await new Promise(resolve => setTimeout(resolve, 100));
       }
+      
+      // ✅ RACE CONDITION FIX: Wait for campaign to be ready before proceeding
+      console.log('[AudiencesPage] handleSelectAudience - Waiting for campaign to be ready...');
+      await waitForCampaignReady();
+      
       console.log('[AudiencesPage] handleSelectAudience - Adding audience to campaign');
       await addAudienceToCampaign(audience);
       console.log('[AudiencesPage] handleSelectAudience - Completed successfully');
     } catch (error) {
       console.error('[AudiencesPage] handleSelectAudience - Error:', error);
+      alert('Failed to add audience to campaign. Please try again.');
     }
   };
 
@@ -83,14 +87,15 @@ const AudiencesPage: React.FC = () => {
         console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Campaign initialized');
       }
       
-      // ✅ PERSISTENCE FIX: Wait for the campaign to be fully persisted
-      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Waiting for campaign to be persisted...');
-      await new Promise(resolve => setTimeout(resolve, 500)); // Give time for localStorage persistence
+      // ✅ RACE CONDITION FIX: Wait for campaign to be ready before navigating
+      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Waiting for campaign to be ready...');
+      await waitForCampaignReady();
       
       console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Navigating to /campaign/build');
       navigate('/campaign/build');
     } catch (error) {
       console.error('[AudiencesPage] handleNavigateToCampaignBuilder - Error:', error);
+      alert('Failed to navigate to campaign builder. Please try again.');
     }
   };
 
