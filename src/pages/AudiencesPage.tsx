@@ -21,7 +21,6 @@ const AudiencesPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -56,22 +55,14 @@ const AudiencesPage: React.FC = () => {
     }
   };
 
-  const handleNavigateToCampaignBuilder = async () => {
+  // UPDATED: Simplified navigation without the setTimeout hack
+  const handleNavigateToCampaignBuilder = () => {
     if (!activeCampaign || activeCampaign.audiences.length === 0) {
       console.warn('No active campaign or audiences selected');
       return;
     }
 
-    setIsNavigating(true);
-    try {
-      // Small delay to ensure state is fully updated
-      await new Promise(resolve => setTimeout(resolve, 100));
-      navigate('/campaign/build');
-    } catch (error) {
-      console.error('Error navigating to campaign builder:', error);
-    } finally {
-      setIsNavigating(false);
-    }
+    navigate('/campaign/build');
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
@@ -98,7 +89,6 @@ const AudiencesPage: React.FC = () => {
                 variant="primary"
                 icon={<ShoppingCart size={18} />}
                 onClick={handleNavigateToCampaignBuilder}
-                isLoading={isNavigating}
                 disabled={selectedAudiences.length === 0}
               >
                 Selected Audiences ({selectedAudiences.length})

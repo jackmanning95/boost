@@ -6,15 +6,32 @@ import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
 import CampaignForm from '../components/campaigns/CampaignForm';
 import CampaignSummary from '../components/campaigns/CampaignSummary';
-import { Check, ChevronRight, Users } from 'lucide-react';
+import { Check, ChevronRight, Users, Clock } from 'lucide-react';
 
 const CampaignBuilderPage: React.FC = () => {
-  const { activeCampaign } = useCampaign();
+  const { activeCampaign, isCampaignOperationLoading } = useCampaign(); // NEW: Import the loading state
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<'details' | 'review'>('details');
   
-  // Redirect if no active campaign or if user is admin
+  // NEW: Show loading state while campaign operations are in progress
+  if (isCampaignOperationLoading) {
+    return (
+      <Layout>
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#509fe0] mb-6"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Setting up your campaign...</h2>
+            <p className="text-gray-600 text-center max-w-md">
+              Please wait while we prepare your campaign builder. This should only take a moment.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // UPDATED: Only redirect if no active campaign AND not loading
   if (!activeCampaign || isAdmin) {
     return <Navigate to="/campaigns" replace />;
   }

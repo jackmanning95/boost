@@ -13,12 +13,13 @@ interface CampaignContextType {
   activityLog: CampaignActivity[];
   filters: CampaignFilters;
   loading: boolean;
+  isCampaignOperationLoading: boolean; // NEW: Track campaign-specific operations
 
   // Campaign Management
-  initializeCampaign: (name: string) => void;
-  addAudienceToCampaign: (audience: AudienceSegment) => void;
-  removeAudienceFromCampaign: (audienceId: string) => void;
-  updateCampaignDetails: (details: Partial<Campaign>) => void;
+  initializeCampaign: (name: string) => Promise<void>;
+  addAudienceToCampaign: (audience: AudienceSegment) => Promise<void>;
+  removeAudienceFromCampaign: (audienceId: string) => Promise<void>;
+  updateCampaignDetails: (details: Partial<Campaign>) => Promise<void>;
   updateCampaignStatus: (campaignId: string, status: string, notes?: string) => Promise<void>;
   submitCampaignRequest: (notes?: string) => Promise<void>;
 
@@ -75,6 +76,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
   const [activityLog, setActivityLog] = useState<CampaignActivity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isCampaignOperationLoading, setIsCampaignOperationLoading] = useState(false); // NEW
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
@@ -775,28 +777,29 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initializeCampaign = async (name: string) => {
     if (!user) return;
 
-    const { timestamp } = createTimestamp();
-    const currentDate = new Date().toISOString().split('T')[0];
-
-    // FIXED: Don't manually set the ID - let Supabase generate it
-    const newCampaign: Campaign = {
-      id: '', // This will be set by the database
-      name,
-      clientId: user.id,
-      audiences: [],
-      platforms: {
-        social: [],
-        programmatic: []
-      },
-      budget: 0,
-      startDate: currentDate,
-      endDate: currentDate,
-      status: 'draft',
-      createdAt: timestamp,
-      updatedAt: timestamp
-    };
-
+    setIsCampaignOperationLoading(true); // NEW: Set loading state
     try {
+      const { timestamp } = createTimestamp();
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      // FIXED: Don't manually set the ID - let Supabase generate it
+      const newCampaign: Campaign = {
+        id: '', // This will be set by the database
+        name,
+        clientId: user.id,
+        audiences: [],
+        platforms: {
+          social: [],
+          programmatic: []
+        },
+        budget: 0,
+        startDate: currentDate,
+        endDate: currentDate,
+        status: 'draft',
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+
       const { data, error } = await supabase
         .from('campaigns')
         .insert([{
@@ -838,6 +841,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     } catch (error) {
       console.error('Error creating campaign:', error);
+    } finally {
+      setIsCampaignOperationLoading(false); // NEW: Reset loading state
     }
   };
 
@@ -847,6 +852,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    setIsCampaignOperationLoading(true); // NEW: Set loading state
     try {
       if (activeCampaign.audiences.some(a => a.id === audience.id)) {
         console.log('Audience already in campaign:', audience.id);
@@ -892,6 +898,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Successfully added audience:', audience.id);
     } catch (error) {
       console.error('Error adding audience to campaign:', error);
+    } finally {
+      setIsCampaignOperationLoading(false); // NEW: Reset loading state
     }
   };
 
@@ -901,6 +909,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    setIsCampaignOperationLoading(true); // NEW: Set loading state
     try {
       const { timestamp } = createTimestamp();
       const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
@@ -944,12 +953,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('Successfully removed audience:', audienceId);
     } catch (error) {
       console.error('Error removing audience from campaign:', error);
+    } finally {
+      setIsCampaignOperationLoading(false); // NEW: Reset loading state
     }
   };
 
   const updateCampaignDetails = async (details: Partial<Campaign>) => {
     if (!activeCampaign) return;
 
+    setIsCampaignOperationLoading(true); // NEW: Set loading state
     try {
       const { timestamp } = createTimestamp();
       const updatedCampaign = {
@@ -983,6 +995,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     } catch (error) {
       console.error('Error updating campaign:', error);
+    } finally {
+      setIsCampaignOperationLoading(false); // NEW: Reset loading state
     }
   };
 
@@ -1073,6 +1087,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    setIsCampaignOperationLoading(true); // NEW: Set loading state
     try {
       const { timestamp } = createTimestamp();
       
@@ -1149,6 +1164,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (error) {
       console.error('Error submitting request:', error);
       throw error;
+    } finally {
+      setIsCampaignOperationLoading(false); // NEW: Reset loading state
     }
   };
 
@@ -1415,6 +1432,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activityLog,
       filters,
       loading,
+      isCampaignOperationLoading, // NEW: Export the new loading state
       initializeCampaign,
       addAudienceToCampaign,
       removeAudienceFromCampaign,
