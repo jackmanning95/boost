@@ -16,11 +16,15 @@ const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
-  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign } = useCampaign();
+  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign, isCampaignOperationLoading } = useCampaign();
   const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // ✅ DEBUGGING: Add comprehensive logging
+  console.log('[AudiencesPage] Render - activeCampaign:', activeCampaign);
+  console.log('[AudiencesPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -35,31 +39,55 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
+  // ✅ FIXED: Proper async handling with debugging
   const handleCreateCampaign = async () => {
+    console.log('[AudiencesPage] handleCreateCampaign - Starting');
     const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-    await initializeCampaign(defaultName);
+    try {
+      await initializeCampaign(defaultName);
+      console.log('[AudiencesPage] handleCreateCampaign - Completed successfully');
+    } catch (error) {
+      console.error('[AudiencesPage] handleCreateCampaign - Error:', error);
+    }
   };
 
+  // ✅ FIXED: Proper async handling with debugging
   const handleSelectAudience = async (audience: AudienceSegment) => {
+    console.log('[AudiencesPage] handleSelectAudience - Starting for audience:', audience.id);
     try {
       if (!activeCampaign) {
+        console.log('[AudiencesPage] handleSelectAudience - No active campaign, initializing');
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
+        // Wait a bit for state to update
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+      console.log('[AudiencesPage] handleSelectAudience - Adding audience to campaign');
       await addAudienceToCampaign(audience);
+      console.log('[AudiencesPage] handleSelectAudience - Completed successfully');
     } catch (error) {
-      console.error('Error selecting audience:', error);
+      console.error('[AudiencesPage] handleSelectAudience - Error:', error);
     }
   };
 
-  // ✅ Updated: Ensure campaign is initialized before navigating
+  // ✅ FIXED: Ensure campaign is initialized before navigating with debugging
   const handleNavigateToCampaignBuilder = async () => {
-    if (!activeCampaign) {
-      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-      await initializeCampaign(defaultName);
+    console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Starting');
+    console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Current activeCampaign:', activeCampaign);
+    
+    try {
+      if (!activeCampaign) {
+        console.log('[AudiencesPage] handleNavigateToCampaignBuilder - No active campaign, initializing');
+        const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+        await initializeCampaign(defaultName);
+        console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Campaign initialized');
+      }
+      
+      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Navigating to /campaign/build');
+      navigate('/campaign/build');
+    } catch (error) {
+      console.error('[AudiencesPage] handleNavigateToCampaignBuilder - Error:', error);
     }
-    navigate('/campaign/build');
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
@@ -86,6 +114,8 @@ const AudiencesPage: React.FC = () => {
                 variant="primary"
                 icon={<ShoppingCart size={18} />}
                 onClick={handleNavigateToCampaignBuilder}
+                disabled={isCampaignOperationLoading}
+                isLoading={isCampaignOperationLoading}
               >
                 Selected Audiences ({selectedAudiences.length})
               </Button>
@@ -98,6 +128,8 @@ const AudiencesPage: React.FC = () => {
                 variant="outline"
                 icon={<Users size={18} />}
                 onClick={handleCreateCampaign}
+                disabled={isCampaignOperationLoading}
+                isLoading={isCampaignOperationLoading}
               >
                 Start with Audiences
               </Button>

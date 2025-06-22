@@ -9,13 +9,19 @@ import CampaignSummary from '../components/campaigns/CampaignSummary';
 import { Check, ChevronRight, Users, Clock } from 'lucide-react';
 
 const CampaignBuilderPage: React.FC = () => {
-  const { activeCampaign, isCampaignOperationLoading } = useCampaign(); // NEW: Import the loading state
+  const { activeCampaign, isCampaignOperationLoading } = useCampaign();
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<'details' | 'review'>('details');
   
-  // NEW: Show loading state while campaign operations are in progress
+  // ✅ DEBUGGING: Add comprehensive logging
+  console.log('[CampaignBuilderPage] Render - activeCampaign:', activeCampaign);
+  console.log('[CampaignBuilderPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
+  console.log('[CampaignBuilderPage] Render - isAdmin:', isAdmin);
+  
+  // ✅ FIXED: Show loading state while campaign operations are in progress
   if (isCampaignOperationLoading) {
+    console.log('[CampaignBuilderPage] Showing loading state');
     return (
       <Layout>
         <div className="max-w-4xl mx-auto">
@@ -25,22 +31,30 @@ const CampaignBuilderPage: React.FC = () => {
             <p className="text-gray-600 text-center max-w-md">
               Please wait while we prepare your campaign builder. This should only take a moment.
             </p>
+            <div className="mt-4 text-sm text-gray-500">
+              Loading state: {isCampaignOperationLoading ? 'true' : 'false'}
+            </div>
           </div>
         </div>
       </Layout>
     );
   }
   
-  // UPDATED: Only redirect if no active campaign AND not loading
+  // ✅ FIXED: Only redirect if no active campaign AND not loading
   if (!activeCampaign || isAdmin) {
+    console.log('[CampaignBuilderPage] Redirecting to campaigns - activeCampaign:', !!activeCampaign, 'isAdmin:', isAdmin);
     return <Navigate to="/campaigns" replace />;
   }
   
+  console.log('[CampaignBuilderPage] Rendering campaign builder for:', activeCampaign.name);
+  
   const handleStepComplete = () => {
+    console.log('[CampaignBuilderPage] Step completed, moving to review');
     setCurrentStep('review');
   };
   
   const handleSubmitComplete = () => {
+    console.log('[CampaignBuilderPage] Submit completed, navigating to campaigns');
     navigate('/campaigns');
   };
   

@@ -13,7 +13,7 @@ interface CampaignContextType {
   activityLog: CampaignActivity[];
   filters: CampaignFilters;
   loading: boolean;
-  isCampaignOperationLoading: boolean; // NEW: Track campaign-specific operations
+  isCampaignOperationLoading: boolean;
 
   // Campaign Management
   initializeCampaign: (name: string) => Promise<void>;
@@ -76,7 +76,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
   const [activityLog, setActivityLog] = useState<CampaignActivity[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isCampaignOperationLoading, setIsCampaignOperationLoading] = useState(false); // NEW
+  const [isCampaignOperationLoading, setIsCampaignOperationLoading] = useState(false);
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
@@ -774,132 +774,181 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  // ✅ FIXED: Initialize Campaign with proper state management and debugging
   const initializeCampaign = async (name: string) => {
-    if (!user) return;
+    if (!user) {
+      console.error('[Context] initializeCampaign - No user found');
+      return;
+    }
 
-    setIsCampaignOperationLoading(true); // NEW: Set loading state
+    console.log('[Context] initializeCampaign - Starting with name:', name, 'user:', user.id);
+    console.log('[Context] initializeCampaign - Current activeCampaign before:', activeCampaign);
+
+    setIsCampaignOperationLoading(true);
     try {
       const { timestamp } = createTimestamp();
       const currentDate = new Date().toISOString().split('T')[0];
 
-      // FIXED: Don't manually set the ID - let Supabase generate it
-      const newCampaign: Campaign = {
-        id: '', // This will be set by the database
+      const newCampaignData = {
         name,
-        clientId: user.id,
+        client_id: user.id,
         audiences: [],
-        platforms: {
-          social: [],
-          programmatic: []
-        },
+        platforms: { social: [], programmatic: [] },
         budget: 0,
-        startDate: currentDate,
-        endDate: currentDate,
+        start_date: currentDate,
+        end_date: currentDate,
         status: 'draft',
-        createdAt: timestamp,
-        updatedAt: timestamp
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived: false
       };
+
+      console.log('[Context] initializeCampaign - Inserting campaign data:', newCampaignData);
 
       const { data, error } = await supabase
         .from('campaigns')
-        .insert([{
-          // Don't include id - let the database generate it
-          name: newCampaign.name,
-          client_id: newCampaign.clientId,
-          audiences: newCampaign.audiences,
-          platforms: newCampaign.platforms,
-          budget: newCampaign.budget,
-          start_date: newCampaign.startDate,
-          end_date: newCampaign.endDate,
-          status: newCampaign.status,
-          created_at: timestamp,
-          updated_at: timestamp,
-          archived: false
-        }])
+        .insert([newCampaignData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Context] initializeCampaign - Database error:', error);
+        throw error;
+      }
 
-      // Update the campaign object with the generated ID
-      const createdCampaign = { ...newCampaign, id: data.id };
+      console.log('[Context] initializeCampaign - Database response:', data);
 
-      setCampaigns(prev => [createdCampaign, ...prev]);
+      // Create the campaign object for local state
+      const createdCampaign: Campaign = {
+        id: data.id,
+        name: data.name,
+        clientId: data.client_id,
+        audiences: data.audiences || [],
+        platforms: data.platforms || { social: [], programmatic: [] },
+        budget: data.budget || 0,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        status: data.status,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        archived: data.archived || false
+      };
+
+      console.log('[Context] initializeCampaign - Created campaign object:', createdCampaign);
+
+      // Update local state immediately
+      setCampaigns(prev => {
+        const updated = [createdCampaign, ...prev];
+        console.log('[Context] initializeCampaign - Updated campaigns list:', updated);
+        return updated;
+      });
+      
       setActiveCampaign(createdCampaign);
+      console.log('[Context] initializeCampaign - Set activeCampaign to:', createdCampaign);
 
       // Notify team members about new campaign
       if (user.companyId) {
-        const teamIds = await getCompanyTeamIds(user.companyId);
-        if (teamIds.length > 0) {
-          await createNotification(
-            'New Campaign Created',
-            `${user.name} created a new campaign: "${createdCampaign.name}"`,
-            teamIds,
-            createdCampaign.id
-          );
+        try {
+          const teamIds = await getCompanyTeamIds(user.companyId);
+          if (teamIds.length > 0) {
+            await createNotification(
+              'New Campaign Created',
+              `${user.name} created a new campaign: "${createdCampaign.name}"`,
+              teamIds,
+              createdCampaign.id
+            );
+          }
+        } catch (notificationError) {
+          console.error('[Context] initializeCampaign - Notification error:', notificationError);
+          // Don't throw, this is non-critical
         }
       }
+
+      console.log('[Context] initializeCampaign - Successfully completed');
+
     } catch (error) {
-      console.error('Error creating campaign:', error);
+      console.error('[Context] initializeCampaign - Error:', error);
+      throw error;
     } finally {
-      setIsCampaignOperationLoading(false); // NEW: Reset loading state
+      setIsCampaignOperationLoading(false);
+      console.log('[Context] initializeCampaign - Set isCampaignOperationLoading to false');
     }
   };
 
+  // ✅ FIXED: Add Audience with proper state management and debugging
   const addAudienceToCampaign = async (audience: AudienceSegment) => {
     if (!activeCampaign) {
-      console.warn('No active campaign to add audience to');
+      console.warn('[Context] addAudienceToCampaign - No active campaign');
       return;
     }
 
-    setIsCampaignOperationLoading(true); // NEW: Set loading state
+    console.log('[Context] addAudienceToCampaign - Adding audience:', audience.id, 'to campaign:', activeCampaign.id);
+
+    setIsCampaignOperationLoading(true);
     try {
       if (activeCampaign.audiences.some(a => a.id === audience.id)) {
-        console.log('Audience already in campaign:', audience.id);
+        console.log('[Context] addAudienceToCampaign - Audience already in campaign:', audience.id);
         return;
       }
 
       const { timestamp } = createTimestamp();
-      const updatedCampaign = {
-        ...activeCampaign,
-        audiences: [...activeCampaign.audiences, audience],
-        updatedAt: timestamp
-      };
+      const updatedAudiences = [...activeCampaign.audiences, audience];
+      
+      console.log('[Context] addAudienceToCampaign - Updated audiences:', updatedAudiences);
 
       const { error } = await supabase
         .from('campaigns')
         .update({
-          audiences: updatedCampaign.audiences,
+          audiences: updatedAudiences,
           updated_at: timestamp
         })
         .eq('id', activeCampaign.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Context] addAudienceToCampaign - Database error:', error);
+        throw error;
+      }
+
+      // Update local state immediately
+      const updatedCampaign = {
+        ...activeCampaign,
+        audiences: updatedAudiences,
+        updatedAt: timestamp
+      };
 
       setActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
 
-      // Log activity
-      await supabase
-        .from('campaign_activity_log')
-        .insert({
-          campaign_id: activeCampaign.id,
-          user_id: user?.id,
-          action_type: 'audience_added',
-          action_details: {
-            audience_name: audience.name,
-            audience_id: audience.id
-          },
-          created_at: timestamp
-        });
+      console.log('[Context] addAudienceToCampaign - Updated activeCampaign:', updatedCampaign);
 
-      console.log('Successfully added audience:', audience.id);
+      // Log activity
+      try {
+        await supabase
+          .from('campaign_activity_log')
+          .insert({
+            campaign_id: activeCampaign.id,
+            user_id: user?.id,
+            action_type: 'audience_added',
+            action_details: {
+              audience_name: audience.name,
+              audience_id: audience.id
+            },
+            created_at: timestamp
+          });
+      } catch (activityError) {
+        console.error('[Context] addAudienceToCampaign - Activity log error:', activityError);
+        // Don't throw, this is non-critical
+      }
+
+      console.log('[Context] addAudienceToCampaign - Successfully added audience:', audience.id);
     } catch (error) {
-      console.error('Error adding audience to campaign:', error);
+      console.error('[Context] addAudienceToCampaign - Error:', error);
+      throw error;
     } finally {
-      setIsCampaignOperationLoading(false); // NEW: Reset loading state
+      setIsCampaignOperationLoading(false);
+      console.log('[Context] addAudienceToCampaign - Set isCampaignOperationLoading to false');
     }
   };
 
@@ -909,7 +958,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
-    setIsCampaignOperationLoading(true); // NEW: Set loading state
+    setIsCampaignOperationLoading(true);
     try {
       const { timestamp } = createTimestamp();
       const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
@@ -954,14 +1003,14 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (error) {
       console.error('Error removing audience from campaign:', error);
     } finally {
-      setIsCampaignOperationLoading(false); // NEW: Reset loading state
+      setIsCampaignOperationLoading(false);
     }
   };
 
   const updateCampaignDetails = async (details: Partial<Campaign>) => {
     if (!activeCampaign) return;
 
-    setIsCampaignOperationLoading(true); // NEW: Set loading state
+    setIsCampaignOperationLoading(true);
     try {
       const { timestamp } = createTimestamp();
       const updatedCampaign = {
@@ -996,7 +1045,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (error) {
       console.error('Error updating campaign:', error);
     } finally {
-      setIsCampaignOperationLoading(false); // NEW: Reset loading state
+      setIsCampaignOperationLoading(false);
     }
   };
 
@@ -1087,7 +1136,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
-    setIsCampaignOperationLoading(true); // NEW: Set loading state
+    setIsCampaignOperationLoading(true);
     try {
       const { timestamp } = createTimestamp();
       
@@ -1165,7 +1214,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Error submitting request:', error);
       throw error;
     } finally {
-      setIsCampaignOperationLoading(false); // NEW: Reset loading state
+      setIsCampaignOperationLoading(false);
     }
   };
 
@@ -1432,7 +1481,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activityLog,
       filters,
       loading,
-      isCampaignOperationLoading, // NEW: Export the new loading state
+      isCampaignOperationLoading,
       initializeCampaign,
       addAudienceToCampaign,
       removeAudienceFromCampaign,
