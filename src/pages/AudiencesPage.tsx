@@ -70,7 +70,7 @@ const AudiencesPage: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Ensure campaign is initialized before navigating with debugging
+  // ✅ FIXED: Ensure campaign is initialized before navigating with debugging and proper waiting
   const handleNavigateToCampaignBuilder = async () => {
     console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Starting');
     console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Current activeCampaign:', activeCampaign);
@@ -82,6 +82,10 @@ const AudiencesPage: React.FC = () => {
         await initializeCampaign(defaultName);
         console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Campaign initialized');
       }
+      
+      // ✅ PERSISTENCE FIX: Wait for the campaign to be fully persisted
+      console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Waiting for campaign to be persisted...');
+      await new Promise(resolve => setTimeout(resolve, 500)); // Give time for localStorage persistence
       
       console.log('[AudiencesPage] handleNavigateToCampaignBuilder - Navigating to /campaign/build');
       navigate('/campaign/build');

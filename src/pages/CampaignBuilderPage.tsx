@@ -25,8 +25,8 @@ const CampaignBuilderPage: React.FC = () => {
     return <Navigate to="/campaigns" replace />;
   }
   
-  // ✅ FIXED: Show loading state while campaign operations are in progress
-  if (isCampaignOperationLoading) {
+  // ✅ FIXED: Show loading state while campaign operations are in progress OR while campaign is being loaded
+  if (isCampaignOperationLoading || (!activeCampaign && isCampaignOperationLoading !== false)) {
     console.log('[CampaignBuilderPage] Showing loading state');
     return (
       <Layout>
@@ -49,32 +49,20 @@ const CampaignBuilderPage: React.FC = () => {
     );
   }
   
-  // ✅ FIXED: Only redirect if no active campaign AND not loading
-  // This was the key issue - it was redirecting before the campaign was fully loaded
+  // ✅ FIXED: Only redirect if no active campaign AND not loading AND loading state is explicitly false
+  // This ensures we don't redirect while the campaign is still being loaded from localStorage/database
   if (!activeCampaign && !isCampaignOperationLoading) {
     console.log('[CampaignBuilderPage] Redirecting to campaigns - no active campaign and not loading');
     return <Navigate to="/campaigns" replace />;
   }
   
-  // If we have no campaign but we're still loading, stay here and wait
-  if (!activeCampaign && isCampaignOperationLoading) {
-    console.log('[CampaignBuilderPage] Waiting for campaign to load...');
-    return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#509fe0] mb-6"></div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading your campaign...</h2>
-            <p className="text-gray-600 text-center max-w-md">
-              Please wait while we load your campaign details.
-            </p>
-          </div>
-        </div>
-      </Layout>
-    );
+  // If we somehow get here without a campaign but we're not loading, show an error
+  if (!activeCampaign) {
+    console.log('[CampaignBuilderPage] No campaign found, redirecting to campaigns');
+    return <Navigate to="/campaigns" replace />;
   }
   
-  console.log('[CampaignBuilderPage] Rendering campaign builder for:', activeCampaign?.name);
+  console.log('[CampaignBuilderPage] Rendering campaign builder for:', activeCampaign.name);
   
   const handleStepComplete = () => {
     console.log('[CampaignBuilderPage] Step completed, moving to review');
@@ -88,7 +76,7 @@ const CampaignBuilderPage: React.FC = () => {
   
   // In a real app, this would check if required fields are filled
   const stepsCompleted = {
-    audiences: activeCampaign?.audiences.length > 0,
+    audiences: activeCampaign.audiences.length > 0,
     details: currentStep === 'review',
     review: false
   };
@@ -97,7 +85,7 @@ const CampaignBuilderPage: React.FC = () => {
     <Layout>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">
-          Campaign: {activeCampaign?.name}
+          Campaign: {activeCampaign.name}
         </h1>
         
         {/* Progress Steps */}

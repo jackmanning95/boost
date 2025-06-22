@@ -63,20 +63,94 @@ interface CampaignContextType {
   deleteCampaign: (campaignId: string) => Promise<void>;
   archiveCampaign: (campaignId: string) => Promise<void>;
   unarchiveCampaign: (campaignId: string) => Promise<void>;
+
+  // Clear active campaign
+  clearActiveCampaign: () => void;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
 
+// ✅ PERSISTENCE: Keys for localStorage
+const STORAGE_KEYS = {
+  ACTIVE_CAMPAIGN: 'boost_active_campaign',
+  CAMPAIGN_OPERATION_LOADING: 'boost_campaign_operation_loading'
+};
+
+// ✅ PERSISTENCE: Helper functions for localStorage
+const persistActiveCampaign = (campaign: Campaign | null) => {
+  try {
+    if (campaign) {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_CAMPAIGN, JSON.stringify(campaign));
+      console.log('[Context] Persisted activeCampaign to localStorage:', campaign.id);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_CAMPAIGN);
+      console.log('[Context] Removed activeCampaign from localStorage');
+    }
+  } catch (error) {
+    console.error('[Context] Error persisting activeCampaign:', error);
+  }
+};
+
+const loadPersistedActiveCampaign = (): Campaign | null => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_CAMPAIGN);
+    if (stored) {
+      const campaign = JSON.parse(stored);
+      console.log('[Context] Loaded activeCampaign from localStorage:', campaign.id);
+      return campaign;
+    }
+  } catch (error) {
+    console.error('[Context] Error loading persisted activeCampaign:', error);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_CAMPAIGN);
+  }
+  return null;
+};
+
+const persistLoadingState = (loading: boolean) => {
+  try {
+    if (loading) {
+      sessionStorage.setItem(STORAGE_KEYS.CAMPAIGN_OPERATION_LOADING, 'true');
+    } else {
+      sessionStorage.removeItem(STORAGE_KEYS.CAMPAIGN_OPERATION_LOADING);
+    }
+  } catch (error) {
+    console.error('[Context] Error persisting loading state:', error);
+  }
+};
+
+const loadPersistedLoadingState = (): boolean => {
+  try {
+    return sessionStorage.getItem(STORAGE_KEYS.CAMPAIGN_OPERATION_LOADING) === 'true';
+  } catch (error) {
+    console.error('[Context] Error loading persisted loading state:', error);
+    return false;
+  }
+};
+
 export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAdmin } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+  
+  // ✅ PERSISTENCE: Initialize activeCampaign from localStorage
+  const [activeCampaign, setActiveCampaignState] = useState<Campaign | null>(() => {
+    const persisted = loadPersistedActiveCampaign();
+    console.log('[Context] Initial activeCampaign from localStorage:', persisted?.id || 'null');
+    return persisted;
+  });
+  
   const [requests, setRequests] = useState<AudienceRequest[]>([]);
   const [comments, setComments] = useState<CampaignComment[]>([]);
   const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
   const [activityLog, setActivityLog] = useState<CampaignActivity[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isCampaignOperationLoading, setIsCampaignOperationLoading] = useState(false);
+  
+  // ✅ PERSISTENCE: Initialize loading state from sessionStorage
+  const [isCampaignOperationLoading, setIsCampaignOperationLoadingState] = useState(() => {
+    const persisted = loadPersistedLoadingState();
+    console.log('[Context] Initial isCampaignOperationLoading from sessionStorage:', persisted);
+    return persisted;
+  });
+  
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
@@ -84,6 +158,24 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     agency: '',
     statusCategory: ''
   });
+
+  // ✅ PERSISTENCE: Wrapper functions that persist to storage
+  const setActiveCampaign = useCallback((campaign: Campaign | null) => {
+    console.log('[Context] setActiveCampaign called with:', campaign?.id || 'null');
+    setActiveCampaignState(campaign);
+    persistActiveCampaign(campaign);
+  }, []);
+
+  const setIsCampaignOperationLoading = useCallback((loading: boolean) => {
+    console.log('[Context] setIsCampaignOperationLoading called with:', loading);
+    setIsCampaignOperationLoadingState(loading);
+    persistLoadingState(loading);
+  }, []);
+
+  const clearActiveCampaign = useCallback(() => {
+    console.log('[Context] clearActiveCampaign called');
+    setActiveCampaign(null);
+  }, [setActiveCampaign]);
 
   // Helper function to get user's timezone
   const getUserTimezone = () => {
@@ -225,6 +317,56 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   
   const activeCampaigns = getCampaignsByCategory('active');
   const completedCampaigns = getCampaignsByCategory('completed');
+
+  // ✅ PERSISTENCE: Sync activeCampaign with database on mount
+  useEffect(() => {
+    const syncActiveCampaign = async () => {
+      if (!user || !activeCampaign) return;
+
+      try {
+        console.log('[Context] Syncing activeCampaign with database:', activeCampaign.id);
+        
+        // Verify the campaign still exists and belongs to the user
+        const { data: campaignData, error } = await supabase
+          .from('campaigns')
+          .select('*')
+          .eq('id', activeCampaign.id)
+          .eq('client_id', user.id)
+          .single();
+
+        if (error || !campaignData) {
+          console.log('[Context] Active campaign no longer exists or accessible, clearing');
+          clearActiveCampaign();
+          return;
+        }
+
+        // Update with latest data from database
+        const syncedCampaign: Campaign = {
+          id: campaignData.id,
+          name: campaignData.name,
+          clientId: campaignData.client_id,
+          audiences: campaignData.audiences || [],
+          platforms: campaignData.platforms || { social: [], programmatic: [] },
+          budget: campaignData.budget || 0,
+          startDate: campaignData.start_date,
+          endDate: campaignData.end_date,
+          status: campaignData.status,
+          createdAt: campaignData.created_at,
+          updatedAt: campaignData.updated_at,
+          archived: campaignData.archived || false
+        };
+
+        console.log('[Context] Synced activeCampaign with database:', syncedCampaign);
+        setActiveCampaign(syncedCampaign);
+
+      } catch (error) {
+        console.error('[Context] Error syncing activeCampaign:', error);
+        clearActiveCampaign();
+      }
+    };
+
+    syncActiveCampaign();
+  }, [user, activeCampaign?.id, setActiveCampaign, clearActiveCampaign]);
 
   // Fetch campaigns and requests on mount
   useEffect(() => {
@@ -718,7 +860,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       // Clear active campaign if it was deleted
       if (activeCampaign?.id === campaignId) {
-        setActiveCampaign(null);
+        clearActiveCampaign();
       }
     } catch (error) {
       console.error('Error deleting campaign:', error);
@@ -778,7 +920,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const initializeCampaign = async (name: string) => {
     if (!user) {
       console.error('[Context] initializeCampaign - No user found');
-      return;
+      throw new Error('No user found');
     }
 
     console.log('[Context] initializeCampaign - Starting with name:', name, 'user:', user.id);
@@ -879,7 +1021,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addAudienceToCampaign = async (audience: AudienceSegment) => {
     if (!activeCampaign) {
       console.warn('[Context] addAudienceToCampaign - No active campaign');
-      return;
+      throw new Error('No active campaign');
     }
 
     console.log('[Context] addAudienceToCampaign - Adding audience:', audience.id, 'to campaign:', activeCampaign.id);
@@ -1512,7 +1654,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       unarchiveRequest,
       deleteCampaign,
       archiveCampaign,
-      unarchiveCampaign
+      unarchiveCampaign,
+      clearActiveCampaign
     }}>
       {children}
     </CampaignContext.Provider>
