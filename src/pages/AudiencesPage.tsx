@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import AudienceSearch from '../components/audiences/AudienceSearch';
 import AudienceCard from '../components/audiences/AudienceCard';
@@ -17,10 +17,11 @@ const PAGE_SIZE = 12;
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign } = useCampaign();
-  const { user, isSuperAdmin } = useAuth(); // <-- added super admin check
+  const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -35,25 +36,48 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleCreateCampaign = () => {
+  const handleCreateCampaign = async () => {
     const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-    initializeCampaign(defaultName);
+    await initializeCampaign(defaultName);
   };
 
-  const handleSelectAudience = (audience: AudienceSegment) => {
-    if (!activeCampaign) {
-      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-      initializeCampaign(defaultName);
-      setTimeout(() => addAudienceToCampaign(audience), 100);
-    } else {
-      addAudienceToCampaign(audience);
+  const handleSelectAudience = async (audience: AudienceSegment) => {
+    try {
+      if (!activeCampaign) {
+        const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+        await initializeCampaign(defaultName);
+        // Wait a bit for the state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      await addAudienceToCampaign(audience);
+    } catch (error) {
+      console.error('Error selecting audience:', error);
+    }
+  };
+
+  const handleNavigateToCampaignBuilder = async () => {
+    if (!activeCampaign || activeCampaign.audiences.length === 0) {
+      console.warn('No active campaign or audiences selected');
+      return;
+    }
+
+    setIsNavigating(true);
+    try {
+      // Small delay to ensure state is fully updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      navigate('/campaign/build');
+    } catch (error) {
+      console.error('Error navigating to campaign builder:', error);
+    } finally {
+      setIsNavigating(false);
     }
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
-  const canEditAudiences = !isSuperAdmin; // <-- Only block Boost internal team if needed
+  const canEditAudiences = !isSuperAdmin;
 
   return (
     <Layout>
@@ -64,20 +88,21 @@ const AudiencesPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {canEditAudiences && activeCampaign && (
+          {canEditAudiences && activeCampaign && selectedAudiences.length > 0 && (
             <div className="flex items-center">
               <div className="mr-4 text-right hidden md:block">
                 <p className="text-sm text-gray-600">Current Campaign</p>
                 <p className="font-medium">{activeCampaign.name}</p>
               </div>
-              <Link to="/campaign/build">
-                <Button 
-                  variant="primary"
-                  icon={<ShoppingCart size={18} />}
-                >
-                  Selected Audiences ({selectedAudiences.length})
-                </Button>
-              </Link>
+              <Button 
+                variant="primary"
+                icon={<ShoppingCart size={18} />}
+                onClick={handleNavigateToCampaignBuilder}
+                isLoading={isNavigating}
+                disabled={selectedAudiences.length === 0}
+              >
+                Selected Audiences ({selectedAudiences.length})
+              </Button>
             </div>
           )}
 
@@ -90,14 +115,13 @@ const AudiencesPage: React.FC = () => {
               >
                 Start with Audiences
               </Button>
-              <Link to="/campaigns/new">
-                <Button 
-                  variant="primary"
-                  icon={<PlusCircle size={18} />}
-                >
-                  Create Campaign
-                </Button>
-              </Link>
+              <Button 
+                variant="primary"
+                icon={<PlusCircle size={18} />}
+                onClick={() => navigate('/campaigns/new')}
+              >
+                Create Campaign
+              </Button>
             </div>
           )}
         </div>
