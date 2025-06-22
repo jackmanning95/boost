@@ -17,7 +17,7 @@ const PAGE_SIZE = 12;
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
   const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign } = useCampaign();
-  const { isAdmin } = useAuth();
+  const { user, isSuperAdmin } = useAuth(); // <-- added super admin check
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
@@ -40,13 +40,10 @@ const AudiencesPage: React.FC = () => {
     initializeCampaign(defaultName);
   };
 
-  // Handle audience selection
   const handleSelectAudience = (audience: AudienceSegment) => {
     if (!activeCampaign) {
-      // If no active campaign, create one and then add the audience
       const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
       initializeCampaign(defaultName);
-      // The audience will be added after the campaign is initialized
       setTimeout(() => addAudienceToCampaign(audience), 100);
     } else {
       addAudienceToCampaign(audience);
@@ -55,6 +52,8 @@ const AudiencesPage: React.FC = () => {
 
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
+
+  const canEditAudiences = !isSuperAdmin; // <-- Only block Boost internal team if needed
 
   return (
     <Layout>
@@ -65,7 +64,7 @@ const AudiencesPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {!isAdmin && activeCampaign && (
+          {canEditAudiences && activeCampaign && (
             <div className="flex items-center">
               <div className="mr-4 text-right hidden md:block">
                 <p className="text-sm text-gray-600">Current Campaign</p>
@@ -82,7 +81,7 @@ const AudiencesPage: React.FC = () => {
             </div>
           )}
 
-          {!isAdmin && !activeCampaign && (
+          {canEditAudiences && !activeCampaign && (
             <div className="flex gap-2">
               <Button 
                 variant="outline"
@@ -140,8 +139,8 @@ const AudiencesPage: React.FC = () => {
                 key={audience.id}
                 audience={audience}
                 isSelected={selectedAudiences.some(a => a.id === audience.id)}
-                onSelect={!isAdmin ? handleSelectAudience : undefined}
-                onDeselect={!isAdmin ? removeAudienceFromCampaign : undefined}
+                onSelect={canEditAudiences ? handleSelectAudience : undefined}
+                onDeselect={canEditAudiences ? removeAudienceFromCampaign : undefined}
               />
             ))}
           </div>
@@ -172,7 +171,7 @@ const AudiencesPage: React.FC = () => {
             </div>
           )}
 
-          {!isAdmin && (
+          {canEditAudiences && (
             <AudienceRecommendations
               selectedAudiences={selectedAudiences}
               onSelectAudience={handleSelectAudience}
