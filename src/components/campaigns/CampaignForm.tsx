@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCampaign } from '../../context/CampaignContext';
+import { useCompany } from '../../context/CompanyContext';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
-import { Calendar, DollarSign, Monitor } from 'lucide-react';
+import CompanyAccountModal from './CompanyAccountModal';
+import { Calendar, DollarSign, Monitor, Building, Plus, Edit } from 'lucide-react';
+import { CompanyAccountId } from '../../types';
 
 interface CampaignFormProps {
   onComplete: () => void;
@@ -17,9 +20,28 @@ const PLATFORM_OPTIONS = {
 
 const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const { activeCampaign, updateCampaignDetails } = useCampaign();
+  const { companyAccountIds, fetchCompanyAccountIds, createCompanyAccountId } = useCompany();
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [customSocial, setCustomSocial] = useState('');
   const [customProgrammatic, setCustomProgrammatic] = useState('');
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+
+  useEffect(() => {
+    // Fetch company account IDs when component mounts
+    const loadAccountIds = async () => {
+      setIsLoadingAccounts(true);
+      try {
+        await fetchCompanyAccountIds();
+      } catch (error) {
+        console.error('Error loading company account IDs:', error);
+      } finally {
+        setIsLoadingAccounts(false);
+      }
+    };
+
+    loadAccountIds();
+  }, [fetchCompanyAccountIds]);
 
   if (!activeCampaign) return null;
 
@@ -54,8 +76,35 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     }
   };
 
+  const handleAccountSelection = (accountId: string) => {
+    updateCampaignDetails({ selectedCompanyAccountId: accountId });
+    if (formErrors.selectedCompanyAccountId) {
+      setFormErrors(prev => {
+        const updated = { ...prev };
+        delete updated.selectedCompanyAccountId;
+        return updated;
+      });
+    }
+  };
+
+  const handleCreateAccount = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => {
+    try {
+      const newAccount = await createCompanyAccountId(accountData);
+      // Automatically select the newly created account
+      updateCampaignDetails({ selectedCompanyAccountId: newAccount.id });
+      setShowAccountModal(false);
+    } catch (error) {
+      console.error('Error creating account:', error);
+      throw error;
+    }
+  };
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
+
+    if (!activeCampaign.name?.trim()) {
+      errors.name = 'Campaign name is required';
+    }
 
     if (!activeCampaign.startDate) errors.startDate = 'Start date is required';
     if (!activeCampaign.endDate) errors.endDate = 'End date is required';
@@ -95,8 +144,93 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     }
   };
 
+  const selectedAccount = companyAccountIds.find(account => account.id === activeCampaign.selectedCompanyAccountId);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Campaign Name */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Edit size={20} className="mr-2 text-blue-600" />
+          Campaign Information
+        </h2>
+        <Input
+          label="Campaign Name"
+          value={activeCampaign.name || ''}
+          onChange={(e) => handleInputChange('name', e.target.value)}
+          error={formErrors.name}
+          placeholder="Enter a descriptive name for your campaign"
+          required
+        />
+      </div>
+
+      {/* Platform Account Selection */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Building size={20} className="mr-2 text-blue-600" />
+          Platform Account
+        </h2>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Platform Account
+            </label>
+            <div className="flex gap-3">
+              <select
+                value={activeCampaign.selectedCompanyAccountId || ''}
+                onChange={(e) => handleAccountSelection(e.target.value)}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoadingAccounts}
+              >
+                <option value="">
+                  {isLoadingAccounts ? 'Loading accounts...' : 'Select an account'}
+                </option>
+                {companyAccountIds.map(account => (
+                  <option key={account.id} value={account.id}>
+                    {account.platform} - {account.accountName} ({account.accountId})
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAccountModal(true)}
+                icon={<Plus size={16} />}
+              >
+                Add New
+              </Button>
+            </div>
+            {formErrors.selectedCompanyAccountId && (
+              <p className="mt-1 text-sm text-red-600">{formErrors.selectedCompanyAccountId}</p>
+            )}
+            
+            {selectedAccount && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      Selected: {selectedAccount.platform}
+                    </p>
+                    <p className="text-sm text-blue-700">
+                      {selectedAccount.accountName} • ID: {selectedAccount.accountId}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleAccountSelection('')}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Timeline */}
       <div>
         <h2 className="text-xl font-semibold mb-4 flex items-center">
@@ -208,6 +342,13 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
           Continue
         </Button>
       </div>
+
+      {/* Company Account Modal */}
+      <CompanyAccountModal
+        isOpen={showAccountModal}
+        onClose={() => setShowAccountModal(false)}
+        onSave={handleCreateAccount}
+      />
     </form>
   );
 };

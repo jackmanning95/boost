@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Company, CompanyUser, UserInvitation } from '../types';
+import { Company, CompanyUser, UserInvitation, CompanyAccountId } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -8,6 +8,7 @@ interface CompanyContextType {
   companies: Company[];
   companyUsers: CompanyUser[];
   userInvitations: UserInvitation[];
+  companyAccountIds: CompanyAccountId[];
   currentCompany: Company | null;
   loading: boolean;
   error: string | null;
@@ -21,6 +22,12 @@ interface CompanyContextType {
   inviteUser: (email: string, role: 'admin' | 'user') => Promise<void>;
   updateUserRole: (userId: string, role: 'admin' | 'user') => Promise<void>;
   removeUser: (userId: string) => Promise<void>;
+  
+  // Company Account Management
+  fetchCompanyAccountIds: (companyId?: string) => Promise<void>;
+  createCompanyAccountId: (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => Promise<CompanyAccountId>;
+  updateCompanyAccountId: (accountId: string, updates: Partial<CompanyAccountId>) => Promise<void>;
+  deleteCompanyAccountId: (accountId: string) => Promise<void>;
   
   // Data Fetching
   fetchCompanies: () => Promise<void>;
@@ -38,6 +45,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
   const [userInvitations, setUserInvitations] = useState<UserInvitation[]>([]);
+  const [companyAccountIds, setCompanyAccountIds] = useState<CompanyAccountId[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +141,137 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setError(err instanceof Error ? err.message : 'Failed to fetch company users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch company account IDs
+  const fetchCompanyAccountIds = async (companyId?: string) => {
+    if (!user) return;
+
+    const targetCompanyId = companyId || user.companyId;
+    if (!targetCompanyId) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('company_account_ids')
+        .select('*')
+        .eq('company_id', targetCompanyId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
+        id: account.id,
+        companyId: account.company_id,
+        platform: account.platform,
+        accountId: account.account_id,
+        accountName: account.account_name,
+        isActive: account.is_active,
+        createdAt: account.created_at,
+        updatedAt: account.updated_at
+      }));
+
+      setCompanyAccountIds(transformedAccounts);
+
+    } catch (err) {
+      console.error('Error fetching company account IDs:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create a new company account ID
+  const createCompanyAccountId = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>): Promise<CompanyAccountId> => {
+    if (!user?.companyId) {
+      throw new Error('No company associated with user');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('company_account_ids')
+        .insert({
+          company_id: user.companyId,
+          platform: accountData.platform,
+          account_id: accountData.accountId,
+          account_name: accountData.accountName,
+          is_active: accountData.isActive
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newAccount: CompanyAccountId = {
+        id: data.id,
+        companyId: data.company_id,
+        platform: data.platform,
+        accountId: data.account_id,
+        accountName: data.account_name,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+
+      setCompanyAccountIds(prev => [newAccount, ...prev]);
+      return newAccount;
+
+    } catch (err) {
+      console.error('Error creating company account ID:', err);
+      throw err;
+    }
+  };
+
+  // Update company account ID
+  const updateCompanyAccountId = async (accountId: string, updates: Partial<CompanyAccountId>) => {
+    try {
+      const updateData: any = {};
+      if (updates.platform) updateData.platform = updates.platform;
+      if (updates.accountId) updateData.account_id = updates.accountId;
+      if (updates.accountName !== undefined) updateData.account_name = updates.accountName;
+      if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
+
+      const { error } = await supabase
+        .from('company_account_ids')
+        .update(updateData)
+        .eq('id', accountId);
+
+      if (error) throw error;
+
+      // Update local state
+      setCompanyAccountIds(prev => 
+        prev.map(account => 
+          account.id === accountId 
+            ? { ...account, ...updates, updatedAt: new Date().toISOString() }
+            : account
+        )
+      );
+
+    } catch (err) {
+      console.error('Error updating company account ID:', err);
+      throw err;
+    }
+  };
+
+  // Delete company account ID
+  const deleteCompanyAccountId = async (accountId: string) => {
+    try {
+      const { error } = await supabase
+        .from('company_account_ids')
+        .delete()
+        .eq('id', accountId);
+
+      if (error) throw error;
+
+      setCompanyAccountIds(prev => prev.filter(account => account.id !== accountId));
+
+    } catch (err) {
+      console.error('Error deleting company account ID:', err);
+      throw err;
     }
   };
 
@@ -371,7 +510,8 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await Promise.all([
       fetchCompanies(),
       fetchCompanyUsers(),
-      fetchUserInvitations()
+      fetchUserInvitations(),
+      fetchCompanyAccountIds()
     ]);
   };
 
@@ -387,6 +527,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       companies,
       companyUsers,
       userInvitations,
+      companyAccountIds,
       currentCompany,
       loading,
       error,
@@ -396,6 +537,10 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       inviteUser,
       updateUserRole,
       removeUser,
+      fetchCompanyAccountIds,
+      createCompanyAccountId,
+      updateCompanyAccountId,
+      deleteCompanyAccountId,
       fetchCompanies,
       fetchCompanyUsers,
       fetchUserInvitations,

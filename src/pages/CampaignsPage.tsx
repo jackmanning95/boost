@@ -32,7 +32,8 @@ import {
   AlertTriangle,
   MoreVertical,
   FileText,
-  Inbox
+  Inbox,
+  Hash
 } from 'lucide-react';
 
 interface ClientFilters {
@@ -356,6 +357,7 @@ const CampaignsPage: React.FC = () => {
           <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
             <div className="py-1">
               <button
+                
                 onClick={() => {
                   handleViewCampaign(campaign.id);
                   setIsOpen(false);
@@ -923,6 +925,15 @@ const CampaignsPage: React.FC = () => {
                                             {campaign.archived ? `Archived on ${formatDate(campaign.updatedAt)}` : getLastUpdate(campaign)}
                                           </span>
                                         </div>
+                                        {/* NEW: Display selected platform account */}
+                                        {campaign.selectedCompanyAccount && (
+                                          <div className="flex items-center space-x-2">
+                                            <Hash size={14} className="text-blue-500" />
+                                            <span className="text-sm text-blue-700 font-medium">
+                                              {campaign.selectedCompanyAccount.platform} - {campaign.selectedCompanyAccount.accountName}
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
                                       <div className="text-right">
                                         <p className="text-xs text-gray-500">Performance</p>

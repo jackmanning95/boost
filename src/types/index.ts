@@ -81,6 +81,8 @@ export interface Campaign {
   updatedAt: string;
   approvedAt?: string;
   archived?: boolean;
+  selectedCompanyAccountId?: string; // NEW: Links to CompanyAccountId
+  selectedCompanyAccount?: CompanyAccountId; // NEW: Populated when fetched
   users?: {
     name: string;
     company_id: string;
