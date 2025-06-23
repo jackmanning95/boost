@@ -33,7 +33,8 @@ import {
   MoreVertical,
   FileText,
   Inbox,
-  Hash
+  Hash,
+  User
 } from 'lucide-react';
 
 interface ClientFilters {
@@ -202,15 +203,19 @@ const CampaignsPage: React.FC = () => {
       // Search filter
       if (clientFilters.search) {
         const searchLower = clientFilters.search.toLowerCase();
-        const searchableText = `${campaign.name} ${campaign.users?.name || ''} ${campaign.users?.companies?.name || ''}`.toLowerCase();
+        const searchableText = `${campaign.name} ${campaign.users?.name || ''} ${campaign.users?.companies?.name || ''} ${campaign.advertiserName || ''}`.toLowerCase();
         if (!searchableText.includes(searchLower)) {
           return false;
         }
       }
 
-      // Advertiser filter (using campaign name as proxy for advertiser)
-      if (clientFilters.advertiser && !campaign.name.toLowerCase().includes(clientFilters.advertiser.toLowerCase())) {
-        return false;
+      // Advertiser filter
+      if (clientFilters.advertiser) {
+        const advertiserLower = clientFilters.advertiser.toLowerCase();
+        const advertiserText = `${campaign.advertiserName || ''} ${campaign.name}`.toLowerCase();
+        if (!advertiserText.includes(advertiserLower)) {
+          return false;
+        }
       }
 
       // Status filter
@@ -357,7 +362,6 @@ const CampaignsPage: React.FC = () => {
           <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
             <div className="py-1">
               <button
-                
                 onClick={() => {
                   handleViewCampaign(campaign.id);
                   setIsOpen(false);
@@ -925,12 +929,20 @@ const CampaignsPage: React.FC = () => {
                                             {campaign.archived ? `Archived on ${formatDate(campaign.updatedAt)}` : getLastUpdate(campaign)}
                                           </span>
                                         </div>
-                                        {/* NEW: Display selected platform account */}
+                                        {/* Display selected platform account and advertiser */}
                                         {campaign.selectedCompanyAccount && (
                                           <div className="flex items-center space-x-2">
                                             <Hash size={14} className="text-blue-500" />
                                             <span className="text-sm text-blue-700 font-medium">
                                               {campaign.selectedCompanyAccount.platform} - {campaign.selectedCompanyAccount.accountName}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {campaign.advertiserName && !campaign.selectedCompanyAccount && (
+                                          <div className="flex items-center space-x-2">
+                                            <User size={14} className="text-green-500" />
+                                            <span className="text-sm text-green-700 font-medium">
+                                              {campaign.advertiserName}
                                             </span>
                                           </div>
                                         )}

@@ -4,7 +4,7 @@ import { useCompany } from '../../context/CompanyContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
-import { ChevronRight, Calendar, DollarSign, Monitor, Users, Send, Building } from 'lucide-react';
+import { ChevronRight, Calendar, DollarSign, Monitor, Users, Send, Building, User } from 'lucide-react';
 import Input from '../ui/Input';
 
 interface CampaignSummaryProps {
@@ -40,7 +40,7 @@ const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
       day: 'numeric'
     });
   };
-
+  
   const selectedAccount = companyAccountIds.find(account => account.id === activeCampaign.selectedCompanyAccountId);
   
   return (
@@ -83,37 +83,6 @@ const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Building size={20} className="mr-2 text-blue-600" />
-              Platform Account
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedAccount ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">Platform</p>
-                  <p className="font-medium">{selectedAccount.platform}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Account Name</p>
-                  <p className="font-medium">{selectedAccount.accountName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Account ID</p>
-                  <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
-                    {selectedAccount.accountId}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500 italic">No platform account selected</p>
-            )}
-          </CardContent>
-        </Card>
         
         <Card>
           <CardHeader>
@@ -149,6 +118,47 @@ const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Building size={20} className="mr-2 text-blue-600" />
+            Platform Account & Advertiser
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {selectedAccount ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-gray-500">Platform</p>
+                <p className="font-medium">{selectedAccount.platform}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Advertiser Name</p>
+                <p className="font-medium">{selectedAccount.accountName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Account ID</p>
+                <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                  {selectedAccount.accountId}
+                </p>
+              </div>
+            </div>
+          ) : activeCampaign.advertiserName ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-gray-500">Advertiser Name</p>
+                <p className="font-medium flex items-center">
+                  <User size={16} className="mr-2 text-green-600" />
+                  {activeCampaign.advertiserName}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 italic">No platform account or advertiser selected</p>
+          )}
+        </CardContent>
+      </Card>
       
       <Card>
         <CardHeader>

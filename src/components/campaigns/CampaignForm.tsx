@@ -77,7 +77,11 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   };
 
   const handleAccountSelection = (accountId: string) => {
-    updateCampaignDetails({ selectedCompanyAccountId: accountId });
+    const selectedAccount = companyAccountIds.find(account => account.id === accountId);
+    updateCampaignDetails({ 
+      selectedCompanyAccountId: accountId,
+      advertiserName: selectedAccount?.accountName // Set advertiser name from account
+    });
     if (formErrors.selectedCompanyAccountId) {
       setFormErrors(prev => {
         const updated = { ...prev };
@@ -91,7 +95,10 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     try {
       const newAccount = await createCompanyAccountId(accountData);
       // Automatically select the newly created account
-      updateCampaignDetails({ selectedCompanyAccountId: newAccount.id });
+      updateCampaignDetails({ 
+        selectedCompanyAccountId: newAccount.id,
+        advertiserName: newAccount.accountName // Set advertiser name from new account
+      });
       setShowAccountModal(false);
     } catch (error) {
       console.error('Error creating account:', error);
@@ -168,7 +175,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       <div>
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <Building size={20} className="mr-2 text-blue-600" />
-          Platform Account
+          Platform Account & Advertiser
         </h2>
         
         <div className="space-y-4">

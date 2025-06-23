@@ -81,8 +81,9 @@ export interface Campaign {
   updatedAt: string;
   approvedAt?: string;
   archived?: boolean;
-  selectedCompanyAccountId?: string; // NEW: Links to CompanyAccountId
-  selectedCompanyAccount?: CompanyAccountId; // NEW: Populated when fetched
+  selectedCompanyAccountId?: string; // Links to CompanyAccountId
+  selectedCompanyAccount?: CompanyAccountId; // Populated when fetched
+  advertiserName?: string; // NEW: Advertiser name for campaign cards
   users?: {
     name: string;
     company_id: string;
