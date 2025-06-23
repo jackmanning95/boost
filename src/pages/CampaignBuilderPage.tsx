@@ -6,11 +6,11 @@ import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
 import CampaignForm from '../components/campaigns/CampaignForm';
 import CampaignSummary from '../components/campaigns/CampaignSummary';
-import { Check, ChevronRight, Users, Clock } from 'lucide-react';
+import { Check, ChevronRight, Users, Clock, Shield } from 'lucide-react';
 
 const CampaignBuilderPage: React.FC = () => {
   const { activeCampaign, hasActiveCampaignLoaded, isCampaignOperationLoading } = useCampaign();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<'details' | 'review'>('details');
   
@@ -19,10 +19,11 @@ const CampaignBuilderPage: React.FC = () => {
   console.log('[CampaignBuilderPage] Render - hasActiveCampaignLoaded:', hasActiveCampaignLoaded);
   console.log('[CampaignBuilderPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
   console.log('[CampaignBuilderPage] Render - isAdmin:', isAdmin);
+  console.log('[CampaignBuilderPage] Render - isSuperAdmin:', isSuperAdmin);
   
-  // Redirect admins immediately (they shouldn't be here)
-  if (isAdmin) {
-    console.log('[CampaignBuilderPage] Redirecting admin to campaigns');
+  // ✅ FIXED: Only redirect super admins (Boost internal team), allow company admins to use campaign builder
+  if (isSuperAdmin) {
+    console.log('[CampaignBuilderPage] Redirecting super admin to campaigns - they should use admin dashboard');
     return <Navigate to="/campaigns" replace />;
   }
   
@@ -49,6 +50,7 @@ const CampaignBuilderPage: React.FC = () => {
               <div>• Operation Loading: {isCampaignOperationLoading ? 'true' : 'false'}</div>
               <div>• Active Campaign: {activeCampaign ? activeCampaign.name : 'null'}</div>
               <div>• Is Admin: {isAdmin ? 'true' : 'false'}</div>
+              <div>• Is Super Admin: {isSuperAdmin ? 'true' : 'false'}</div>
             </div>
           </div>
         </div>
@@ -90,6 +92,18 @@ const CampaignBuilderPage: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto">
+        {/* ✅ ADDED: Admin indicator for company admins */}
+        {isAdmin && !isSuperAdmin && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center">
+              <Shield size={16} className="text-blue-600 mr-2" />
+              <span className="text-sm text-blue-800 font-medium">
+                Company Admin Access - You can create and manage campaigns for your company
+              </span>
+            </div>
+          </div>
+        )}
+        
         <h1 className="text-2xl font-bold text-gray-900 mb-6">
           Campaign: {activeCampaign.name}
         </h1>

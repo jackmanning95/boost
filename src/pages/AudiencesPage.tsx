@@ -102,6 +102,7 @@ const AudiencesPage: React.FC = () => {
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
+  // ✅ FIXED: Allow company admins to edit audiences, only block super admins
   const canEditAudiences = !isSuperAdmin;
 
   return (
