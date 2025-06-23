@@ -9,13 +9,14 @@ import CampaignSummary from '../components/campaigns/CampaignSummary';
 import { Check, ChevronRight, Users, Clock } from 'lucide-react';
 
 const CampaignBuilderPage: React.FC = () => {
-  const { activeCampaign, isCampaignOperationLoading } = useCampaign();
+  const { activeCampaign, hasActiveCampaignLoaded, isCampaignOperationLoading } = useCampaign();
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<'details' | 'review'>('details');
   
   // ✅ DEBUGGING: Add comprehensive logging
   console.log('[CampaignBuilderPage] Render - activeCampaign:', activeCampaign);
+  console.log('[CampaignBuilderPage] Render - hasActiveCampaignLoaded:', hasActiveCampaignLoaded);
   console.log('[CampaignBuilderPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
   console.log('[CampaignBuilderPage] Render - isAdmin:', isAdmin);
   
@@ -25,21 +26,27 @@ const CampaignBuilderPage: React.FC = () => {
     return <Navigate to="/campaigns" replace />;
   }
   
-  // ✅ FIXED: Show loading state while campaign operations are in progress OR while campaign is being loaded
-  if (isCampaignOperationLoading || (!activeCampaign && isCampaignOperationLoading !== false)) {
-    console.log('[CampaignBuilderPage] Showing loading state');
+  // ✅ FIXED: Show loading state until campaign hydration is complete OR while operations are in progress
+  if (!hasActiveCampaignLoaded || isCampaignOperationLoading) {
+    console.log('[CampaignBuilderPage] Showing loading state - hydration or operation in progress');
     return (
       <Layout>
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#509fe0] mb-6"></div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Setting up your campaign...</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              {!hasActiveCampaignLoaded ? 'Loading your campaign...' : 'Setting up your campaign...'}
+            </h2>
             <p className="text-gray-600 text-center max-w-md">
-              Please wait while we prepare your campaign builder. This should only take a moment.
+              {!hasActiveCampaignLoaded 
+                ? 'Please wait while we load your campaign data.'
+                : 'Please wait while we prepare your campaign builder. This should only take a moment.'
+              }
             </p>
             <div className="mt-4 text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
               <div>Debug Info:</div>
-              <div>• Loading: {isCampaignOperationLoading ? 'true' : 'false'}</div>
+              <div>• Hydration Complete: {hasActiveCampaignLoaded ? 'true' : 'false'}</div>
+              <div>• Operation Loading: {isCampaignOperationLoading ? 'true' : 'false'}</div>
               <div>• Active Campaign: {activeCampaign ? activeCampaign.name : 'null'}</div>
               <div>• Is Admin: {isAdmin ? 'true' : 'false'}</div>
             </div>
@@ -49,14 +56,13 @@ const CampaignBuilderPage: React.FC = () => {
     );
   }
   
-  // ✅ FIXED: Only redirect if no active campaign AND not loading AND loading state is explicitly false
-  // This ensures we don't redirect while the campaign is still being loaded from localStorage/database
-  if (!activeCampaign && !isCampaignOperationLoading) {
-    console.log('[CampaignBuilderPage] Redirecting to campaigns - no active campaign and not loading');
+  // ✅ FIXED: Only redirect if no active campaign AND hydration is complete
+  if (!activeCampaign && hasActiveCampaignLoaded) {
+    console.log('[CampaignBuilderPage] Redirecting to campaigns - no active campaign after hydration complete');
     return <Navigate to="/campaigns" replace />;
   }
   
-  // If we somehow get here without a campaign but we're not loading, show an error
+  // If we somehow get here without a campaign, show an error
   if (!activeCampaign) {
     console.log('[CampaignBuilderPage] No campaign found, redirecting to campaigns');
     return <Navigate to="/campaigns" replace />;

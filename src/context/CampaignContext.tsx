@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Campaign, AudienceSegment, AudienceRequest, CampaignComment, CampaignWorkflowHistory, CampaignFilters, CampaignActivity, CampaignStatusCategory } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -13,13 +13,16 @@ interface CampaignContextType {
   activityLog: CampaignActivity[];
   filters: CampaignFilters;
   loading: boolean;
+
+  // New loading states
+  hasActiveCampaignLoaded: boolean;
   isCampaignOperationLoading: boolean;
 
   // Campaign Management
   initializeCampaign: (name: string) => Promise<void>;
   addAudienceToCampaign: (audience: AudienceSegment) => Promise<void>;
-  removeAudienceFromCampaign: (audienceId: string) => void;
-  updateCampaignDetails: (details: Partial<Campaign>) => void;
+  removeAudienceFromCampaign: (audienceId: string) => Promise<void>;
+  updateCampaignDetails: (details: Partial<Campaign>) => Promise<void>;
   updateCampaignStatus: (campaignId: string, status: string, notes?: string) => Promise<void>;
   submitCampaignRequest: (notes?: string) => Promise<void>;
 
@@ -64,12 +67,14 @@ interface CampaignContextType {
   archiveCampaign: (campaignId: string) => Promise<void>;
   unarchiveCampaign: (campaignId: string) => Promise<void>;
 
-  // ✅ NEW: Campaign readiness system
-  waitForCampaignReady: () => Promise<Campaign>;
-  clearActiveCampaign: () => void;
+  // New: Campaign readiness helper
+  waitForCampaignReady: () => Promise<void>;
 }
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
+
+// Constants for localStorage
+const CAMPAIGN_ID_KEY = 'boost_active_campaign_id';
 
 export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAdmin } = useAuth();
@@ -80,7 +85,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [workflowHistory, setWorkflowHistory] = useState<CampaignWorkflowHistory[]>([]);
   const [activityLog, setActivityLog] = useState<CampaignActivity[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // ✅ NEW: Campaign loading states
+  const [hasActiveCampaignLoaded, setHasActiveCampaignLoaded] = useState(false);
   const [isCampaignOperationLoading, setIsCampaignOperationLoading] = useState(false);
+  
   const [filters, setFiltersState] = useState<CampaignFilters>({
     search: '',
     status: '',
@@ -88,10 +97,6 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     agency: '',
     statusCategory: ''
   });
-
-  // ✅ NEW: Campaign readiness system
-  const campaignReadyPromiseRef = useRef<Promise<Campaign> | null>(null);
-  const campaignReadyResolveRef = useRef<((campaign: Campaign) => void) | null>(null);
 
   // Helper function to get user's timezone
   const getUserTimezone = () => {
@@ -114,166 +119,103 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   };
 
-  // ✅ PERSISTENCE: Save campaign to localStorage
-  const persistActiveCampaign = (campaign: Campaign | null) => {
-    try {
-      if (campaign) {
-        console.log('[CampaignContext] Persisting campaign to localStorage:', campaign.id);
-        localStorage.setItem('activeCampaign', JSON.stringify(campaign));
-      } else {
-        console.log('[CampaignContext] Removing campaign from localStorage');
-        localStorage.removeItem('activeCampaign');
-      }
-    } catch (error) {
-      console.error('[CampaignContext] Error persisting campaign:', error);
-    }
-  };
-
-  // ✅ PERSISTENCE: Save loading state to sessionStorage
-  const persistLoadingState = (isLoading: boolean) => {
-    try {
-      if (isLoading) {
-        sessionStorage.setItem('isCampaignOperationLoading', 'true');
-      } else {
-        sessionStorage.removeItem('isCampaignOperationLoading');
-      }
-    } catch (error) {
-      console.error('[CampaignContext] Error persisting loading state:', error);
-    }
-  };
-
-  // ✅ PERSISTENCE: Load campaign from localStorage
-  const loadPersistedCampaign = async () => {
-    try {
-      const stored = localStorage.getItem('activeCampaign');
-      if (stored && user) {
-        const campaign = JSON.parse(stored);
-        console.log('[CampaignContext] Loading persisted campaign:', campaign.id);
-        
-        // Verify campaign still exists and belongs to user
-        const { data, error } = await supabase
-          .from('campaigns')
-          .select('*')
-          .eq('id', campaign.id)
-          .eq('client_id', user.id)
-          .single();
-
-        if (error || !data) {
-          console.log('[CampaignContext] Persisted campaign no longer valid, clearing');
-          localStorage.removeItem('activeCampaign');
-          return null;
-        }
-
-        // Update with latest data from database
-        const updatedCampaign = {
-          ...campaign,
-          ...data,
-          clientId: data.client_id,
-          startDate: data.start_date,
-          endDate: data.end_date,
-          createdAt: data.created_at,
-          updatedAt: data.updated_at,
-          approvedAt: data.approved_at
-        };
-
-        return updatedCampaign;
-      }
-    } catch (error) {
-      console.error('[CampaignContext] Error loading persisted campaign:', error);
-      localStorage.removeItem('activeCampaign');
-    }
-    return null;
-  };
-
-  // ✅ PERSISTENCE: Load loading state from sessionStorage
-  const loadPersistedLoadingState = () => {
-    try {
-      return sessionStorage.getItem('isCampaignOperationLoading') === 'true';
-    } catch (error) {
-      console.error('[CampaignContext] Error loading persisted loading state:', error);
-      return false;
-    }
-  };
-
-  // ✅ ENHANCED: Wrapper for setActiveCampaign with persistence
-  const setActiveCampaignWithPersistence = (campaign: Campaign | null) => {
-    console.log('[CampaignContext] setActiveCampaignWithPersistence:', campaign?.id || 'null');
+  // ✅ NEW: Helper to update active campaign and manage localStorage
+  const updateActiveCampaign = useCallback((campaign: Campaign | null) => {
+    console.log('[CampaignContext] updateActiveCampaign:', campaign?.id || 'null');
     setActiveCampaign(campaign);
-    persistActiveCampaign(campaign);
     
-    // ✅ NEW: Resolve campaign ready promise when campaign is set
-    if (campaign && campaignReadyResolveRef.current) {
-      console.log('[CampaignContext] Resolving campaign ready promise');
-      campaignReadyResolveRef.current(campaign);
-      campaignReadyResolveRef.current = null;
-      campaignReadyPromiseRef.current = null;
+    if (campaign) {
+      localStorage.setItem(CAMPAIGN_ID_KEY, campaign.id);
+    } else {
+      localStorage.removeItem(CAMPAIGN_ID_KEY);
     }
-  };
+  }, []);
 
-  // ✅ ENHANCED: Wrapper for setIsCampaignOperationLoading with persistence
-  const setIsCampaignOperationLoadingWithPersistence = (isLoading: boolean) => {
-    console.log('[CampaignContext] setIsCampaignOperationLoadingWithPersistence:', isLoading);
-    setIsCampaignOperationLoading(isLoading);
-    persistLoadingState(isLoading);
-  };
-
-  // ✅ NEW: Wait for campaign to be ready
-  const waitForCampaignReady = (): Promise<Campaign> => {
-    console.log('[CampaignContext] waitForCampaignReady called');
+  // ✅ NEW: Campaign readiness helper
+  const waitForCampaignReady = useCallback(async (): Promise<void> => {
+    console.log('[CampaignContext] waitForCampaignReady - Starting wait');
+    console.log('[CampaignContext] waitForCampaignReady - hasActiveCampaignLoaded:', hasActiveCampaignLoaded);
+    console.log('[CampaignContext] waitForCampaignReady - isCampaignOperationLoading:', isCampaignOperationLoading);
     
-    // If campaign is already available, return it immediately
-    if (activeCampaign) {
-      console.log('[CampaignContext] Campaign already ready:', activeCampaign.id);
-      return Promise.resolve(activeCampaign);
-    }
-
-    // If there's already a promise waiting, return it
-    if (campaignReadyPromiseRef.current) {
-      console.log('[CampaignContext] Returning existing campaign ready promise');
-      return campaignReadyPromiseRef.current;
-    }
-
-    // Create a new promise that will resolve when campaign is ready
-    console.log('[CampaignContext] Creating new campaign ready promise');
-    campaignReadyPromiseRef.current = new Promise<Campaign>((resolve) => {
-      campaignReadyResolveRef.current = resolve;
+    return new Promise((resolve) => {
+      const checkReady = () => {
+        if (hasActiveCampaignLoaded && !isCampaignOperationLoading) {
+          console.log('[CampaignContext] waitForCampaignReady - Campaign is ready');
+          resolve();
+        } else {
+          console.log('[CampaignContext] waitForCampaignReady - Still waiting...');
+          setTimeout(checkReady, 100);
+        }
+      };
+      checkReady();
     });
+  }, [hasActiveCampaignLoaded, isCampaignOperationLoading]);
 
-    return campaignReadyPromiseRef.current;
-  };
-
-  // ✅ NEW: Clear active campaign
-  const clearActiveCampaign = () => {
-    console.log('[CampaignContext] clearActiveCampaign called');
-    setActiveCampaignWithPersistence(null);
-    setIsCampaignOperationLoadingWithPersistence(false);
-  };
-
-  // ✅ PERSISTENCE: Initialize from stored state on mount
+  // ✅ NEW: Load campaign from localStorage on mount
   useEffect(() => {
-    const initializeFromStorage = async () => {
-      if (!user) return;
+    if (!user) {
+      console.log('[CampaignContext] No user, skipping campaign hydration');
+      setHasActiveCampaignLoaded(true);
+      return;
+    }
 
-      console.log('[CampaignContext] Initializing from storage');
+    const loadStoredCampaign = async () => {
+      console.log('[CampaignContext] Starting campaign hydration');
       
-      // Load persisted loading state
-      const persistedLoading = loadPersistedLoadingState();
-      if (persistedLoading) {
-        setIsCampaignOperationLoading(true);
-      }
+      try {
+        const storedCampaignId = localStorage.getItem(CAMPAIGN_ID_KEY);
+        console.log('[CampaignContext] Stored campaign ID:', storedCampaignId);
+        
+        if (storedCampaignId) {
+          // Fetch campaign from database
+          const { data: campaign, error } = await supabase
+            .from('campaigns')
+            .select('*')
+            .eq('id', storedCampaignId)
+            .eq('client_id', user.id) // Ensure user owns this campaign
+            .single();
 
-      // Load persisted campaign
-      const persistedCampaign = await loadPersistedCampaign();
-      if (persistedCampaign) {
-        console.log('[CampaignContext] Restored campaign from storage:', persistedCampaign.id);
-        setActiveCampaignWithPersistence(persistedCampaign);
+          if (error || !campaign) {
+            console.warn('[CampaignContext] Stored campaign not found or error:', error);
+            localStorage.removeItem(CAMPAIGN_ID_KEY);
+            setActiveCampaign(null);
+          } else {
+            console.log('[CampaignContext] Successfully loaded stored campaign:', campaign.name);
+            
+            // Transform database campaign to our Campaign type
+            const transformedCampaign: Campaign = {
+              id: campaign.id,
+              name: campaign.name,
+              clientId: campaign.client_id,
+              audiences: campaign.audiences || [],
+              platforms: campaign.platforms || { social: [], programmatic: [] },
+              budget: campaign.budget || 0,
+              startDate: campaign.start_date,
+              endDate: campaign.end_date,
+              status: campaign.status,
+              createdAt: campaign.created_at,
+              updatedAt: campaign.updated_at,
+              approvedAt: campaign.approved_at,
+              archived: campaign.archived || false
+            };
+            
+            setActiveCampaign(transformedCampaign);
+          }
+        } else {
+          console.log('[CampaignContext] No stored campaign ID found');
+          setActiveCampaign(null);
+        }
+      } catch (error) {
+        console.error('[CampaignContext] Error loading stored campaign:', error);
+        localStorage.removeItem(CAMPAIGN_ID_KEY);
+        setActiveCampaign(null);
+      } finally {
+        setHasActiveCampaignLoaded(true);
+        console.log('[CampaignContext] Hydration complete');
       }
-
-      // Clear loading state after initialization
-      setIsCampaignOperationLoadingWithPersistence(false);
     };
 
-    initializeFromStorage();
+    loadStoredCampaign();
   }, [user]);
 
   // Helper function to create notifications for relevant users
@@ -888,7 +830,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       // Clear active campaign if it was deleted
       if (activeCampaign?.id === campaignId) {
-        setActiveCampaignWithPersistence(null);
+        updateActiveCampaign(null);
       }
     } catch (error) {
       console.error('Error deleting campaign:', error);
@@ -944,15 +886,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // ✅ FIXED: Enhanced initializeCampaign with proper async handling and readiness system
+  // ✅ UPDATED: Initialize campaign with proper loading state management
   const initializeCampaign = async (name: string) => {
-    if (!user) {
-      console.error('[CampaignContext] initializeCampaign: No user found');
-      return;
-    }
+    if (!user) return;
 
-    console.log('[CampaignContext] initializeCampaign: Starting for name:', name);
-    setIsCampaignOperationLoadingWithPersistence(true);
+    console.log('[CampaignContext] initializeCampaign - Starting:', name);
+    setIsCampaignOperationLoading(true);
 
     try {
       const { timestamp } = createTimestamp();
@@ -962,10 +901,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         name,
         client_id: user.id,
         audiences: [],
-        platforms: {
-          social: [],
-          programmatic: []
-        },
+        platforms: { social: [], programmatic: [] },
         budget: 0,
         start_date: currentDate,
         end_date: currentDate,
@@ -975,19 +911,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         archived: false
       };
 
-      console.log('[CampaignContext] initializeCampaign: Creating campaign in database');
       const { data, error } = await supabase
         .from('campaigns')
         .insert([newCampaignData])
         .select()
         .single();
 
-      if (error) {
-        console.error('[CampaignContext] initializeCampaign: Database error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      // Transform database response to match our Campaign interface
+      // Transform to our Campaign type
       const createdCampaign: Campaign = {
         id: data.id,
         name: data.name,
@@ -1003,135 +935,126 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         archived: data.archived || false
       };
 
-      console.log('[CampaignContext] initializeCampaign: Campaign created successfully:', createdCampaign.id);
-
-      // Update local state
       setCampaigns(prev => [createdCampaign, ...prev]);
-      setActiveCampaignWithPersistence(createdCampaign);
+      updateActiveCampaign(createdCampaign);
 
       // Notify team members about new campaign
       if (user.companyId) {
-        try {
-          const teamIds = await getCompanyTeamIds(user.companyId);
-          if (teamIds.length > 0) {
-            await createNotification(
-              'New Campaign Created',
-              `${user.name} created a new campaign: "${createdCampaign.name}"`,
-              teamIds,
-              createdCampaign.id
-            );
-          }
-        } catch (notificationError) {
-          console.error('[CampaignContext] initializeCampaign: Notification error:', notificationError);
-          // Don't throw here, campaign creation was successful
+        const teamIds = await getCompanyTeamIds(user.companyId);
+        if (teamIds.length > 0) {
+          await createNotification(
+            'New Campaign Created',
+            `${user.name} created a new campaign: "${createdCampaign.name}"`,
+            teamIds,
+            createdCampaign.id
+          );
         }
       }
 
-      console.log('[CampaignContext] initializeCampaign: Completed successfully');
+      console.log('[CampaignContext] initializeCampaign - Completed successfully');
     } catch (error) {
-      console.error('[CampaignContext] initializeCampaign: Error:', error);
+      console.error('[CampaignContext] initializeCampaign - Error:', error);
       throw error;
     } finally {
-      setIsCampaignOperationLoadingWithPersistence(false);
+      setIsCampaignOperationLoading(false);
     }
   };
 
-  // ✅ FIXED: Enhanced addAudienceToCampaign with campaign readiness check
+  // ✅ UPDATED: Add audience with proper loading state management
   const addAudienceToCampaign = async (audience: AudienceSegment) => {
-    console.log('[CampaignContext] addAudienceToCampaign: Starting for audience:', audience.id);
+    if (!activeCampaign) {
+      console.warn('No active campaign to add audience to');
+      return;
+    }
+
+    console.log('[CampaignContext] addAudienceToCampaign - Starting:', audience.id);
+    setIsCampaignOperationLoading(true);
 
     try {
-      // ✅ NEW: Wait for campaign to be ready if it's not available yet
-      let campaign = activeCampaign;
-      if (!campaign) {
-        console.log('[CampaignContext] addAudienceToCampaign: No active campaign, waiting for it to be ready...');
-        campaign = await waitForCampaignReady();
-        console.log('[CampaignContext] addAudienceToCampaign: Campaign is now ready:', campaign.id);
-      }
-
-      if (campaign.audiences.some(a => a.id === audience.id)) {
-        console.log('[CampaignContext] addAudienceToCampaign: Audience already in campaign:', audience.id);
+      if (activeCampaign.audiences.some(a => a.id === audience.id)) {
+        console.log('Audience already in campaign:', audience.id);
         return;
       }
 
       const { timestamp } = createTimestamp();
-      const updatedCampaign = {
-        ...campaign,
-        audiences: [...campaign.audiences, audience],
-        updatedAt: timestamp
-      };
-
-      console.log('[CampaignContext] addAudienceToCampaign: Updating campaign in database');
-      const { error } = await supabase
-        .from('campaigns')
-        .update({
-          audiences: updatedCampaign.audiences,
-          updated_at: timestamp
-        })
-        .eq('id', campaign.id);
-
-      if (error) {
-        console.error('[CampaignContext] addAudienceToCampaign: Database error:', error);
-        throw error;
-      }
-
-      setActiveCampaignWithPersistence(updatedCampaign);
-      setCampaigns(prev => 
-        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
-      );
-
-      // Log activity
-      try {
-        await supabase
-          .from('campaign_activity_log')
-          .insert({
-            campaign_id: campaign.id,
-            user_id: user?.id,
-            action_type: 'audience_added',
-            action_details: {
-              audience_name: audience.name,
-              audience_id: audience.id
-            },
-            created_at: timestamp
-          });
-      } catch (activityError) {
-        console.error('[CampaignContext] addAudienceToCampaign: Activity log error:', activityError);
-        // Don't throw here, main operation was successful
-      }
-
-      console.log('[CampaignContext] addAudienceToCampaign: Successfully added audience:', audience.id);
-    } catch (error) {
-      console.error('[CampaignContext] addAudienceToCampaign: Error:', error);
-      throw error;
-    }
-  };
-
-  const removeAudienceFromCampaign = async (audienceId: string) => {
-    if (!activeCampaign) {
-      console.warn('[CampaignContext] removeAudienceFromCampaign: No active campaign');
-      return;
-    }
-
-    try {
-      const { timestamp } = createTimestamp();
-      const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
-      const updatedCampaign = {
-        ...activeCampaign,
-        audiences: activeCampaign.audiences.filter(a => a.id !== audienceId),
-        updatedAt: timestamp
-      };
+      const updatedAudiences = [...activeCampaign.audiences, audience];
 
       const { error } = await supabase
         .from('campaigns')
         .update({
-          audiences: updatedCampaign.audiences,
+          audiences: updatedAudiences,
           updated_at: timestamp
         })
         .eq('id', activeCampaign.id);
 
       if (error) throw error;
 
-      setActiveCampaignWithPersistence(updatedCampaign);
+      const updatedCampaign = {
+        ...activeCampaign,
+        audiences: updatedAudiences,
+        updatedAt: timestamp
+      };
+
+      updateActiveCampaign(updatedCampaign);
+      setCampaigns(prev => 
+        prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
+      );
+
+      // Log activity
+      await supabase
+        .from('campaign_activity_log')
+        .insert({
+          campaign_id: activeCampaign.id,
+          user_id: user?.id,
+          action_type: 'audience_added',
+          action_details: {
+            audience_name: audience.name,
+            audience_id: audience.id
+          },
+          created_at: timestamp
+        });
+
+      console.log('[CampaignContext] addAudienceToCampaign - Completed successfully');
+    } catch (error) {
+      console.error('[CampaignContext] addAudienceToCampaign - Error:', error);
+      throw error;
+    } finally {
+      setIsCampaignOperationLoading(false);
+    }
+  };
+
+  // ✅ UPDATED: Remove audience with proper loading state management
+  const removeAudienceFromCampaign = async (audienceId: string) => {
+    if (!activeCampaign) {
+      console.warn('No active campaign to remove audience from');
+      return;
+    }
+
+    console.log('[CampaignContext] removeAudienceFromCampaign - Starting:', audienceId);
+    setIsCampaignOperationLoading(true);
+
+    try {
+      const { timestamp } = createTimestamp();
+      const removedAudience = activeCampaign.audiences.find(a => a.id === audienceId);
+      const updatedAudiences = activeCampaign.audiences.filter(a => a.id !== audienceId);
+
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          audiences: updatedAudiences,
+          updated_at: timestamp
+        })
+        .eq('id', activeCampaign.id);
+
+      if (error) throw error;
+
+      const updatedCampaign = {
+        ...activeCampaign,
+        audiences: updatedAudiences,
+        updatedAt: timestamp
+      };
+
+      updateActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
@@ -1152,14 +1075,21 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
       }
 
-      console.log('[CampaignContext] removeAudienceFromCampaign: Successfully removed audience:', audienceId);
+      console.log('[CampaignContext] removeAudienceFromCampaign - Completed successfully');
     } catch (error) {
-      console.error('[CampaignContext] removeAudienceFromCampaign: Error:', error);
+      console.error('[CampaignContext] removeAudienceFromCampaign - Error:', error);
+      throw error;
+    } finally {
+      setIsCampaignOperationLoading(false);
     }
   };
 
+  // ✅ UPDATED: Update campaign details with proper loading state management
   const updateCampaignDetails = async (details: Partial<Campaign>) => {
     if (!activeCampaign) return;
+
+    console.log('[CampaignContext] updateCampaignDetails - Starting');
+    setIsCampaignOperationLoading(true);
 
     try {
       const { timestamp } = createTimestamp();
@@ -1188,12 +1118,17 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (error) throw error;
 
-      setActiveCampaignWithPersistence(updatedCampaign);
+      updateActiveCampaign(updatedCampaign);
       setCampaigns(prev => 
         prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c)
       );
+
+      console.log('[CampaignContext] updateCampaignDetails - Completed successfully');
     } catch (error) {
-      console.error('Error updating campaign:', error);
+      console.error('[CampaignContext] updateCampaignDetails - Error:', error);
+      throw error;
+    } finally {
+      setIsCampaignOperationLoading(false);
     }
   };
 
@@ -1270,21 +1205,24 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  // ✅ UPDATED: Submit campaign request with proper loading state management
   const submitCampaignRequest = async (notes?: string) => {
     if (!activeCampaign || !user) return;
 
-    // FIXED: Ensure authenticated user and valid campaign ID are available
-    if (!user?.id) {
-      console.error("submitCampaignRequest: No authenticated user found.");
-      return;
-    }
-
-    if (!activeCampaign.id) {
-      console.error("submitCampaignRequest: No valid campaign ID found.");
-      return;
-    }
+    console.log('[CampaignContext] submitCampaignRequest - Starting');
+    setIsCampaignOperationLoading(true);
 
     try {
+      if (!user?.id) {
+        console.error("submitCampaignRequest: No authenticated user found.");
+        return;
+      }
+
+      if (!activeCampaign.id) {
+        console.error("submitCampaignRequest: No valid campaign ID found.");
+        return;
+      }
+
       const { timestamp } = createTimestamp();
       
       // FIXED: Generate a unique ID for the audience request
@@ -1357,9 +1295,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
       
       setRequests(prev => [createdRequest, ...prev]);
+
+      console.log('[CampaignContext] submitCampaignRequest - Completed successfully');
     } catch (error) {
-      console.error('Error submitting request:', error);
+      console.error('[CampaignContext] submitCampaignRequest - Error:', error);
       throw error;
+    } finally {
+      setIsCampaignOperationLoading(false);
     }
   };
 
@@ -1626,6 +1568,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activityLog,
       filters,
       loading,
+      hasActiveCampaignLoaded,
       isCampaignOperationLoading,
       initializeCampaign,
       addAudienceToCampaign,
@@ -1658,8 +1601,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       deleteCampaign,
       archiveCampaign,
       unarchiveCampaign,
-      waitForCampaignReady,
-      clearActiveCampaign
+      waitForCampaignReady
     }}>
       {children}
     </CampaignContext.Provider>
