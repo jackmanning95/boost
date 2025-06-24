@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useCompany } from '../../context/CompanyContext';
+import { useAuth } from '../../context/AuthContext';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import CompanyAccountModal from './CompanyAccountModal';
@@ -21,6 +22,7 @@ const PLATFORM_OPTIONS = {
 const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const { activeCampaign, updateCampaignDetails } = useCampaign();
   const { companyAccountIds, fetchCompanyAccountIds, createCompanyAccountId } = useCompany();
+  const { user } = useAuth();
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [customSocial, setCustomSocial] = useState('');
   const [customProgrammatic, setCustomProgrammatic] = useState('');
@@ -32,16 +34,21 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     const loadAccountIds = async () => {
       setIsLoadingAccounts(true);
       try {
+        console.log('[CampaignForm] Loading account IDs for user:', user);
+        console.log('[CampaignForm] User company ID:', user?.companyId);
+        
         await fetchCompanyAccountIds();
+        
+        console.log('[CampaignForm] Loaded account IDs:', companyAccountIds);
       } catch (error) {
-        console.error('Error loading company account IDs:', error);
+        console.error('[CampaignForm] Error loading company account IDs:', error);
       } finally {
         setIsLoadingAccounts(false);
       }
     };
 
     loadAccountIds();
-  }, [fetchCompanyAccountIds]);
+  }, [fetchCompanyAccountIds, user]);
 
   if (!activeCampaign) return null;
 
@@ -77,11 +84,17 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   };
 
   const handleAccountSelection = (accountId: string) => {
+    console.log('[CampaignForm] Selected account ID:', accountId);
+    console.log('[CampaignForm] Available accounts:', companyAccountIds);
+    
     const selectedAccount = companyAccountIds.find(account => account.id === accountId);
+    console.log('[CampaignForm] Found selected account:', selectedAccount);
+    
     updateCampaignDetails({ 
       selectedCompanyAccountId: accountId,
       advertiserName: selectedAccount?.accountName // Set advertiser name from account
     });
+    
     if (formErrors.selectedCompanyAccountId) {
       setFormErrors(prev => {
         const updated = { ...prev };
@@ -93,7 +106,10 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
 
   const handleCreateAccount = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => {
     try {
+      console.log('[CampaignForm] Creating new account with data:', accountData);
       const newAccount = await createCompanyAccountId(accountData);
+      console.log('[CampaignForm] Created new account:', newAccount);
+      
       // Automatically select the newly created account
       updateCampaignDetails({ 
         selectedCompanyAccountId: newAccount.id,
@@ -101,7 +117,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       });
       setShowAccountModal(false);
     } catch (error) {
-      console.error('Error creating account:', error);
+      console.error('[CampaignForm] Error creating account:', error);
       throw error;
     }
   };
@@ -191,7 +207,9 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                 disabled={isLoadingAccounts}
               >
                 <option value="">
-                  {isLoadingAccounts ? 'Loading accounts...' : 'Select an account'}
+                  {isLoadingAccounts ? 'Loading accounts...' : 
+                   companyAccountIds.length === 0 ? 'No accounts available - add one' : 
+                   'Select an account'}
                 </option>
                 {companyAccountIds.map(account => (
                   <option key={account.id} value={account.id}>

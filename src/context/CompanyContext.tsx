@@ -149,12 +149,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!user) return;
 
     const targetCompanyId = companyId || user.companyId;
-    if (!targetCompanyId) return;
+    if (!targetCompanyId) {
+      console.error('[CompanyContext] fetchCompanyAccountIds: No company ID available');
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
 
+      console.log('[CompanyContext] Fetching account IDs for company:', targetCompanyId);
+      
       const { data, error: fetchError } = await supabase
         .from('company_account_ids')
         .select('*')
@@ -162,7 +167,12 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('[CompanyContext] Fetched account IDs:', data);
 
       const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
         id: account.id,
@@ -192,6 +202,9 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
+      console.log('[CompanyContext] Creating account ID with data:', accountData);
+      console.log('[CompanyContext] For company ID:', user.companyId);
+      
       const { data, error } = await supabase
         .from('company_account_ids')
         .insert({
@@ -204,7 +217,12 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[CompanyContext] Error creating company account ID:', error);
+        throw error;
+      }
+
+      console.log('[CompanyContext] Created account ID:', data);
 
       const newAccount: CompanyAccountId = {
         id: data.id,
