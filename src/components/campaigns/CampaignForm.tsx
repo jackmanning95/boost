@@ -4,7 +4,7 @@ import { useCompany } from '../../context/CompanyContext';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import CompanyAccountModal from './CompanyAccountModal';
-import { Calendar, DollarSign, Monitor, Building, Plus, Edit } from 'lucide-react';
+import { Calendar, DollarSign, Monitor, Building, Plus, Edit, Hash } from 'lucide-react';
 import { CompanyAccountId } from '../../types';
 
 interface CampaignFormProps {
@@ -235,6 +235,18 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               </div>
             )}
           </div>
+
+          {!selectedAccount && (
+            <div>
+              <Input
+                label="Advertiser Name"
+                value={activeCampaign.advertiserName || ''}
+                onChange={(e) => handleInputChange('advertiserName', e.target.value)}
+                placeholder="Enter advertiser name"
+                helpText="This will be displayed in campaign cards and summaries"
+              />
+            </div>
+          )}
         </div>
       </div>
 
