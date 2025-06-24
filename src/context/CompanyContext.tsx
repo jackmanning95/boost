@@ -144,13 +144,21 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Fetch company account IDs
+  // Fetch company account IDs - ENHANCED WITH DEBUGGING
   const fetchCompanyAccountIds = async (companyId?: string) => {
-    if (!user) return;
+    if (!user) {
+      console.log('[CompanyContext] fetchCompanyAccountIds: No user available');
+      return;
+    }
 
     const targetCompanyId = companyId || user.companyId;
     if (!targetCompanyId) {
       console.error('[CompanyContext] fetchCompanyAccountIds: No company ID available');
+      console.log('[CompanyContext] Debug info:', {
+        providedCompanyId: companyId,
+        userCompanyId: user.companyId,
+        user: user
+      });
       return;
     }
 
@@ -159,6 +167,12 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setError(null);
 
       console.log('[CompanyContext] Fetching account IDs for company:', targetCompanyId);
+      console.log('[CompanyContext] Current user:', {
+        id: user.id,
+        email: user.email,
+        companyId: user.companyId,
+        role: user.role
+      });
       
       const { data, error: fetchError } = await supabase
         .from('company_account_ids')
@@ -167,35 +181,66 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
+      console.log('[CompanyContext] Supabase response for company_account_ids:', {
+        data,
+        error: fetchError,
+        targetCompanyId,
+        queryUsed: `company_account_ids where company_id = ${targetCompanyId} and is_active = true`
+      });
+
       if (fetchError) {
         console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
         throw fetchError;
       }
 
-      console.log('[CompanyContext] Fetched account IDs:', data);
+      console.log('[CompanyContext] Raw data from Supabase:', data);
+      console.log('[CompanyContext] Number of records found:', data?.length || 0);
 
-      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
-        id: account.id,
-        companyId: account.company_id,
-        platform: account.platform,
-        accountId: account.account_id,
-        accountName: account.account_name,
-        isActive: account.is_active,
-        createdAt: account.created_at,
-        updatedAt: account.updated_at
-      }));
+      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => {
+        console.log('[CompanyContext] Transforming account:', account);
+        return {
+          id: account.id,
+          companyId: account.company_id,
+          platform: account.platform,
+          accountId: account.account_id,
+          accountName: account.account_name,
+          isActive: account.is_active,
+          createdAt: account.created_at,
+          updatedAt: account.updated_at
+        };
+      });
 
+      console.log('[CompanyContext] Transformed accounts:', transformedAccounts);
       setCompanyAccountIds(transformedAccounts);
 
+      // Additional debugging for RLS issues
+      if (data && data.length === 0) {
+        console.warn('[CompanyContext] No account IDs found. Checking RLS permissions...');
+        
+        // Test if we can read from the table at all
+        const { data: testData, error: testError } = await supabase
+          .from('company_account_ids')
+          .select('count')
+          .limit(1);
+        
+        console.log('[CompanyContext] RLS test query result:', { testData, testError });
+        
+        if (testError) {
+          console.error('[CompanyContext] RLS test failed - user cannot read company_account_ids table:', testError);
+        } else {
+          console.log('[CompanyContext] RLS test passed - user can read table, but no records match the filter');
+        }
+      }
+
     } catch (err) {
-      console.error('Error fetching company account IDs:', err);
+      console.error('[CompanyContext] Error in fetchCompanyAccountIds:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
     } finally {
       setLoading(false);
     }
   };
 
-  // Create a new company account ID
+  // Create a new company account ID - ENHANCED WITH DEBUGGING
   const createCompanyAccountId = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>): Promise<CompanyAccountId> => {
     if (!user?.companyId) {
       throw new Error('No company associated with user');
@@ -205,15 +250,19 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.log('[CompanyContext] Creating account ID with data:', accountData);
       console.log('[CompanyContext] For company ID:', user.companyId);
       
+      const insertData = {
+        company_id: user.companyId,
+        platform: accountData.platform,
+        account_id: accountData.accountId,
+        account_name: accountData.accountName,
+        is_active: accountData.isActive
+      };
+      
+      console.log('[CompanyContext] Insert data:', insertData);
+      
       const { data, error } = await supabase
         .from('company_account_ids')
-        .insert({
-          company_id: user.companyId,
-          platform: accountData.platform,
-          account_id: accountData.accountId,
-          account_name: accountData.accountName,
-          is_active: accountData.isActive
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -222,7 +271,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw error;
       }
 
-      console.log('[CompanyContext] Created account ID:', data);
+      console.log('[CompanyContext] Created account ID successfully:', data);
 
       const newAccount: CompanyAccountId = {
         id: data.id,
@@ -235,11 +284,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: data.updated_at
       };
 
-      setCompanyAccountIds(prev => [newAccount, ...prev]);
+      // Update local state
+      setCompanyAccountIds(prev => {
+        const updated = [newAccount, ...prev];
+        console.log('[CompanyContext] Updated local state with new account:', updated);
+        return updated;
+      });
+      
       return newAccount;
 
     } catch (err) {
-      console.error('Error creating company account ID:', err);
+      console.error('[CompanyContext] Error creating company account ID:', err);
       throw err;
     }
   };
@@ -525,18 +580,28 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Refresh all data
   const refreshData = async () => {
+    console.log('[CompanyContext] Refreshing all data...');
     await Promise.all([
       fetchCompanies(),
       fetchCompanyUsers(),
       fetchUserInvitations(),
       fetchCompanyAccountIds()
     ]);
+    console.log('[CompanyContext] Data refresh completed');
   };
 
-  // Initialize data on mount
+  // Initialize data on mount - ENHANCED WITH DEBUGGING
   useEffect(() => {
     if (user) {
+      console.log('[CompanyContext] User detected, initializing data for user:', {
+        id: user.id,
+        email: user.email,
+        companyId: user.companyId,
+        role: user.role
+      });
       refreshData();
+    } else {
+      console.log('[CompanyContext] No user detected, skipping data initialization');
     }
   }, [user]);
 

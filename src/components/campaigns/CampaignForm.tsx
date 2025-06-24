@@ -28,18 +28,38 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const [customProgrammatic, setCustomProgrammatic] = useState('');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
 
+  // ENHANCED useEffect with comprehensive debugging
   useEffect(() => {
-    // Fetch company account IDs when component mounts
     const loadAccountIds = async () => {
+      console.log('[CampaignForm] useEffect triggered');
+      console.log('[CampaignForm] Current user:', user);
+      console.log('[CampaignForm] User company ID:', user?.companyId);
+      console.log('[CampaignForm] Current companyAccountIds:', companyAccountIds);
+      console.log('[CampaignForm] Accounts already loaded:', accountsLoaded);
+
+      if (!user) {
+        console.log('[CampaignForm] No user available, skipping account load');
+        return;
+      }
+
+      if (!user.companyId) {
+        console.log('[CampaignForm] User has no company ID, skipping account load');
+        return;
+      }
+
+      if (accountsLoaded) {
+        console.log('[CampaignForm] Accounts already loaded, skipping reload');
+        return;
+      }
+
       setIsLoadingAccounts(true);
       try {
-        console.log('[CampaignForm] Loading account IDs for user:', user);
-        console.log('[CampaignForm] User company ID:', user?.companyId);
-        
+        console.log('[CampaignForm] Starting to fetch company account IDs...');
         await fetchCompanyAccountIds();
-        
-        console.log('[CampaignForm] Loaded account IDs:', companyAccountIds);
+        setAccountsLoaded(true);
+        console.log('[CampaignForm] Successfully fetched company account IDs');
       } catch (error) {
         console.error('[CampaignForm] Error loading company account IDs:', error);
       } finally {
@@ -48,7 +68,22 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     };
 
     loadAccountIds();
-  }, [fetchCompanyAccountIds, user]);
+  }, [user, fetchCompanyAccountIds, accountsLoaded]);
+
+  // Additional useEffect to log when companyAccountIds changes
+  useEffect(() => {
+    console.log('[CampaignForm] companyAccountIds updated:', companyAccountIds);
+    console.log('[CampaignForm] Number of accounts:', companyAccountIds.length);
+    companyAccountIds.forEach((account, index) => {
+      console.log(`[CampaignForm] Account ${index + 1}:`, {
+        id: account.id,
+        platform: account.platform,
+        accountName: account.accountName,
+        accountId: account.accountId,
+        isActive: account.isActive
+      });
+    });
+  }, [companyAccountIds]);
 
   if (!activeCampaign) return null;
 
@@ -84,8 +119,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   };
 
   const handleAccountSelection = (accountId: string) => {
-    console.log('[CampaignForm] Selected account ID:', accountId);
-    console.log('[CampaignForm] Available accounts:', companyAccountIds);
+    console.log('[CampaignForm] handleAccountSelection called with:', accountId);
+    console.log('[CampaignForm] Available accounts for selection:', companyAccountIds);
     
     const selectedAccount = companyAccountIds.find(account => account.id === accountId);
     console.log('[CampaignForm] Found selected account:', selectedAccount);
@@ -169,6 +204,16 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
 
   const selectedAccount = companyAccountIds.find(account => account.id === activeCampaign.selectedCompanyAccountId);
 
+  // Debug logging for render
+  console.log('[CampaignForm] Rendering with state:', {
+    isLoadingAccounts,
+    accountsLoaded,
+    companyAccountIdsLength: companyAccountIds.length,
+    selectedAccountId: activeCampaign.selectedCompanyAccountId,
+    selectedAccount,
+    userCompanyId: user?.companyId
+  });
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Campaign Name */}
@@ -199,6 +244,19 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Platform Account
             </label>
+            
+            {/* Debug Information Panel */}
+            <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Debug Information:</h4>
+              <div className="text-xs text-blue-700 space-y-1">
+                <div>Loading Accounts: {isLoadingAccounts ? 'Yes' : 'No'}</div>
+                <div>Accounts Loaded: {accountsLoaded ? 'Yes' : 'No'}</div>
+                <div>Available Accounts: {companyAccountIds.length}</div>
+                <div>User Company ID: {user?.companyId || 'None'}</div>
+                <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
+              </div>
+            </div>
+            
             <div className="flex gap-3">
               <select
                 value={activeCampaign.selectedCompanyAccountId || ''}
