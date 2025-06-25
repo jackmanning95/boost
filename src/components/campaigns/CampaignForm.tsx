@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import CompanyAccountModal from './CompanyAccountModal';
@@ -29,6 +30,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // ENHANCED useEffect with comprehensive debugging
   useEffect(() => {
@@ -57,6 +59,18 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       setIsLoadingAccounts(true);
       try {
         console.log('[CampaignForm] Starting to fetch company account IDs...');
+        
+        // DEBUGGING: Call the debug function from within the app
+        console.log('[CampaignForm] Calling debug function with user session...');
+        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions');
+        
+        if (debugError) {
+          console.error('[CampaignForm] Debug function error:', debugError);
+        } else {
+          console.log('[CampaignForm] Debug function result:', debugData);
+          setDebugInfo(debugData);
+        }
+        
         await fetchCompanyAccountIds();
         setAccountsLoaded(true);
         console.log('[CampaignForm] Successfully fetched company account IDs');
@@ -254,6 +268,14 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                 <div>Available Accounts: {companyAccountIds.length}</div>
                 <div>User Company ID: {user?.companyId || 'None'}</div>
                 <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
+                {debugInfo && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-blue-800 font-medium">Session Debug Info</summary>
+                    <pre className="mt-2 text-xs bg-blue-100 p-2 rounded overflow-auto max-h-40">
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                  </details>
+                )}
               </div>
             </div>
             
