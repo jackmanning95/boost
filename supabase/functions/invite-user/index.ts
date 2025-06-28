@@ -176,12 +176,12 @@ Deno.serve(async (req) => {
 
     console.log('Company verified:', companyData)
 
-    // Check if user already exists in auth.users
+    // Check if user already exists in auth.users using listUsers
     let existingAuthUser
     try {
-      const { data: authUserData, error: authLookupError } = await supabaseAdmin.auth.admin.getUserByEmail(email)
+      const { data: usersData, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
       
-      if (authLookupError && !authLookupError.message.includes('User not found')) {
+      if (authLookupError) {
         console.error('Auth lookup error:', authLookupError)
         return new Response(
           JSON.stringify({ 
@@ -195,7 +195,8 @@ Deno.serve(async (req) => {
         )
       }
 
-      existingAuthUser = authUserData?.user
+      // Find user by email in the list
+      existingAuthUser = usersData.users?.find(user => user.email === email)
       console.log('Auth user lookup result:', { exists: !!existingAuthUser, email })
     } catch (authError) {
       console.error('Unexpected auth lookup error:', authError)
