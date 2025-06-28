@@ -376,48 +376,11 @@ Deno.serve(async (req) => {
       }
 
       console.log('Auth user created successfully:', authData.user.id)
-
-      // Wait a moment for the trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Use upsert to handle the case where the trigger already created the profile
-      const { error: profileError } = await supabaseAdmin
-        .from('users')
-        .upsert({
-          id: authData.user.id,
-          email,
-          name,
-          role,
-          company_id: companyId,
-          platform_ids: {}
-        }, {
-          onConflict: 'id'
-        })
-
-      if (profileError) {
-        console.error('Profile upsert error:', profileError)
-        
-        // Clean up the auth user if profile creation fails
-        try {
-          await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-          console.log('Cleaned up auth user after profile creation failure')
-        } catch (cleanupError) {
-          console.error('Failed to cleanup auth user:', cleanupError)
-        }
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Failed to create user profile: ${profileError.message}` 
-          }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
-
-      console.log('User profile created/updated successfully')
+      
+      // Let the handle_new_user_with_company trigger handle the profile creation
+      // The user_metadata contains all the necessary information for the trigger
+      console.log('Profile creation will be handled by database trigger')
+      
       authUserId = authData.user.id
     }
 
