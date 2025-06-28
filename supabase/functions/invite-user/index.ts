@@ -12,10 +12,32 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Get environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    // Validate environment variables
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing environment variables:', { 
+        hasUrl: !!supabaseUrl, 
+        hasServiceKey: !!supabaseServiceKey 
+      })
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Server configuration error: Missing required environment variables' 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
     // Create Supabase admin client
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      supabaseServiceKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -35,37 +57,70 @@ Deno.serve(async (req) => {
           error: 'Missing required fields: email, name, role, companyId' 
         }),
         { 
-          status: 200, 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid email format' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Check if admin methods are available
+    if (!supabaseAdmin.auth.admin || typeof supabaseAdmin.auth.admin.listUsers !== 'function') {
+      console.error('Admin methods not available on Supabase client')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Server configuration error: Admin privileges not available' 
+        }),
+        { 
+          status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
     // First, check if user already exists in auth.users
-    const { data: existingAuthUser, error: authLookupError } = await supabaseAdmin.auth.admin.getUserByEmail(email)
+    const { data: existingAuthUser, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
     
-    if (authLookupError && authLookupError.message !== 'User not found') {
+    if (authLookupError) {
       console.error('Auth lookup error:', authLookupError)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Failed to check existing user: ${authLookupError.message}` 
+          error: `Failed to check existing users: ${authLookupError.message}` 
         }),
         { 
-          status: 200, 
+          status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
+    // Find user by email
+    const existingUser = existingAuthUser?.users?.find(user => user.email === email)
+
     let authUserId: string
 
-    if (existingAuthUser?.user) {
+    if (existingUser) {
       // User exists in auth, check if they have a profile in public.users
       const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
         .from('users')
         .select('id, company_id, email')
-        .eq('id', existingAuthUser.user.id)
+        .eq('id', existingUser.id)
         .single()
 
       if (profileLookupError && profileLookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -76,7 +131,7 @@ Deno.serve(async (req) => {
             error: `Failed to check user profile: ${profileLookupError.message}` 
           }),
           { 
-            status: 200, 
+            status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
@@ -91,7 +146,7 @@ Deno.serve(async (req) => {
               error: 'User is already a member of this company' 
             }),
             { 
-              status: 200, 
+              status: 400, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
           )
@@ -102,7 +157,7 @@ Deno.serve(async (req) => {
               error: 'User is already a member of another company' 
             }),
             { 
-              status: 200, 
+              status: 400, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
           )
@@ -115,7 +170,7 @@ Deno.serve(async (req) => {
               role,
               company_id: companyId
             })
-            .eq('id', existingAuthUser.user.id)
+            .eq('id', existingUser.id)
 
           if (updateError) {
             console.error('Profile update error:', updateError)
@@ -125,20 +180,20 @@ Deno.serve(async (req) => {
                 error: `Failed to update user profile: ${updateError.message}` 
               }),
               { 
-                status: 200, 
+                status: 500, 
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
               }
             )
           }
 
-          authUserId = existingAuthUser.user.id
+          authUserId = existingUser.id
         }
       } else {
         // User exists in auth but no profile, create profile
         const { error: profileError } = await supabaseAdmin
           .from('users')
           .insert({
-            id: existingAuthUser.user.id,
+            id: existingUser.id,
             email,
             name,
             role,
@@ -154,13 +209,13 @@ Deno.serve(async (req) => {
               error: `Failed to create user profile: ${profileError.message}` 
             }),
             { 
-              status: 200, 
+              status: 500, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
           )
         }
 
-        authUserId = existingAuthUser.user.id
+        authUserId = existingUser.id
       }
     } else {
       // User doesn't exist, create new auth user
@@ -184,7 +239,20 @@ Deno.serve(async (req) => {
             error: `Failed to create user: ${authError.message}` 
           }),
           { 
-            status: 200, 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      if (!authData?.user?.id) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to create user: No user ID returned' 
+          }),
+          { 
+            status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
@@ -214,7 +282,7 @@ Deno.serve(async (req) => {
             error: `Failed to create user profile: ${profileError.message}` 
           }),
           { 
-            status: 200, 
+            status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
@@ -256,7 +324,7 @@ Deno.serve(async (req) => {
         error: `An unexpected error occurred: ${error instanceof Error ? error.message : String(error)}` 
       }),
       { 
-        status: 200, 
+        status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
