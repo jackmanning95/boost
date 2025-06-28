@@ -1447,19 +1447,41 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchActivityLog = async (campaignId: string) => {
     try {
-      // FIXED: Remove the explicit foreign key hint and let Supabase infer the relationship
-      const { data, error } = await supabase
+      // First, fetch the activity logs without user data
+      const { data: activityData, error: activityError } = await supabase
         .from('campaign_activity_log')
-        .select(`
-          *,
-          users (name, role)
-        `)
+        .select('*')
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (activityError) throw activityError;
 
-      const formattedActivity: CampaignActivity[] = data?.map(item => ({
+      if (!activityData || activityData.length === 0) {
+        setActivityLog([]);
+        return;
+      }
+
+      // Extract unique user IDs from the activity logs
+      const userIds = [...new Set(activityData.map(item => item.user_id).filter(Boolean))];
+
+      // Fetch user data separately if there are user IDs
+      let usersMap: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, name, role')
+          .in('id', userIds);
+
+        if (!usersError && usersData) {
+          usersMap = usersData.reduce((acc, user) => {
+            acc[user.id] = { name: user.name, role: user.role };
+            return acc;
+          }, {} as Record<string, any>);
+        }
+      }
+
+      // Combine activity logs with user data
+      const formattedActivity: CampaignActivity[] = activityData.map(item => ({
         id: item.id,
         campaignId: item.campaign_id,
         userId: item.user_id,
@@ -1468,8 +1490,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         oldValues: item.old_values,
         newValues: item.new_values,
         createdAt: item.created_at,
-        user: item.users
-      })) || [];
+        user: item.user_id ? usersMap[item.user_id] : null
+      }));
 
       setActivityLog(formattedActivity);
     } catch (error) {
