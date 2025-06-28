@@ -19,6 +19,7 @@ const AudienceCard: React.FC<AudienceCardProps> = ({
   onDeselect
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isNameExpanded, setIsNameExpanded] = useState(false);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -33,6 +34,10 @@ const AudienceCard: React.FC<AudienceCardProps> = ({
 
   const toggleDescription = () => {
     setIsExpanded(!isExpanded);
+  };
+
+  const toggleName = () => {
+    setIsNameExpanded(!isNameExpanded);
   };
 
   // Format CPM to display as currency
@@ -54,7 +59,25 @@ const AudienceCard: React.FC<AudienceCardProps> = ({
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-4">
           <div className="flex-1">
-            <CardTitle className="text-lg font-bold line-clamp-2">{audience.name}</CardTitle>
+            <div className={`text-lg font-bold ${isNameExpanded ? '' : 'line-clamp-2'}`}>
+              {audience.name}
+            </div>
+            {audience.name.length > 50 && (
+              <button
+                onClick={toggleName}
+                className="text-[#509fe0] text-sm font-medium flex items-center mt-1 hover:underline"
+              >
+                {isNameExpanded ? (
+                  <>
+                    Show Less <ChevronUp size={14} className="ml-1" />
+                  </>
+                ) : (
+                  <>
+                    Read More <ChevronDown size={14} className="ml-1" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
           {(onSelect || onDeselect) && (
             <Button
