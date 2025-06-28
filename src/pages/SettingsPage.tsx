@@ -6,7 +6,7 @@ import Input from '../components/ui/Input';
 import TeamManagement from '../components/company/TeamManagement';
 import { useAuth } from '../context/AuthContext';
 import { User, Settings, Shield, Save, Users, Building } from 'lucide-react';
-import AdvertiserAccountManager from '../components/settings/AdvertiserAccountManager';
+import CompanyAccountManager from '../components/settings/CompanyAccountManager';
 
 const SettingsPage: React.FC = () => {
   const { user, updateUserProfile, isCompanyAdmin } = useAuth();
@@ -164,7 +164,7 @@ const SettingsPage: React.FC = () => {
             )}
             
             {activeTab === 'platforms' && (
-              <AdvertiserAccountManager />
+              <CompanyAccountManager />
             )}
 
             {activeTab === 'team' && isCompanyAdmin && (

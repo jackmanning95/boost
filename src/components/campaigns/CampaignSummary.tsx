@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCampaign } from '../../context/CampaignContext';
-import { useUserAdvertiserAccounts } from '../../context/UserAdvertiserAccountContext';
+import { useCompany } from '../../context/CompanyContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -13,7 +13,7 @@ interface CampaignSummaryProps {
 
 const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
   const { activeCampaign, submitCampaignRequest } = useCampaign();
-  const { advertiserAccounts } = useUserAdvertiserAccounts();
+  const { companyAccountIds } = useCompany();
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -41,7 +41,7 @@ const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
     });
   };
   
-  const selectedAccount = advertiserAccounts.find(account => account.id === activeCampaign.selectedAdvertiserAccountId);
+  const selectedAccount = companyAccountIds.find(account => account.id === activeCampaign.selectedCompanyAccountId);
   
   return (
     <div className="space-y-6">
@@ -135,12 +135,12 @@ const CampaignSummary: React.FC<CampaignSummaryProps> = ({ onSubmit }) => {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Advertiser Name</p>
-                <p className="font-medium">{selectedAccount.advertiserName}</p>
+                <p className="font-medium">{selectedAccount.accountName}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Account ID</p>
                 <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
-                  {selectedAccount.advertiserId}
+                  {selectedAccount.accountId}
                 </p>
               </div>
             </div>

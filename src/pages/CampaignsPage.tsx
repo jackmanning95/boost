@@ -929,16 +929,16 @@ const CampaignsPage: React.FC = () => {
                                             {campaign.archived ? `Archived on ${formatDate(campaign.updatedAt)}` : getLastUpdate(campaign)}
                                           </span>
                                         </div>
-                                        {/* Display selected advertiser account */}
-                                        {campaign.selectedAdvertiserAccount && (
+                                        {/* Display selected platform account and advertiser */}
+                                        {campaign.selectedCompanyAccount && (
                                           <div className="flex items-center space-x-2">
                                             <Hash size={14} className="text-blue-500" />
                                             <span className="text-sm text-blue-700 font-medium">
-                                              {campaign.selectedAdvertiserAccount.platform} - {campaign.selectedAdvertiserAccount.advertiserName}
+                                              {campaign.selectedCompanyAccount.platform} - {campaign.selectedCompanyAccount.accountName}
                                             </span>
                                           </div>
                                         )}
-                                        {campaign.advertiserName && !campaign.selectedAdvertiserAccount && (
+                                        {campaign.advertiserName && !campaign.selectedCompanyAccount && (
                                           <div className="flex items-center space-x-2">
                                             <User size={14} className="text-green-500" />
                                             <span className="text-sm text-green-700 font-medium">

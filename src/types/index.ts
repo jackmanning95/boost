@@ -54,15 +54,6 @@ export interface UserInvitation {
   expiresAt: string;
 }
 
-// NEW: Global AdvertiserAccount interface (moved from settings component)
-export interface AdvertiserAccount {
-  id: string;
-  platform: string;
-  advertiserName: string;
-  advertiserId: string;
-  createdAt: string;
-}
-
 export interface AudienceSegment {
   id: string;
   name: string;
@@ -90,9 +81,8 @@ export interface Campaign {
   updatedAt: string;
   approvedAt?: string;
   archived?: boolean;
-  // UPDATED: Replace company account fields with advertiser account fields
-  selectedAdvertiserAccountId?: string; // Links to AdvertiserAccount
-  selectedAdvertiserAccount?: AdvertiserAccount; // Populated when fetched
+  selectedCompanyAccountId?: string; // Links to CompanyAccountId
+  selectedCompanyAccount?: CompanyAccountId; // Populated when fetched
   advertiserName?: string; // Advertiser name for campaign cards
   users?: {
     name: string;

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import { X } from 'lucide-react';
-import { AdvertiserAccount } from '../../types';
+import { CompanyAccountId } from '../../types';
 
-interface AdvertiserAccountModalProps {
+interface CompanyAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => Promise<void>;
-  account?: AdvertiserAccount | null;
+  onSave: (account: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => Promise<void>;
+  account?: CompanyAccountId | null;
 }
 
 const PLATFORMS = [
@@ -29,27 +29,30 @@ const PLATFORMS = [
   'Other'
 ];
 
-const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
+const CompanyAccountModal: React.FC<CompanyAccountModalProps> = ({
   isOpen,
   onClose,
   onSave,
   account
 }) => {
   const [platform, setPlatform] = useState('');
-  const [advertiserName, setAdvertiserName] = useState('');
-  const [advertiserId, setAdvertiserId] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (account) {
       setPlatform(account.platform);
-      setAdvertiserName(account.advertiserName);
-      setAdvertiserId(account.advertiserId);
+      setAccountId(account.accountId);
+      setAccountName(account.accountName || '');
+      setIsActive(account.isActive);
     } else {
       setPlatform('');
-      setAdvertiserName('');
-      setAdvertiserId('');
+      setAccountId('');
+      setAccountName('');
+      setIsActive(true);
     }
     setErrors({});
   }, [account, isOpen]);
@@ -61,12 +64,12 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
       newErrors.platform = 'Platform is required';
     }
 
-    if (!advertiserName.trim()) {
-      newErrors.advertiserName = 'Advertiser name is required';
+    if (!accountId.trim()) {
+      newErrors.accountId = 'Account ID is required';
     }
 
-    if (!advertiserId.trim()) {
-      newErrors.advertiserId = 'Advertiser ID is required';
+    if (!accountName.trim()) {
+      newErrors.accountName = 'Account name is required';
     }
 
     setErrors(newErrors);
@@ -82,12 +85,13 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     try {
       await onSave({
         platform,
-        advertiserName: advertiserName.trim(),
-        advertiserId: advertiserId.trim()
+        accountId: accountId.trim(),
+        accountName: accountName.trim(),
+        isActive
       });
       onClose();
     } catch (error) {
-      console.error('Error saving advertiser account:', error);
+      console.error('Error saving company account:', error);
       setErrors({ submit: 'Failed to save account. Please try again.' });
     } finally {
       setIsSubmitting(false);
@@ -136,21 +140,34 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
           </div>
 
           <Input
-            label="Advertiser Name"
-            value={advertiserName}
-            onChange={(e) => setAdvertiserName(e.target.value)}
-            error={errors.advertiserName}
+            label="Account ID"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            error={errors.accountId}
+            placeholder="Enter the platform-specific account ID"
+          />
+
+          <Input
+            label="Account Name / Advertiser Name"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            error={errors.accountName}
             placeholder="Enter a descriptive name for this account"
             helpText="This will be displayed in campaign cards and summaries"
           />
 
-          <Input
-            label="Advertiser ID"
-            value={advertiserId}
-            onChange={(e) => setAdvertiserId(e.target.value)}
-            error={errors.advertiserId}
-            placeholder="Enter the platform-specific account ID"
-          />
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">
+              Active account
+            </label>
+          </div>
 
           {errors.submit && (
             <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
@@ -181,4 +198,4 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   );
 };
 
-export default AdvertiserAccountModal;
+export default CompanyAccountModal;
