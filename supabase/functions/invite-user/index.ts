@@ -342,7 +342,8 @@ Deno.serve(async (req) => {
           name,
           invited: true,
           role,
-          company_id: companyId
+          company_id: companyId,
+          platform_ids: {}
         }
       })
 
