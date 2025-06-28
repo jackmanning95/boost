@@ -296,18 +296,20 @@ Deno.serve(async (req) => {
           authUserId = existingAuthUser.id
         }
       } else {
-        // User exists in auth but no profile, create profile
+        // User exists in auth but no profile, use upsert to handle trigger conflicts
         console.log('Creating profile for existing auth user...')
         
         const { error: profileError } = await supabaseAdmin
           .from('users')
-          .insert({
+          .upsert({
             id: existingAuthUser.id,
             email,
             name,
             role,
             company_id: companyId,
             platform_ids: {}
+          }, {
+            onConflict: 'id'
           })
 
         if (profileError) {
@@ -338,7 +340,9 @@ Deno.serve(async (req) => {
         email_confirm: true,
         user_metadata: {
           name,
-          invited: true
+          invited: true,
+          role,
+          company_id: companyId
         }
       })
 
@@ -372,20 +376,25 @@ Deno.serve(async (req) => {
 
       console.log('Auth user created successfully:', authData.user.id)
 
-      // Create user profile in the users table
+      // Wait a moment for the trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Use upsert to handle the case where the trigger already created the profile
       const { error: profileError } = await supabaseAdmin
         .from('users')
-        .insert({
+        .upsert({
           id: authData.user.id,
           email,
           name,
           role,
           company_id: companyId,
           platform_ids: {}
+        }, {
+          onConflict: 'id'
         })
 
       if (profileError) {
-        console.error('Profile creation error:', profileError)
+        console.error('Profile upsert error:', profileError)
         
         // Clean up the auth user if profile creation fails
         try {
@@ -407,7 +416,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      console.log('User profile created successfully')
+      console.log('User profile created/updated successfully')
       authUserId = authData.user.id
     }
 
