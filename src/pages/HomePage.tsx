@@ -16,7 +16,7 @@ const HomePage: React.FC = () => {
     } else if (isCompanyAdmin) {
       return <Navigate to="/admin" replace />;
     } else {
-      return <Navigate to="/audiences" replace />;
+      return <Navigate to="/campaigns" replace />;
     }
   }
   
