@@ -36,7 +36,7 @@ serve(async (req) => {
           error: 'Missing required fields: email, name, role, companyId' 
         }),
         { 
-          status: 400, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -64,7 +64,7 @@ serve(async (req) => {
           error: `Failed to create user: ${authError.message}` 
         }),
         { 
-          status: 400, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -94,7 +94,7 @@ serve(async (req) => {
           error: `Failed to create user profile: ${profileError.message}` 
         }),
         { 
-          status: 400, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -133,7 +133,7 @@ serve(async (req) => {
         error: 'An unexpected error occurred' 
       }),
       { 
-        status: 500, 
+        status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
