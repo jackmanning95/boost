@@ -202,7 +202,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to verify user status' 
+          error: `Failed to verify user status: ${authError instanceof Error ? authError.message : String(authError)}`,
+          details: authError instanceof Error ? authError.stack : undefined
         }),
         { 
           status: 500, 
