@@ -6,7 +6,7 @@ import Input from '../components/ui/Input';
 import TeamManagement from '../components/company/TeamManagement';
 import { useAuth } from '../context/AuthContext';
 import { User, Settings, Shield, Save, Users, Building } from 'lucide-react';
-import AdvertiserAccountManager, { AdvertiserAccount } from '../components/settings/AdvertiserAccountManager';
+import AdvertiserAccountManager from '../components/settings/AdvertiserAccountManager';
 
 const SettingsPage: React.FC = () => {
   const { user, updateUserProfile, isCompanyAdmin } = useAuth();
@@ -19,23 +19,6 @@ const SettingsPage: React.FC = () => {
     name: user?.name || '',
     email: user?.email || ''
   });
-
-  const [accounts, setAccounts] = useState<AdvertiserAccount[]>([
-    {
-      id: '1',
-      platform: 'Meta',
-      advertiserName: 'Example Corp',
-      advertiserId: '2934983222',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: '2',
-      platform: 'DV360',
-      advertiserName: 'Example Corp',
-      advertiserId: '8745612390',
-      createdAt: new Date().toISOString()
-    }
-  ]);
   
   if (!user) {
     return null;
@@ -66,29 +49,6 @@ const SettingsPage: React.FC = () => {
       ...prev,
       [field]: value
     }));
-  };
-
-  const handleAddAccount = (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
-    const newAccount: AdvertiserAccount = {
-      ...account,
-      id: `account-${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setAccounts(prev => [...prev, newAccount]);
-  };
-
-  const handleUpdateAccount = (updatedAccount: AdvertiserAccount) => {
-    setAccounts(prev => 
-      prev.map(account => 
-        account.id === updatedAccount.id ? updatedAccount : account
-      )
-    );
-  };
-
-  const handleDeleteAccount = (accountId: string) => {
-    if (confirm('Are you sure you want to delete this account?')) {
-      setAccounts(prev => prev.filter(account => account.id !== accountId));
-    }
   };
   
   const tabs = [
@@ -204,12 +164,7 @@ const SettingsPage: React.FC = () => {
             )}
             
             {activeTab === 'platforms' && (
-              <AdvertiserAccountManager
-                accounts={accounts}
-                onAdd={handleAddAccount}
-                onUpdate={handleUpdateAccount}
-                onDelete={handleDeleteAccount}
-              />
+              <AdvertiserAccountManager />
             )}
 
             {activeTab === 'team' && isCompanyAdmin && (

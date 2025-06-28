@@ -5,6 +5,7 @@ import { CompanyProvider } from './context/CompanyContext';
 import { TaxonomyProvider } from './context/TaxonomyContext';
 import { CampaignProvider } from './context/CampaignContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { UserAdvertiserAccountProvider } from './context/UserAdvertiserAccountContext';
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -27,97 +28,99 @@ const App: React.FC = () => {
     <Suspense fallback={<div>Loading...</div>}>
       <AuthProvider>
         <CompanyProvider>
-          <NotificationProvider>
-            <TaxonomyProvider>
-              <CampaignProvider>
-                <Router>
-                  <Routes>
-                    {/* Public routes */}
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/signup" element={<SignUpPage />} />
-                    
-                    {/* Protected routes */}
-                    <Route 
-                      path="/audiences" 
-                      element={
-                        <PrivateRoute>
-                          <AudiencesPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/campaigns" 
-                      element={
-                        <PrivateRoute>
-                          <CampaignsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/campaigns/:id" 
-                      element={
-                        <PrivateRoute>
-                          <CampaignDetailPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/campaigns/new" 
-                      element={
-                        <PrivateRoute>
-                          <CampaignsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/campaign/build" 
-                      element={
-                        <PrivateRoute>
-                          <CampaignBuilderPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/requests" 
-                      element={
-                        <PrivateRoute>
-                          <RequestsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/admin" 
-                      element={
-                        <PrivateRoute>
-                          <AdminDashboard />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/notifications" 
-                      element={
-                        <PrivateRoute>
-                          <NotificationsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/settings" 
-                      element={
-                        <PrivateRoute>
-                          <SettingsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    
-                    {/* Catch all */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Router>
-              </CampaignProvider>
-            </TaxonomyProvider>
-          </NotificationProvider>
+          <UserAdvertiserAccountProvider>
+            <NotificationProvider>
+              <TaxonomyProvider>
+                <CampaignProvider>
+                  <Router>
+                    <Routes>
+                      {/* Public routes */}
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/signup" element={<SignUpPage />} />
+                      
+                      {/* Protected routes */}
+                      <Route 
+                        path="/audiences" 
+                        element={
+                          <PrivateRoute>
+                            <AudiencesPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/campaigns" 
+                        element={
+                          <PrivateRoute>
+                            <CampaignsPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/campaigns/:id" 
+                        element={
+                          <PrivateRoute>
+                            <CampaignDetailPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/campaigns/new" 
+                        element={
+                          <PrivateRoute>
+                            <CampaignsPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/campaign/build" 
+                        element={
+                          <PrivateRoute>
+                            <CampaignBuilderPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/requests" 
+                        element={
+                          <PrivateRoute>
+                            <RequestsPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/admin" 
+                        element={
+                          <PrivateRoute>
+                            <AdminDashboard />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/notifications" 
+                        element={
+                          <PrivateRoute>
+                            <NotificationsPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/settings" 
+                        element={
+                          <PrivateRoute>
+                            <SettingsPage />
+                          </PrivateRoute>
+                        } 
+                      />
+                      
+                      {/* Catch all */}
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Router>
+                </CampaignProvider>
+              </TaxonomyProvider>
+            </NotificationProvider>
+          </UserAdvertiserAccountProvider>
         </CompanyProvider>
       </AuthProvider>
     </Suspense>

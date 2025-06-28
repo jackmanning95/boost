@@ -2,99 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
 import AdvertiserAccountModal from './AdvertiserAccountModal';
-import { supabase } from '../../lib/supabase';
+import { useUserAdvertiserAccounts } from '../../context/UserAdvertiserAccountContext';
 import { useAuth } from '../../context/AuthContext';
 import { Building, Plus, Edit, Trash2, Calendar, AlertCircle } from 'lucide-react';
-
-export type AdvertiserAccount = {
-  id: string;
-  platform: string;
-  advertiserName: string;
-  advertiserId: string;
-  createdAt: string;
-};
+import { AdvertiserAccount } from '../../types';
 
 const AdvertiserAccountManager: React.FC = () => {
   const { user } = useAuth();
-  const [accounts, setAccounts] = useState<AdvertiserAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { 
+    advertiserAccounts, 
+    loading, 
+    error, 
+    fetchAdvertiserAccounts, 
+    createAdvertiserAccount, 
+    updateAdvertiserAccount, 
+    deleteAdvertiserAccount 
+  } = useUserAdvertiserAccounts();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      fetchAccounts();
+      fetchAdvertiserAccounts();
     }
-  }, [user]);
-
-  const fetchAccounts = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      console.log('Fetching advertiser accounts for user:', user.id);
-
-      const { data, error } = await supabase
-        .from('advertiser_accounts')
-        .select('id, platform, advertiser_name, advertiser_id, created_at, user_id')  // select only advertiser_accounts fields
-        .eq('user_id', user.id)  // use user.id directly here
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching advertiser accounts:', error);
-        setError('Failed to load advertiser accounts. Please try again.');
-        return;
-      }
-
-      console.log('Fetched advertiser accounts:', data);
-
-      const transformedAccounts: AdvertiserAccount[] = (data || []).map(account => ({
-        id: account.id,
-        platform: account.platform,
-        advertiserName: account.advertiser_name,
-        advertiserId: account.advertiser_id,
-        createdAt: account.created_at
-      }));
-
-      setAccounts(transformedAccounts);
-    } catch (error) {
-      console.error('Error in fetchAccounts:', error);
-      setError('Failed to load advertiser accounts. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [user, fetchAdvertiserAccounts]);
 
   const handleAdd = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
-    if (!user) return;
-
     try {
       console.log('Adding advertiser account:', accountData);
-
-      const { data, error } = await supabase
-        .from('advertiser_accounts')
-        .insert({
-          user_id: user.id,
-          platform: accountData.platform,
-          advertiser_name: accountData.advertiserName,
-          advertiser_id: accountData.advertiserId
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error adding advertiser account:', error);
-        alert('Failed to add advertiser account. Please try again.');
-        return;
-      }
-
-      console.log('Successfully added advertiser account:', data);
-      await fetchAccounts();
+      await createAdvertiserAccount(accountData);
     } catch (error) {
-      console.error('Error in handleAdd:', error);
+      console.error('Error adding advertiser account:', error);
       alert('Failed to add advertiser account. Please try again.');
     }
   };
@@ -102,27 +40,13 @@ const AdvertiserAccountManager: React.FC = () => {
   const handleUpdate = async (account: AdvertiserAccount) => {
     try {
       console.log('Updating advertiser account:', account);
-
-      const { error } = await supabase
-        .from('advertiser_accounts')
-        .update({
-          platform: account.platform,
-          advertiser_name: account.advertiserName,
-          advertiser_id: account.advertiserId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', account.id);
-
-      if (error) {
-        console.error('Error updating advertiser account:', error);
-        alert('Failed to update advertiser account. Please try again.');
-        return;
-      }
-
-      console.log('Successfully updated advertiser account');
-      await fetchAccounts();
+      await updateAdvertiserAccount(account.id, {
+        platform: account.platform,
+        advertiserName: account.advertiserName,
+        advertiserId: account.advertiserId
+      });
     } catch (error) {
-      console.error('Error in handleUpdate:', error);
+      console.error('Error updating advertiser account:', error);
       alert('Failed to update advertiser account. Please try again.');
     }
   };
@@ -134,22 +58,9 @@ const AdvertiserAccountManager: React.FC = () => {
 
     try {
       console.log('Deleting advertiser account:', id);
-
-      const { error } = await supabase
-        .from('advertiser_accounts')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error('Error deleting advertiser account:', error);
-        alert('Failed to delete advertiser account. Please try again.');
-        return;
-      }
-
-      console.log('Successfully deleted advertiser account');
-      await fetchAccounts();
+      await deleteAdvertiserAccount(id);
     } catch (error) {
-      console.error('Error in handleDelete:', error);
+      console.error('Error deleting advertiser account:', error);
       alert('Failed to delete advertiser account. Please try again.');
     }
   };
@@ -198,7 +109,7 @@ const AdvertiserAccountManager: React.FC = () => {
         <CardContent className="p-12 text-center">
           <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
           <p className="text-red-600 mb-4">{error}</p>
-          <Button variant="primary" onClick={fetchAccounts}>
+          <Button variant="primary" onClick={fetchAdvertiserAccounts}>
             Try Again
           </Button>
         </CardContent>
@@ -219,7 +130,7 @@ const AdvertiserAccountManager: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          {accounts.length === 0 ? (
+          {advertiserAccounts.length === 0 ? (
             <div className="text-center py-8">
               <Building size={48} className="mx-auto mb-4 text-gray-300" />
               <p className="text-gray-600 mb-4">No advertiser accounts added yet.</p>
@@ -232,7 +143,7 @@ const AdvertiserAccountManager: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {accounts.map(account => (
+              {advertiserAccounts.map(account => (
                 <div
                   key={account.id}
                   className="border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:shadow-sm transition-shadow"

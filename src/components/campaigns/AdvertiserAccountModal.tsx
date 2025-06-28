@@ -7,7 +7,7 @@ import { AdvertiserAccount } from '../../types';
 interface AdvertiserAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => void;
+  onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => Promise<void>;
   account?: AdvertiserAccount | null;
 }
 
@@ -19,15 +19,14 @@ const PLATFORMS = [
   'LinkedIn',
   'Pinterest',
   'Snapchat',
-  'Programmatic Platforms',
   'DV360',
   'The Trade Desk',
-  'StackAdapt',
-  'Yahoo! DSP',
-  'Amazon DSP',
+  'Xandr',
   'MediaMath',
-  'Reddit',
-  'Other (please specify)'
+  'Amazon DSP',
+  'Yahoo! DSP',
+  'StackAdapt',
+  'Other'
 ];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
@@ -37,27 +36,20 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   account
 }) => {
   const [platform, setPlatform] = useState('');
-  const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
   const [advertiserId, setAdvertiserId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (account) {
       setPlatform(account.platform);
       setAdvertiserName(account.advertiserName);
       setAdvertiserId(account.advertiserId);
-      if (!PLATFORMS.includes(account.platform)) {
-        setCustomPlatform(account.platform);
-        setPlatform('Other (please specify)');
-      } else {
-        setCustomPlatform('');
-      }
     } else {
       setPlatform('');
       setAdvertiserName('');
       setAdvertiserId('');
-      setCustomPlatform('');
     }
     setErrors({});
   }, [account, isOpen]);
@@ -69,15 +61,11 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
       newErrors.platform = 'Platform is required';
     }
 
-    if (platform === 'Other (please specify)' && !customPlatform.trim()) {
-      newErrors.platform = 'Please specify a platform';
-    }
-
-    if (!advertiserName) {
+    if (!advertiserName.trim()) {
       newErrors.advertiserName = 'Advertiser name is required';
     }
 
-    if (!advertiserId) {
+    if (!advertiserId.trim()) {
       newErrors.advertiserId = 'Advertiser ID is required';
     }
 
@@ -85,16 +73,24 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (validateForm()) {
-      onSave({
-        platform:
-          platform === 'Other (please specify)' ? customPlatform : platform,
-        advertiserName,
-        advertiserId
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        platform,
+        advertiserName: advertiserName.trim(),
+        advertiserId: advertiserId.trim()
       });
+      onClose();
+    } catch (error) {
+      console.error('Error saving advertiser account:', error);
+      setErrors({ submit: 'Failed to save account. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -102,10 +98,10 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">
-            {account ? 'Edit Advertiser Account' : 'Add New Advertiser Account'}
+            {account ? 'Edit Platform Account' : 'Add New Platform Account'}
           </h2>
           <button
             onClick={onClose}
@@ -115,7 +111,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Platform
@@ -134,15 +130,6 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
                 </option>
               ))}
             </select>
-            {platform === 'Other (please specify)' && (
-              <input
-                type="text"
-                placeholder="Enter custom platform name"
-                value={customPlatform}
-                onChange={(e) => setCustomPlatform(e.target.value)}
-                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
             {errors.platform && (
               <p className="mt-1 text-sm text-red-600">{errors.platform}</p>
             )}
@@ -153,7 +140,8 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
             value={advertiserName}
             onChange={(e) => setAdvertiserName(e.target.value)}
             error={errors.advertiserName}
-            placeholder="e.g., Client A"
+            placeholder="Enter a descriptive name for this account"
+            helpText="This will be displayed in campaign cards and summaries"
           />
 
           <Input
@@ -161,14 +149,29 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
             value={advertiserId}
             onChange={(e) => setAdvertiserId(e.target.value)}
             error={errors.advertiserId}
-            placeholder="Enter the platform-specific ID"
+            placeholder="Enter the platform-specific account ID"
           />
 
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
+          {errors.submit && (
+            <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
+              {errors.submit}
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isSubmitting}
+            >
               {account ? 'Save Changes' : 'Add Account'}
             </Button>
           </div>
