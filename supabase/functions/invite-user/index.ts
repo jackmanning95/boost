@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     }
 
     // Check if admin methods are available
-    if (!supabaseAdmin.auth.admin || typeof supabaseAdmin.auth.admin.listUsers !== 'function') {
+    if (!supabaseAdmin.auth.admin || typeof supabaseAdmin.auth.admin.getUserByEmail !== 'function') {
       console.error('Admin methods not available on Supabase client')
       return new Response(
         JSON.stringify({ 
@@ -93,10 +93,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // First, check if user already exists in auth.users
-    const { data: existingAuthUser, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
+    // Check if user already exists in auth.users using the more reliable getUserByEmail method
+    const { data: existingAuthUser, error: authLookupError } = await supabaseAdmin.auth.admin.getUserByEmail(email)
     
-    if (authLookupError) {
+    if (authLookupError && authLookupError.message !== 'User not found') {
       console.error('Auth lookup error:', authLookupError)
       return new Response(
         JSON.stringify({ 
@@ -110,17 +110,14 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Find user by email
-    const existingUser = existingAuthUser?.users?.find(user => user.email === email)
-
     let authUserId: string
 
-    if (existingUser) {
+    if (existingAuthUser && existingAuthUser.user) {
       // User exists in auth, check if they have a profile in public.users
       const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
         .from('users')
         .select('id, company_id, email')
-        .eq('id', existingUser.id)
+        .eq('id', existingAuthUser.user.id)
         .single()
 
       if (profileLookupError && profileLookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -170,7 +167,7 @@ Deno.serve(async (req) => {
               role,
               company_id: companyId
             })
-            .eq('id', existingUser.id)
+            .eq('id', existingAuthUser.user.id)
 
           if (updateError) {
             console.error('Profile update error:', updateError)
@@ -186,14 +183,14 @@ Deno.serve(async (req) => {
             )
           }
 
-          authUserId = existingUser.id
+          authUserId = existingAuthUser.user.id
         }
       } else {
         // User exists in auth but no profile, create profile
         const { error: profileError } = await supabaseAdmin
           .from('users')
           .insert({
-            id: existingUser.id,
+            id: existingAuthUser.user.id,
             email,
             name,
             role,
@@ -215,7 +212,7 @@ Deno.serve(async (req) => {
           )
         }
 
-        authUserId = existingUser.id
+        authUserId = existingAuthUser.user.id
       }
     } else {
       // User doesn't exist, create new auth user
