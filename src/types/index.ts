@@ -54,6 +54,15 @@ export interface UserInvitation {
   expiresAt: string;
 }
 
+// NEW: Interface for advertiser accounts (legacy support)
+export interface AdvertiserAccount {
+  id: string;
+  platform: string;
+  advertiserName: string;
+  advertiserId: string;
+  createdAt: string;
+}
+
 export interface AudienceSegment {
   id: string;
   name: string;

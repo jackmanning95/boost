@@ -19,7 +19,7 @@ interface CompanyContextType {
   deleteCompany: (companyId: string) => Promise<void>;
   
   // User Management
-  inviteUser: (email: string, role: 'admin' | 'user') => Promise<void>;
+  inviteUser: (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => Promise<void>;
   updateUserRole: (userId: string, role: 'admin' | 'user') => Promise<void>;
   removeUser: (userId: string) => Promise<void>;
   
@@ -441,8 +441,8 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Invite a user to the company
-  const inviteUser = async (email: string, role: 'admin' | 'user') => {
+  // Invite a user to the company - UPDATED WITH FIRST/LAST NAME AND EDGE FUNCTION
+  const inviteUser = async (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => {
     if (!user || (!isCompanyAdmin && !isSuperAdmin)) {
       throw new Error('Insufficient permissions to invite users');
     }
@@ -468,38 +468,40 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
         
         // User exists but has no company - add them to this company
+        const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
+        
         const { error: updateError } = await supabase
           .from('users')
           .update({
             company_id: targetCompanyId,
             role: role,
+            name: fullName,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingUser.id);
 
         if (updateError) throw updateError;
       } else {
-        // Create new auth user
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email,
-          password: 'TempPassword123!', // User should change this on first login
-          email_confirm: true
+        // Call the secure Edge Function to create the user
+        const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
+        
+        const { data: inviteResponse, error: inviteError } = await supabase.functions.invoke('invite-user', {
+          body: {
+            email,
+            name: fullName,
+            role,
+            companyId: targetCompanyId
+          }
         });
 
-        if (authError) throw authError;
+        if (inviteError) {
+          console.error('Edge function error:', inviteError);
+          throw new Error('Failed to send invitation. Please try again.');
+        }
 
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email,
-            name: email.split('@')[0], // Default name from email
-            role,
-            company_id: targetCompanyId
-          });
-
-        if (profileError) throw profileError;
+        if (!inviteResponse.success) {
+          throw new Error(inviteResponse.error || 'Failed to create user invitation');
+        }
       }
 
       // Refresh company users

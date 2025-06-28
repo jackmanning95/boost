@@ -30,6 +30,8 @@ const TeamManagement: React.FC = () => {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteData, setInviteData] = useState({
     email: '',
+    firstName: '',
+    lastName: '',
     role: 'user' as 'admin' | 'user'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,14 +47,14 @@ const TeamManagement: React.FC = () => {
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteData.email.trim() || !canManage) return;
+    if (!inviteData.email.trim() || !inviteData.firstName.trim() || !inviteData.lastName.trim() || !canManage) return;
 
     setIsSubmitting(true);
     setInviteError('');
     
     try {
-      await inviteUser(inviteData.email, inviteData.role);
-      setInviteData({ email: '', role: 'user' });
+      await inviteUser(inviteData.email, inviteData.role, inviteData.firstName, inviteData.lastName);
+      setInviteData({ email: '', firstName: '', lastName: '', role: 'user' });
       setShowInviteForm(false);
     } catch (error) {
       console.error('Error inviting user:', error);
@@ -238,8 +240,8 @@ const TeamManagement: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-blue-900 mb-1">How Team Invitations Work</h3>
                   <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• A temporary account will be created with a default password</li>
-                    <li>• The user should change their password on first login</li>
+                    <li>• A secure invitation will be sent to create their account</li>
+                    <li>• They will receive an email with setup instructions</li>
                     <li>• They will be automatically added to your company</li>
                     <li>• You can change their role at any time</li>
                   </ul>
@@ -248,6 +250,25 @@ const TeamManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleInviteUser} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="First Name"
+                  type="text"
+                  value={inviteData.firstName}
+                  onChange={(e) => setInviteData(prev => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="John"
+                  required
+                />
+                <Input
+                  label="Last Name"
+                  type="text"
+                  value={inviteData.lastName}
+                  onChange={(e) => setInviteData(prev => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Smith"
+                  required
+                />
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Email Address"
