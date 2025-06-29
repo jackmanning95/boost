@@ -33,7 +33,11 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Server configuration error: Missing environment variables'
+          error: 'Server configuration error: Missing environment variables',
+          debug: {
+            hasUrl: !!supabaseUrl,
+            hasServiceKey: !!supabaseServiceKey
+          }
         }),
         { 
           status: 500, 
@@ -53,7 +57,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid request body format'
+          error: 'Invalid request body format',
+          debug: { parseError: parseError.message }
         }),
         { 
           status: 400, 
@@ -77,7 +82,10 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: email, name, role, companyId'
+          error: 'Missing required fields: email, name, role, companyId',
+          debug: {
+            received: { email: !!email, name: !!name, role: !!role, companyId: !!companyId }
+          }
         }),
         { 
           status: 400, 
@@ -93,7 +101,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid email format'
+          error: 'Invalid email format',
+          debug: { email }
         }),
         { 
           status: 400, 
@@ -108,7 +117,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid role. Must be "admin" or "user"'
+          error: 'Invalid role. Must be "admin" or "user"',
+          debug: { role }
         }),
         { 
           status: 400, 
@@ -143,7 +153,12 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid company ID'
+          error: 'Invalid company ID',
+          debug: { 
+            companyId, 
+            companyError: companyError?.message,
+            companyErrorCode: companyError?.code
+          }
         }),
         { 
           status: 400, 
@@ -154,23 +169,24 @@ Deno.serve(async (req) => {
 
     console.log('✅ Company verified:', companyData.name)
 
-    // ✅ 5. CHECK FOR EXISTING USER IN AUTH
+    // ✅ 5. CHECK FOR EXISTING USER IN AUTH - IMPROVED METHOD
     console.log('Checking for existing auth user:', email)
     let existingAuthUser = null
     
     try {
-      // Use listUsers to find user by email
-      const { data: usersData, error: userLookupError } = await supabaseAdmin.auth.admin.listUsers({
-        page: 1,
-        perPage: 1
-      })
+      // Try to get user by email using the admin API
+      const { data: listUsersData, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers()
       
-      if (userLookupError) {
-        console.error('❌ Auth lookup error:', userLookupError)
+      if (listUsersError) {
+        console.error('❌ Auth lookup error:', listUsersError)
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Failed to check existing users: ${userLookupError.message}`
+            error: `Failed to check existing users: ${listUsersError.message}`,
+            debug: { 
+              listUsersError: listUsersError.message,
+              listUsersErrorCode: listUsersError.code
+            }
           }),
           { 
             status: 500, 
@@ -180,18 +196,20 @@ Deno.serve(async (req) => {
       }
 
       // Find user with matching email
-      existingAuthUser = usersData?.users?.find(user => user.email === email) || null
+      existingAuthUser = listUsersData?.users?.find(user => user.email === email) || null
       console.log('Auth user lookup result:', { 
         exists: !!existingAuthUser,
         email,
-        userId: existingAuthUser?.id || 'none'
+        userId: existingAuthUser?.id || 'none',
+        totalUsersChecked: listUsersData?.users?.length || 0
       })
     } catch (authError) {
       console.error('❌ Unexpected auth lookup error:', authError)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Failed to verify user status: ${authError.message}`
+          error: `Failed to verify user status: ${authError.message}`,
+          debug: { authError: authError.message }
         }),
         { 
           status: 500, 
@@ -217,7 +235,11 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Failed to check user profile: ${profileLookupError.message}`
+            error: `Failed to check user profile: ${profileLookupError.message}`,
+            debug: { 
+              profileLookupError: profileLookupError.message,
+              profileLookupErrorCode: profileLookupError.code
+            }
           }),
           { 
             status: 500, 
@@ -232,7 +254,14 @@ Deno.serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'User is already a member of this company'
+              error: 'User is already a member of this company',
+              debug: { 
+                existingProfile: {
+                  id: existingProfile.id,
+                  company_id: existingProfile.company_id,
+                  role: existingProfile.role
+                }
+              }
             }),
             { 
               status: 400, 
@@ -244,7 +273,14 @@ Deno.serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'User is already a member of another company'
+              error: 'User is already a member of another company',
+              debug: { 
+                existingProfile: {
+                  id: existingProfile.id,
+                  company_id: existingProfile.company_id,
+                  role: existingProfile.role
+                }
+              }
             }),
             { 
               status: 400, 
@@ -269,7 +305,11 @@ Deno.serve(async (req) => {
             return new Response(
               JSON.stringify({ 
                 success: false, 
-                error: `Failed to update user profile: ${updateError.message}`
+                error: `Failed to update user profile: ${updateError.message}`,
+                debug: { 
+                  updateError: updateError.message,
+                  updateErrorCode: updateError.code
+                }
               }),
               { 
                 status: 500, 
@@ -300,7 +340,11 @@ Deno.serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: `Failed to create user profile: ${profileError.message}`
+              error: `Failed to create user profile: ${profileError.message}`,
+              debug: { 
+                profileError: profileError.message,
+                profileErrorCode: profileError.code
+              }
             }),
             { 
               status: 500, 
@@ -313,7 +357,7 @@ Deno.serve(async (req) => {
         authUserId = existingAuthUser.id
       }
     } else {
-      // ✅ 6. CREATE NEW AUTH USER WITH IMPROVED ERROR HANDLING
+      // ✅ 6. CREATE NEW AUTH USER WITH ENHANCED ERROR HANDLING
       console.log('Creating new auth user...')
       
       // Generate a secure temporary password
@@ -322,7 +366,8 @@ Deno.serve(async (req) => {
       console.log('Auth user creation parameters:', {
         email,
         passwordLength: tempPassword.length,
-        emailConfirm: true
+        emailConfirm: true,
+        userMetadata: { name, invited: true }
       })
 
       try {
@@ -358,10 +403,7 @@ Deno.serve(async (req) => {
           if (authError.message?.includes('User already registered')) {
             console.log('User already exists, trying to handle existing user...')
             // Try to get the existing user and handle accordingly
-            const { data: existingUsersData } = await supabaseAdmin.auth.admin.listUsers({
-              page: 1,
-              perPage: 1
-            })
+            const { data: existingUsersData } = await supabaseAdmin.auth.admin.listUsers()
             const existingUser = existingUsersData?.users?.find(user => user.email === email)
             if (existingUser) {
               authUserId = existingUser.id
@@ -370,7 +412,8 @@ Deno.serve(async (req) => {
               return new Response(
                 JSON.stringify({ 
                   success: false, 
-                  error: 'User already exists but cannot be retrieved'
+                  error: 'User already exists but cannot be retrieved',
+                  debug: { authError: authError.message }
                 }),
                 { 
                   status: 400, 
@@ -387,7 +430,8 @@ Deno.serve(async (req) => {
                   authError: {
                     name: authError.name,
                     status: authError.status,
-                    code: authError.code
+                    code: authError.code,
+                    message: authError.message
                   }
                 }
               }),
@@ -402,7 +446,8 @@ Deno.serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Failed to create user: No user ID returned'
+              error: 'Failed to create user: No user ID returned',
+              debug: { authData }
             }),
             { 
               status: 500, 
@@ -419,7 +464,11 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Unexpected error creating user: ${unexpectedError.message}`
+            error: `Unexpected error creating user: ${unexpectedError.message}`,
+            debug: { 
+              unexpectedError: unexpectedError.message,
+              stack: unexpectedError.stack
+            }
           }),
           { 
             status: 500, 
@@ -460,7 +509,18 @@ Deno.serve(async (req) => {
             return new Response(
               JSON.stringify({ 
                 success: false, 
-                error: `Failed to create user profile: ${profileError.message}`
+                error: `Failed to create user profile: ${profileError.message}`,
+                debug: { 
+                  profileError: profileError.message,
+                  profileErrorCode: profileError.code,
+                  profileData: {
+                    id: authUserId,
+                    email,
+                    name,
+                    role,
+                    company_id: companyId
+                  }
+                }
               }),
               { 
                 status: 500, 
@@ -488,7 +548,7 @@ Deno.serve(async (req) => {
 
       if (resetError) {
         console.warn('⚠️ Failed to send password reset email:', resetError)
-        // Don't fail the entire operation
+        // Don't fail the entire operation, but log it
       } else {
         console.log('✅ Password reset email sent successfully')
       }
@@ -504,7 +564,14 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: 'User invited successfully',
-        userId: authUserId
+        userId: authUserId,
+        debug: {
+          email,
+          name,
+          role,
+          companyId,
+          companyName: companyData.name
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -519,7 +586,8 @@ Deno.serve(async (req) => {
         error: `An unexpected error occurred: ${error.message}`,
         debug: {
           stack: error.stack,
-          name: error.name
+          name: error.name,
+          message: error.message
         }
       }),
       { 
