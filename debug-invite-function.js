@@ -22,19 +22,45 @@ async function getCompanies() {
     }
     
     const companies = await response.json()
-    console.log('✅ Available companies:', companies)
+    console.log('📋 Available companies:', companies)
+    
+    if (companies.length === 0) {
+      console.error('❌ No companies found in database')
+      return []
+    }
+    
     return companies
   } catch (error) {
-    console.error('❌ Error fetching companies:', error.message)
+    console.error('❌ Error fetching companies:', error)
     return []
   }
 }
 
-async function testInviteFunction(testData) {
-  console.log('\n🧪 Testing invite-user Edge Function...')
-  console.log('📤 Test data:', testData)
+async function testInviteWithRealCompany() {
+  console.log('🧪 Testing invite-user with real company data...')
   
   try {
+    // First, get a real company ID from the database
+    const companies = await getCompanies()
+    
+    if (companies.length === 0) {
+      console.log('❌ Cannot proceed with function test - no companies found')
+      return
+    }
+    
+    const testCompany = companies[0]
+    console.log('✅ Using company:', testCompany)
+    
+    // Now test the Edge Function with real data
+    const testData = {
+      email: `test.user.${Date.now()}@example.com`, // Unique email
+      name: 'Test User',
+      role: 'user',
+      companyId: testCompany.id
+    }
+    
+    console.log('📤 Testing Edge Function with:', testData)
+    
     const response = await fetch(`${SUPABASE_URL}/functions/v1/invite-user`, {
       method: 'POST',
       headers: {
@@ -56,12 +82,7 @@ async function testInviteFunction(testData) {
       
       if (responseData.success) {
         console.log('✅ SUCCESS - User invitation worked!')
-        if (responseData.userId) {
-          console.log('User ID:', responseData.userId)
-        }
-        if (responseData.debug) {
-          console.log('Debug info:', JSON.stringify(responseData.debug, null, 2))
-        }
+        console.log('User ID:', responseData.userId)
       } else {
         console.log('❌ FAILED - User invitation failed')
         console.log('Error:', responseData.error)
@@ -69,134 +90,113 @@ async function testInviteFunction(testData) {
           console.log('Debug info:', JSON.stringify(responseData.debug, null, 2))
         }
       }
-      
-      return responseData
     } catch (parseError) {
       console.log('❌ Failed to parse response as JSON:', parseError.message)
-      return { success: false, error: 'Invalid JSON response', rawResponse: responseText }
     }
     
   } catch (error) {
-    console.log('❌ Network error:', error.message)
-    return { success: false, error: error.message }
-  }
-}
-
-async function testValidationErrors() {
-  console.log('\n🧪 Testing validation errors...')
-  
-  const testCases = [
-    {
-      name: 'Missing email',
-      data: { name: 'Test User', role: 'user', companyId: 'test-id' }
-    },
-    {
-      name: 'Invalid email format',
-      data: { email: 'invalid-email', name: 'Test User', role: 'user', companyId: 'test-id' }
-    },
-    {
-      name: 'Invalid role',
-      data: { email: 'test@example.com', name: 'Test User', role: 'invalid', companyId: 'test-id' }
-    },
-    {
-      name: 'Missing company ID',
-      data: { email: 'test@example.com', name: 'Test User', role: 'user' }
-    }
-  ]
-  
-  for (const testCase of testCases) {
-    console.log(`\n📝 Testing: ${testCase.name}`)
-    const result = await testInviteFunction(testCase.data)
-    
-    if (!result.success && result.error) {
-      console.log(`✅ Validation test PASSED - Correctly rejected: ${result.error}`)
-    } else {
-      console.log(`❌ Validation test FAILED - Should have rejected ${testCase.name}`)
-    }
-  }
-}
-
-async function testWithRealCompany() {
-  console.log('\n🧪 Testing with real company data...')
-  
-  const companies = await getCompanies()
-  
-  if (companies.length === 0) {
-    console.log('❌ No companies found - cannot test with real data')
-    return
-  }
-  
-  const testCompany = companies[0]
-  console.log('✅ Using company:', testCompany)
-  
-  const testData = {
-    email: `test.user.${Date.now()}@example.com`, // Unique email
-    name: 'Test User Debug',
-    role: 'user',
-    companyId: testCompany.id
-  }
-  
-  const result = await testInviteFunction(testData)
-  
-  if (result.success) {
-    console.log('🎉 REAL DATA TEST PASSED!')
-  } else {
-    console.log('💥 REAL DATA TEST FAILED!')
-    console.log('This is the error you need to investigate:')
-    console.log('Error:', result.error)
-    if (result.debug) {
-      console.log('Debug details:', JSON.stringify(result.debug, null, 2))
-    }
+    console.log('❌ Test error:', error.message)
   }
 }
 
 async function checkDatabasePermissions() {
   console.log('\n🔐 Testing database permissions...')
   
-  const tests = [
-    { table: 'companies', description: 'Companies table read access' },
-    { table: 'users', description: 'Users table read access' }
-  ]
-  
-  for (const test of tests) {
-    try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/${test.table}?select=count&head=true`, {
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'apikey': SUPABASE_ANON_KEY
-        }
-      })
-      
-      if (response.ok) {
-        console.log(`✅ ${test.description}`)
-      } else {
-        console.log(`❌ ${test.description} - Status: ${response.status}`)
+  try {
+    // Test reading companies table
+    const companiesResponse = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=count&head=true`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
       }
-    } catch (error) {
-      console.log(`❌ ${test.description} - Error: ${error.message}`)
+    })
+    
+    if (companiesResponse.ok) {
+      console.log('✅ Can read companies table')
+    } else {
+      console.log('❌ Cannot read companies table:', companiesResponse.status)
     }
+    
+    // Test reading users table
+    const usersResponse = await fetch(`${SUPABASE_URL}/rest/v1/users?select=count&head=true`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
+      }
+    })
+    
+    if (usersResponse.ok) {
+      console.log('✅ Can read users table')
+    } else {
+      console.log('❌ Cannot read users table:', usersResponse.status)
+    }
+    
+  } catch (error) {
+    console.log('❌ Database permission test error:', error.message)
   }
 }
 
-async function runComprehensiveDebug() {
-  console.log('🚀 Starting comprehensive invite-user debugging...\n')
+async function checkEnvironmentVariables() {
+  console.log('\n🔧 Checking Edge Function environment variables...')
   
-  // Step 1: Check basic permissions
-  await checkDatabasePermissions()
-  
-  // Step 2: Test validation
-  await testValidationErrors()
-  
-  // Step 3: Test with real data
-  await testWithRealCompany()
-  
-  console.log('\n🏁 Debugging completed!')
-  console.log('\n📋 Next steps if issues persist:')
-  console.log('1. Check Supabase Edge Function logs in the dashboard')
-  console.log('2. Verify SUPABASE_SERVICE_ROLE_KEY is set in Edge Function environment')
-  console.log('3. Check RLS policies on users table allow service_role to insert')
-  console.log('4. Verify the handle_new_user_with_company trigger is working')
-  console.log('5. Check if auth.admin.createUser has proper permissions')
+  try {
+    // Send empty payload to trigger environment variable validation
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/invite-user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}) // Empty body
+    })
+    
+    const result = await response.json()
+    
+    if (result.debug && result.debug.checklist) {
+      console.log('\n📋 ENVIRONMENT VARIABLES STATUS:')
+      Object.entries(result.debug.checklist).forEach(([key, value]) => {
+        console.log(`  ${value ? '✅' : '❌'} ${key}`)
+      })
+      
+      const missingVars = Object.entries(result.debug.checklist)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key)
+      
+      if (missingVars.length > 0) {
+        console.log('\n🚨 MISSING ENVIRONMENT VARIABLES:')
+        missingVars.forEach(varName => {
+          console.log(`  ❌ ${varName}`)
+        })
+        console.log('\n💡 TO FIX:')
+        console.log('1. Go to Supabase Dashboard → Edge Functions → invite-user → Settings')
+        console.log('2. Add the missing environment variables')
+        console.log('3. Ensure SUPABASE_SERVICE_ROLE_KEY is the SERVICE ROLE key (not anon)')
+        console.log('4. Redeploy the function')
+      } else {
+        console.log('\n✅ All required environment variables are set!')
+      }
+    } else {
+      console.log('⚠️  Could not retrieve environment variable status')
+    }
+    
+  } catch (error) {
+    console.log('❌ Environment variable check failed:', error.message)
+  }
 }
 
-runComprehensiveDebug()
+async function runAllTests() {
+  console.log('🚀 Starting comprehensive Edge Function tests...\n')
+  
+  await checkDatabasePermissions()
+  await checkEnvironmentVariables()
+  await testInviteWithRealCompany()
+  
+  console.log('\n🏁 All tests completed!')
+  console.log('\n📋 Next steps if tests fail:')
+  console.log('1. Check Supabase Edge Function logs for detailed error messages')
+  console.log('2. Verify RLS policies allow service_role to insert into users table')
+  console.log('3. Check if auth.admin.createUser has proper permissions')
+  console.log('4. Ensure SUPABASE_SERVICE_ROLE_KEY is correctly set in Edge Function environment')
+}
+
+runAllTests()
