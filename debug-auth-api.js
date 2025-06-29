@@ -2,7 +2,8 @@
 // Run with: node debug-auth-api.js
 
 const SUPABASE_URL = 'https://usbowqbohkdfadhclypx.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTU1MjE4NzQsImV4cCI6MjAzMTA5Nzg3NH0.Ej6phn9OtWNbLBXOBYgKJULdCJhMQJGJZKNJZKNJZKN'
+// Note: Replace this with your actual anon key from Supabase Dashboard → Settings → API
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU0NjI0NzQsImV4cCI6MjA1MTA0MjQ3NH0.example_key_replace_with_actual'
 
 async function getCompanies() {
   console.log('🔍 Fetching companies from database...')
@@ -39,7 +40,12 @@ async function testInviteWithDetailedLogging() {
   
   if (companies.length === 0) {
     console.log('❌ No companies found - cannot test invite function')
-    return
+    // Explicitly return an object with success property to prevent TypeError
+    return { 
+      success: false, 
+      error: 'No companies found to test invite function', 
+      debug: { noCompanies: true } 
+    }
   }
   
   const testCompany = companies[0]
@@ -94,7 +100,7 @@ async function testInviteWithDetailedLogging() {
         console.log('Error:', responseData.error)
         
         // Analyze specific error types
-        if (responseData.error.includes('unexpected_failure')) {
+        if (responseData.error && responseData.error.includes('unexpected_failure')) {
           console.log('\n🚨 AUTH API UNEXPECTED FAILURE DETECTED!')
           console.log('This is the exact error you reported.')
           console.log('\n💡 MOST LIKELY CAUSES:')
@@ -182,37 +188,59 @@ async function runDiagnostic() {
   console.log('This tool focuses specifically on Auth API issues in the invite-user function.')
   console.log('It will help identify the exact cause of the "unexpected_failure" error.')
   
+  // Check if the anon key looks like a placeholder
+  if (SUPABASE_ANON_KEY.includes('example_key_replace_with_actual')) {
+    console.log('\n🚨 INVALID SUPABASE ANON KEY DETECTED!')
+    console.log('The SUPABASE_ANON_KEY appears to be a placeholder.')
+    console.log('\n💡 TO FIX:')
+    console.log('1. Go to Supabase Dashboard → Settings → API')
+    console.log('2. Copy your "anon public" key')
+    console.log('3. Replace the SUPABASE_ANON_KEY value in this script')
+    console.log('4. Re-run this diagnostic')
+    return
+  }
+  
   await checkEnvironmentVariables()
   const result = await testInviteWithDetailedLogging()
   
   console.log('\n🎯 DIAGNOSTIC SUMMARY:')
   console.log('='.repeat(60))
   
-  if (result.success) {
+  // Safely check result.success since we now guarantee result is always an object
+  if (result && result.success) {
     console.log('✅ GOOD NEWS! The invite-user function is working correctly.')
     console.log('If you were experiencing issues before, they appear to be resolved.')
   } else {
     console.log('❌ The invite-user function is still failing.')
     
-    if (result.error?.includes('environment variables')) {
-      console.log('\n🚨 ENVIRONMENT VARIABLE ISSUE:')
-      console.log('1. Go to Supabase Dashboard → Edge Functions → invite-user → Settings')
-      console.log('2. Ensure SUPABASE_SERVICE_ROLE_KEY is set (not anon key)')
-      console.log('3. Redeploy the function')
-    }
-    
-    if (result.error?.includes('unexpected_failure')) {
-      console.log('\n🚨 AUTH API ISSUE:')
-      console.log('1. Check Supabase Auth → Settings → Email configuration')
-      console.log('2. Verify SMTP settings are correct')
-      console.log('3. Check Auth API quotas in Supabase Dashboard → Usage')
-      console.log('4. Ensure service role key has admin permissions')
-    }
-    
-    if (result.error?.includes('company') || result.error?.includes('RLS')) {
-      console.log('\n🚨 DATABASE/RLS ISSUE:')
-      console.log('1. Verify the latest RLS migration has been applied')
-      console.log('2. Check that service_role has full access to users table')
+    if (result && result.error) {
+      if (result.error.includes('environment variables')) {
+        console.log('\n🚨 ENVIRONMENT VARIABLE ISSUE:')
+        console.log('1. Go to Supabase Dashboard → Edge Functions → invite-user → Settings')
+        console.log('2. Ensure SUPABASE_SERVICE_ROLE_KEY is set (not anon key)')
+        console.log('3. Redeploy the function')
+      }
+      
+      if (result.error.includes('unexpected_failure')) {
+        console.log('\n🚨 AUTH API ISSUE:')
+        console.log('1. Check Supabase Auth → Settings → Email configuration')
+        console.log('2. Verify SMTP settings are correct')
+        console.log('3. Check Auth API quotas in Supabase Dashboard → Usage')
+        console.log('4. Ensure service role key has admin permissions')
+      }
+      
+      if (result.error.includes('company') || result.error.includes('RLS')) {
+        console.log('\n🚨 DATABASE/RLS ISSUE:')
+        console.log('1. Verify the latest RLS migration has been applied')
+        console.log('2. Check that service_role has full access to users table')
+      }
+      
+      if (result.error.includes('No companies found')) {
+        console.log('\n🚨 DATABASE ACCESS ISSUE:')
+        console.log('1. Verify your Supabase anon key is correct')
+        console.log('2. Check RLS policies allow reading companies table')
+        console.log('3. Ensure you have at least one company in your database')
+      }
     }
   }
   
