@@ -242,21 +242,18 @@ Deno.serve(async (req) => {
     let existingAuthUser = null
     
     try {
-      // Use a more efficient approach - try to get user by email first
-      const { data: listUsersData, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000 // Reasonable limit to avoid performance issues
-      })
+      // Use getUserByEmail for better performance
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(email)
       
-      if (listUsersError) {
-        console.error('❌ Auth API error:', listUsersError)
+      if (userError && userError.status !== 404) {
+        console.error('❌ Auth API error:', userError)
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Auth API error: ${listUsersError.message}`,
+            error: `Auth API error: ${userError.message}`,
             debug: { 
-              authApiError: listUsersError.message,
-              authApiErrorCode: listUsersError.code,
+              authApiError: userError.message,
+              authApiErrorCode: userError.code,
               hint: 'Check Supabase Auth API limits and service role permissions'
             }
           }),
@@ -267,13 +264,10 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Find user with matching email
-      existingAuthUser = listUsersData?.users?.find(user => user.email === email) || null
+      existingAuthUser = userData?.user || null
       console.log('Auth user lookup result:', { 
         exists: !!existingAuthUser,
-        userId: existingAuthUser?.id || 'none',
-        totalUsersChecked: listUsersData?.users?.length || 0,
-        authApiLimitCheck: listUsersData?.users?.length < 1000 ? 'OK' : 'APPROACHING_LIMIT'
+        userId: existingAuthUser?.id || 'none'
       })
     } catch (authError) {
       console.error('❌ Unexpected auth lookup error:', authError)
@@ -450,6 +444,16 @@ Deno.serve(async (req) => {
       })
 
       try {
+        // CRITICAL: Log the exact parameters being sent to createUser
+        console.log('Auth creation request details:', {
+          email,
+          password_length: tempPassword.length,
+          email_confirm: true,
+          user_metadata: { name, invited: true },
+          using_service_role: true,
+          service_role_key_prefix: requiredEnvVars.SUPABASE_SERVICE_ROLE_KEY!.substring(0, 10) + '...'
+        })
+
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
           email,
           password: tempPassword,
@@ -466,7 +470,8 @@ Deno.serve(async (req) => {
           email: authData?.user?.email,
           confirmed: authData?.user?.email_confirmed_at,
           errorCode: authError?.code,
-          errorMessage: authError?.message
+          errorMessage: authError?.message,
+          errorStatus: authError?.status
         })
 
         if (authError) {
@@ -480,8 +485,9 @@ Deno.serve(async (req) => {
           // Handle specific auth errors with better recovery
           if (authError.message?.includes('User already registered') || authError.code === 'user_already_exists') {
             console.log('User already exists, attempting recovery...')
-            const { data: existingUsersData } = await supabaseAdmin.auth.admin.listUsers()
-            const existingUser = existingUsersData?.users?.find(user => user.email === email)
+            const { data: existingUserData } = await supabaseAdmin.auth.admin.getUserByEmail(email)
+            const existingUser = existingUserData?.user
+            
             if (existingUser) {
               authUserId = existingUser.id
               console.log('✅ Using existing auth user:', authUserId)
