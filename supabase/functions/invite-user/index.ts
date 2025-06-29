@@ -332,9 +332,7 @@ Deno.serve(async (req) => {
           email_confirm: true,
           user_metadata: {
             name,
-            invited: true,
-            role,
-            company_id: companyId
+            invited: true
           }
         })
 
