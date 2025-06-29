@@ -159,10 +159,13 @@ Deno.serve(async (req) => {
     let existingAuthUser = null
     
     try {
-      // Use getUserByEmail instead of listUsers for better performance
-      const { data: userData, error: userLookupError } = await supabaseAdmin.auth.admin.getUserByEmail(email)
+      // Use listUsers to find user by email
+      const { data: usersData, error: userLookupError } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1
+      })
       
-      if (userLookupError && userLookupError.status !== 404) {
+      if (userLookupError) {
         console.error('❌ Auth lookup error:', userLookupError)
         return new Response(
           JSON.stringify({ 
@@ -176,7 +179,8 @@ Deno.serve(async (req) => {
         )
       }
 
-      existingAuthUser = userData?.user || null
+      // Find user with matching email
+      existingAuthUser = usersData?.users?.find(user => user.email === email) || null
       console.log('Auth user lookup result:', { 
         exists: !!existingAuthUser,
         email,
@@ -356,9 +360,13 @@ Deno.serve(async (req) => {
           if (authError.message?.includes('User already registered')) {
             console.log('User already exists, trying to handle existing user...')
             // Try to get the existing user and handle accordingly
-            const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(email)
-            if (existingUser?.user) {
-              authUserId = existingUser.user.id
+            const { data: existingUsersData } = await supabaseAdmin.auth.admin.listUsers({
+              page: 1,
+              perPage: 1
+            })
+            const existingUser = existingUsersData?.users?.find(user => user.email === email)
+            if (existingUser) {
+              authUserId = existingUser.id
               console.log('✅ Using existing auth user:', authUserId)
             } else {
               return new Response(
