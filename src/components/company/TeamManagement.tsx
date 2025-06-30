@@ -41,7 +41,7 @@ export const TeamManagement: React.FC = () => {
     );
   }
 
-  const filteredUsers = companyUsers.filter(companyUser =>
+  const filteredUsers = (companyUsers || []).filter(companyUser =>
     companyUser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     companyUser.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -158,7 +158,7 @@ export const TeamManagement: React.FC = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Total Users</p>
-                <p className="text-2xl font-bold text-gray-900">{companyUsers.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{(companyUsers || []).length}</p>
               </div>
             </div>
           </CardContent>
@@ -173,7 +173,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Administrators</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {companyUsers.filter(u => u.role === 'admin').length}
+                  {(companyUsers || []).filter(u => u.role === 'admin').length}
                 </p>
               </div>
             </div>
@@ -189,7 +189,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Regular Users</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {companyUsers.filter(u => u.role === 'user').length}
+                  {(companyUsers || []).filter(u => u.role === 'user').length}
                 </p>
               </div>
             </div>
