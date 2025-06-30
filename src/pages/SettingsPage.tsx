@@ -3,7 +3,7 @@ import Layout from '../components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { TeamManagement } from '../components/company/TeamManagement';
+import TeamManagement from '../components/company/TeamManagement';
 import { useAuth } from '../context/AuthContext';
 import { User, Settings, Shield, Save, Users, Building } from 'lucide-react';
 import CompanyAccountManager from '../components/settings/CompanyAccountManager';
