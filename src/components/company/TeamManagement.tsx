@@ -20,7 +20,8 @@ import {
   Crown,
   Send,
   AlertCircle,
-  Eye
+  Eye,
+  Settings
 } from 'lucide-react';
 
 const TeamManagement: React.FC = () => {
@@ -58,7 +59,28 @@ const TeamManagement: React.FC = () => {
       setShowInviteForm(false);
     } catch (error) {
       console.error('Error inviting user:', error);
-      setInviteError(error instanceof Error ? error.message : 'Failed to invite user. Please try again.');
+      
+      // Enhanced error handling with specific guidance for environment variable issues
+      let errorMessage = 'Failed to invite user. Please try again.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Check for specific error patterns that indicate environment variable issues
+        if (error.message.includes('🚨') || 
+            error.message.includes('ENVIRONMENT VARIABLE') || 
+            error.message.includes('CONFIGURATION ERROR') ||
+            error.message.includes('Auth API unexpected failure') ||
+            error.message.includes('Edge Function returned a non-2xx status code')) {
+          // These are configuration errors that need immediate attention
+          setInviteError(error.message);
+        } else {
+          // Generic error handling
+          setInviteError(errorMessage);
+        }
+      } else {
+        setInviteError('An unexpected error occurred. This may be due to missing environment variables in the invite-user Edge Function.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -159,6 +181,32 @@ const TeamManagement: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Environment Variable Warning - Show if there are invitation errors */}
+      {inviteError && (inviteError.includes('🚨') || inviteError.includes('ENVIRONMENT VARIABLE') || inviteError.includes('CONFIGURATION ERROR')) && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-start">
+              <Settings size={20} className="text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm font-medium text-red-900 mb-2">Configuration Issue Detected</h3>
+                <div className="text-sm text-red-700 space-y-2">
+                  <p>The invite-user Edge Function needs to be configured properly:</p>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li>Go to your <strong>Supabase Dashboard</strong></li>
+                    <li>Navigate to <strong>Settings → API</strong></li>
+                    <li>Copy your <strong>service_role</strong> key (NOT the anon key)</li>
+                    <li>Go to <strong>Edge Functions → invite-user → Settings</strong></li>
+                    <li>Add <strong>SUPABASE_SERVICE_ROLE_KEY</strong> with the copied value</li>
+                    <li>Click <strong>Deploy</strong> to redeploy the function</li>
+                  </ol>
+                  <p className="mt-2 font-medium">This is the most common cause of invitation failures.</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -293,6 +341,26 @@ const TeamManagement: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Enhanced error display */}
+              {inviteError && (
+                <div className={`p-4 rounded-lg ${
+                  inviteError.includes('🚨') || inviteError.includes('ENVIRONMENT VARIABLE') || inviteError.includes('CONFIGURATION ERROR')
+                    ? 'bg-red-50 border border-red-200'
+                    : 'bg-yellow-50 border border-yellow-200'
+                }`}>
+                  <div className="flex items-start">
+                    <AlertCircle size={16} className={`mt-0.5 mr-2 flex-shrink-0 ${
+                      inviteError.includes('🚨') ? 'text-red-600' : 'text-yellow-600'
+                    }`} />
+                    <div className={`text-sm ${
+                      inviteError.includes('🚨') ? 'text-red-700' : 'text-yellow-700'
+                    }`}>
+                      <div className="whitespace-pre-line">{inviteError}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="flex justify-end space-x-3">
                 <Button

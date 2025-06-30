@@ -455,7 +455,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Invite a user to the company - ENHANCED WITH BETTER ERROR HANDLING
+  // Invite a user to the company - ENHANCED WITH BETTER ERROR HANDLING AND ENVIRONMENT VARIABLE GUIDANCE
   const inviteUser = async (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => {
     if (!user || (!isCompanyAdmin && !isSuperAdmin)) {
       throw new Error('Insufficient permissions to invite users');
@@ -523,11 +523,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (inviteError) {
           console.error('[CompanyContext] Edge function error:', inviteError);
           
-          // Enhanced error handling for Edge Function errors
+          // Enhanced error handling for Edge Function errors with specific guidance
           if (inviteError.message?.includes('FunctionsHttpError')) {
-            throw new Error('Edge function error: The invitation service is currently unavailable. Please try again later.');
+            throw new Error('🚨 ENVIRONMENT VARIABLE ISSUE: The invite-user Edge Function is not configured properly. Please check that SUPABASE_SERVICE_ROLE_KEY is set correctly in the Edge Function settings. Go to Supabase Dashboard → Edge Functions → invite-user → Settings and verify your environment variables.');
           } else if (inviteError.message?.includes('FunctionsFetchError')) {
             throw new Error('Network error: Unable to send invitation. Please check your connection and try again.');
+          } else if (inviteError.message?.includes('Edge Function returned a non-2xx status code')) {
+            throw new Error('🚨 CONFIGURATION ERROR: The invite-user Edge Function is failing. This is usually caused by missing or incorrect SUPABASE_SERVICE_ROLE_KEY. Please check the Edge Function environment variables in your Supabase Dashboard.');
           } else {
             throw new Error(`Edge function error: ${inviteError.message || 'Unknown error occurred'}`);
           }
@@ -544,14 +546,19 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const debug = inviteResponse.debug;
             
             if (debug.missingVars && debug.missingVars.length > 0) {
-              errorMessage = 'Server configuration error: Missing environment variables. Please contact support.';
+              errorMessage = '🚨 SERVER CONFIGURATION ERROR: Missing environment variables in Edge Function. The SUPABASE_SERVICE_ROLE_KEY is not set properly. Please go to Supabase Dashboard → Edge Functions → invite-user → Settings and add the correct service role key.';
             } else if (debug.authError?.code === 'unexpected_failure') {
-              errorMessage = 'Authentication service error: Please try again in a few minutes. If the problem persists, contact support.';
+              errorMessage = '🚨 AUTH API ERROR: This is usually caused by an incorrect SUPABASE_SERVICE_ROLE_KEY. Please verify that you are using the SERVICE_ROLE key (not the anon key) in your Edge Function environment variables.';
             } else if (debug.profileError) {
               errorMessage = 'Database error: Unable to create user profile. Please contact support.';
             } else if (debug.troubleshooting) {
-              errorMessage = `${errorMessage}. This appears to be a configuration issue.`;
+              errorMessage = `${errorMessage}. This appears to be a configuration issue. Please check your Edge Function environment variables.`;
             }
+          }
+          
+          // Add specific guidance for the most common error
+          if (errorMessage.includes('Auth API unexpected failure')) {
+            errorMessage = '🚨 URGENT FIX NEEDED: The invite-user Edge Function is missing the SUPABASE_SERVICE_ROLE_KEY environment variable. Please:\n\n1. Go to Supabase Dashboard → Settings → API\n2. Copy your SERVICE_ROLE key (not anon key)\n3. Go to Edge Functions → invite-user → Settings\n4. Add SUPABASE_SERVICE_ROLE_KEY with the copied value\n5. Redeploy the function\n\nThis is the most common cause of invitation failures.';
           }
           
           throw new Error(errorMessage);
@@ -568,12 +575,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       // Re-throw with enhanced error message if it's a generic error
       if (err instanceof Error) {
+        // Don't modify specific error messages that already contain guidance
+        if (err.message.includes('🚨') || err.message.includes('ENVIRONMENT VARIABLE') || err.message.includes('CONFIGURATION ERROR')) {
+          throw err;
+        }
+        
         if (err.message === 'Failed to send invitation. Please try again.') {
-          throw new Error('Unable to send invitation. This may be due to a temporary service issue. Please try again in a few minutes.');
+          throw new Error('Unable to send invitation. This may be due to a temporary service issue or missing environment variables in the Edge Function. Please verify your Edge Function configuration and try again.');
         }
         throw err;
       } else {
-        throw new Error('An unexpected error occurred while inviting the user. Please try again.');
+        throw new Error('An unexpected error occurred while inviting the user. This may be due to missing environment variables in the invite-user Edge Function. Please check your configuration.');
       }
     }
   };
