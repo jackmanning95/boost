@@ -3,7 +3,7 @@ import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/Card';
 import Button from '../ui/Button';
-import { Input } from '../ui/Input';
+import Input from '../ui/Input';
 import Badge from '../ui/Badge';
 import { UserPlus, Mail, Shield, User, Trash2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
