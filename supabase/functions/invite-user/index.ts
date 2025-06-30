@@ -127,6 +127,27 @@ Deno.serve(async (req) => {
 
     // ✅ 3. CREATE SUPABASE CLIENT WITH ENHANCED ERROR HANDLING
     console.log('Creating Supabase admin client...')
+    
+    // FIXED: Ensure we're using the environment variables directly, not process.env
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing required environment variables',
+          debug: {
+            missingVars: [
+              !supabaseUrl ? 'SUPABASE_URL' : null,
+              !supabaseServiceKey ? 'SUPABASE_SERVICE_ROLE_KEY' : null
+            ].filter(Boolean)
+          }
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
     const supabaseAdmin = createClient(
       supabaseUrl,
       supabaseServiceKey,
@@ -212,7 +233,7 @@ Deno.serve(async (req) => {
     // ✅ 5. CHECK FOR EXISTING USER WITH ENHANCED LOGIC
     console.log('Checking for existing user:', email)
     
-    // Check auth.users first
+    // FIXED: Use listUsers instead of getUserByEmail which doesn't exist
     const { data: existingAuthUsers, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
     
     if (authLookupError) {
