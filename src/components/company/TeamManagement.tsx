@@ -19,11 +19,13 @@ import {
   UserX,
   Crown,
   Send,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Settings
 } from 'lucide-react';
 
 export const TeamManagement: React.FC = () => {
-  const { teamMembers, company, loading, inviteUser, updateUserRole, removeUser, refreshTeamMembers } = useCompany();
+  const { companyUsers, currentCompany, loading, inviteUser, updateUserRole, removeUser, fetchCompanyUsers } = useCompany();
   const { user, isCompanyAdmin, isSuperAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -36,30 +38,23 @@ export const TeamManagement: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
-  if (!isCompanyAdmin && !isSuperAdmin) {
-    return (
-      <div className="text-center py-12">
-        <Users size={64} className="mx-auto mb-4 text-gray-300" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
-        <p className="text-gray-600">Only company administrators can manage users.</p>
-      </div>
-    );
-  }
+  // Allow all users to view the team list, but only admins can manage
+  const canManage = isCompanyAdmin || isSuperAdmin;
 
-  const filteredUsers = (teamMembers || []).filter(teamMember =>
-    teamMember.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    teamMember.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = (companyUsers || []).filter(companyUser =>
+    companyUser.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    companyUser.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteData.email.trim() || !inviteData.firstName.trim() || !inviteData.lastName.trim()) return;
+    if (!inviteData.email.trim() || !inviteData.firstName.trim() || !inviteData.lastName.trim() || !canManage) return;
 
     setIsSubmitting(true);
     setInviteError('');
     
     try {
-      await inviteUser(inviteData.email, inviteData.firstName, inviteData.lastName, inviteData.role);
+      await inviteUser(inviteData.email, inviteData.role, inviteData.firstName, inviteData.lastName);
       setInviteData({ email: '', firstName: '', lastName: '', role: 'user' });
       setShowInviteForm(false);
     } catch (error) {
@@ -92,6 +87,8 @@ export const TeamManagement: React.FC = () => {
   };
 
   const handleUpdateRole = async (userId: string, newRole: 'admin' | 'user') => {
+    if (!canManage) return;
+    
     if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
       return;
     }
@@ -105,6 +102,8 @@ export const TeamManagement: React.FC = () => {
   };
 
   const handleRemoveUser = async (userToRemove: CompanyUser) => {
+    if (!canManage) return;
+    
     if (!confirm(`Are you sure you want to remove "${userToRemove.name}" from the company? This action cannot be undone.`)) {
       return;
     }
@@ -150,31 +149,36 @@ export const TeamManagement: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900 flex items-center">
             <Users size={28} className="mr-3 text-blue-600" />
             Team Members
-            {company && (
+            {currentCompany && (
               <span className="ml-3 text-lg font-normal text-gray-600">
-                - {company.name}
+                - {currentCompany.name}
               </span>
             )}
           </h2>
           <p className="text-gray-600 mt-1">
-            Invite and manage team members within your company
+            {canManage 
+              ? 'Invite and manage team members within your company'
+              : 'View team members within your company'
+            }
           </p>
         </div>
         <div className="flex gap-3">
           <Button
             variant="outline"
-            onClick={() => refreshTeamMembers()}
-            icon={<UserCheck size={18} />}
+            onClick={() => fetchCompanyUsers()}
+            icon={<Eye size={18} />}
           >
             Refresh
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => setShowInviteForm(true)}
-            icon={<Plus size={18} />}
-          >
-            Invite Team Member
-          </Button>
+          {canManage && (
+            <Button
+              variant="primary"
+              onClick={() => setShowInviteForm(true)}
+              icon={<Plus size={18} />}
+            >
+              Invite Team Member
+            </Button>
+          )}
         </div>
       </div>
 
@@ -183,7 +187,7 @@ export const TeamManagement: React.FC = () => {
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-4">
             <div className="flex items-start">
-              <AlertCircle size={20} className="text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+              <Settings size={20} className="text-red-600 mt-0.5 mr-3 flex-shrink-0" />
               <div>
                 <h3 className="text-sm font-medium text-red-900 mb-2">Configuration Issue Detected</h3>
                 <div className="text-sm text-red-700 space-y-2">
@@ -214,7 +218,7 @@ export const TeamManagement: React.FC = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Total Team Members</p>
-                <p className="text-2xl font-bold text-gray-900">{(teamMembers || []).length}</p>
+                <p className="text-2xl font-bold text-gray-900">{(companyUsers || []).length}</p>
               </div>
             </div>
           </CardContent>
@@ -229,7 +233,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Administrators</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {(teamMembers || []).filter(u => u.role === 'admin').length}
+                  {(companyUsers || []).filter(u => u.role === 'admin').length}
                 </p>
               </div>
             </div>
@@ -245,7 +249,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Regular Users</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {(teamMembers || []).filter(u => u.role === 'user').length}
+                  {(companyUsers || []).filter(u => u.role === 'user').length}
                 </p>
               </div>
             </div>
@@ -268,8 +272,8 @@ export const TeamManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Invite Form */}
-      {showInviteForm && (
+      {/* Invite Form - Only show for admins */}
+      {canManage && showInviteForm && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -390,43 +394,43 @@ export const TeamManagement: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
           </div>
         ) : filteredUsers.length > 0 ? (
-          filteredUsers.map(teamMember => {
-            const isCurrentUser = teamMember.id === user?.id;
-            const canModifyThisUser = !isCurrentUser && (isCompanyAdmin || isSuperAdmin);
+          filteredUsers.map(companyUser => {
+            const isCurrentUser = companyUser.id === user?.id;
+            const canModifyThisUser = canManage && !isCurrentUser;
             
             return (
-              <Card key={teamMember.id} className="hover:shadow-md transition-shadow">
+              <Card key={companyUser.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{teamMember.name || teamMember.email}</h3>
-                        {getRoleBadge(teamMember.role, isCurrentUser)}
+                        <h3 className="text-lg font-semibold text-gray-900">{companyUser.name || companyUser.email}</h3>
+                        {getRoleBadge(companyUser.role, isCurrentUser)}
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div className="flex items-center text-gray-600">
                           <Mail size={14} className="mr-1" />
-                          <span>{teamMember.email}</span>
+                          <span>{companyUser.email}</span>
                         </div>
                         <div className="flex items-center text-gray-600">
                           <Calendar size={14} className="mr-1" />
-                          <span>Joined {formatDate(teamMember.createdAt)}</span>
+                          <span>Joined {formatDate(companyUser.createdAt)}</span>
                         </div>
                         <div className="flex items-center text-gray-600">
                           <Shield size={14} className="mr-1" />
-                          <span>Role: {teamMember.role === 'admin' ? 'Administrator' : 'User'}</span>
+                          <span>Role: {companyUser.role === 'admin' ? 'Administrator' : 'User'}</span>
                         </div>
                       </div>
                     </div>
                     
                     {canModifyThisUser && (
                       <div className="flex items-center space-x-2">
-                        {teamMember.role === 'user' ? (
+                        {companyUser.role === 'user' ? (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdateRole(teamMember.id, 'admin')}
+                            onClick={() => handleUpdateRole(companyUser.id, 'admin')}
                             icon={<Crown size={16} />}
                           >
                             Promote to Admin
@@ -435,7 +439,7 @@ export const TeamManagement: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdateRole(teamMember.id, 'user')}
+                            onClick={() => handleUpdateRole(companyUser.id, 'user')}
                             icon={<UserX size={16} />}
                           >
                             Remove Admin
@@ -444,7 +448,7 @@ export const TeamManagement: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRemoveUser(teamMember)}
+                          onClick={() => handleRemoveUser(companyUser)}
                           icon={<Trash2 size={16} />}
                           className="text-red-600 hover:text-red-700"
                         >
@@ -467,10 +471,12 @@ export const TeamManagement: React.FC = () => {
               <p className="text-gray-600 mb-6">
                 {searchTerm 
                   ? 'Try adjusting your search criteria'
-                  : 'Invite your first team member to get started collaborating'
+                  : canManage
+                    ? 'Invite your first team member to get started collaborating'
+                    : 'No team members have been added to your company yet'
                 }
               </p>
-              {!searchTerm && (
+              {!searchTerm && canManage && (
                 <Button
                   variant="primary"
                   onClick={() => setShowInviteForm(true)}
