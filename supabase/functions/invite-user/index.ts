@@ -13,9 +13,7 @@ Deno.serve(async (req) => {
 
   try {
     console.log('=== INVITE USER EDGE FUNCTION START ===')
-    console.log('Request method:', req.method)
-    console.log('Request URL:', req.url)
-
+    
     // ✅ 1. VALIDATE ENVIRONMENT VARIABLES
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -24,8 +22,8 @@ Deno.serve(async (req) => {
     console.log('Environment check:', {
       hasUrl: !!supabaseUrl,
       hasServiceKey: !!supabaseServiceKey,
-      hasSiteUrl: !!siteUrl,
-      serviceKeyPrefix: supabaseServiceKey ? supabaseServiceKey.substring(0, 20) + '...' : 'missing'
+      serviceKeyLength: supabaseServiceKey?.length || 0,
+      serviceKeyPrefix: supabaseServiceKey?.substring(0, 10) || 'missing'
     })
 
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -33,14 +31,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Server configuration error: Missing environment variables',
-          debug: {
-            checklist: {
-              SUPABASE_URL: !!supabaseUrl,
-              SUPABASE_SERVICE_ROLE_KEY: !!supabaseServiceKey,
-              SITE_URL: !!siteUrl
-            }
-          }
+          error: 'Server configuration error: Missing environment variables'
         }),
         { 
           status: 500, 
@@ -50,49 +41,22 @@ Deno.serve(async (req) => {
     }
 
     // ✅ 2. PARSE AND VALIDATE INPUT
-    let requestBody
-    try {
-      const rawBody = await req.text()
-      console.log('Raw request body:', rawBody)
-      requestBody = JSON.parse(rawBody)
-    } catch (parseError) {
-      console.error('❌ Failed to parse request body:', parseError)
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Invalid request body format'
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
+    const requestBody = await req.json()
     const { email, name, role, companyId } = requestBody
 
-    console.log('✅ Input received:', {
-      email: email || 'MISSING',
-      name: name || 'MISSING', 
-      role: role || 'MISSING',
-      companyId: companyId || 'MISSING'
+    console.log('Input validation:', {
+      email: !!email,
+      name: !!name,
+      role: !!role,
+      companyId: !!companyId
     })
 
     // Validate required fields
     if (!email || !name || !role || !companyId) {
-      console.error('❌ Missing required fields')
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: email, name, role, companyId',
-          debug: {
-            received: { 
-              email: !!email, 
-              name: !!name, 
-              role: !!role, 
-              companyId: !!companyId 
-            }
-          }
+          error: 'Missing required fields: email, name, role, companyId'
         }),
         { 
           status: 400, 
@@ -104,7 +68,6 @@ Deno.serve(async (req) => {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      console.error('❌ Invalid email format:', email)
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -119,7 +82,6 @@ Deno.serve(async (req) => {
 
     // Validate role
     if (!['admin', 'user'].includes(role)) {
-      console.error('❌ Invalid role:', role)
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -158,8 +120,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid company ID',
-          debug: { companyError }
+          error: 'Invalid company ID'
         }),
         { 
           status: 400, 
@@ -170,21 +131,18 @@ Deno.serve(async (req) => {
 
     console.log('✅ Company verified:', companyData.name)
 
-    // ✅ 5. CHECK FOR EXISTING USER IN PUBLIC.USERS TABLE FIRST
-    console.log('Checking for existing user in public.users table:', email)
-    const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
-      .from('users')
-      .select('id, company_id, email, name, role')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (profileLookupError) {
-      console.error('❌ Profile lookup error:', profileLookupError)
+    // ✅ 5. CHECK FOR EXISTING USER
+    console.log('Checking for existing user:', email)
+    
+    // Check auth.users first
+    const { data: existingAuthUser, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
+    
+    if (authLookupError) {
+      console.error('❌ Auth lookup error:', authLookupError)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Failed to check existing user: ${profileLookupError.message}`,
-          debug: { profileLookupError }
+          error: 'Failed to check existing users'
         }),
         { 
           status: 500, 
@@ -193,148 +151,77 @@ Deno.serve(async (req) => {
       )
     }
 
+    const existingUser = existingAuthUser.users.find(user => user.email === email)
+    
+    if (existingUser) {
+      console.log('❌ User already exists in auth.users')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'A user with this email already exists'
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Check public.users table
+    const { data: existingProfile } = await supabaseAdmin
+      .from('users')
+      .select('id, company_id, email')
+      .eq('email', email)
+      .maybeSingle()
+
     if (existingProfile) {
-      if (existingProfile.company_id === companyId) {
-        console.log('❌ User already in this company')
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'User is already a member of this company'
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      } else if (existingProfile.company_id) {
-        console.log('❌ User already in another company')
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'User is already a member of another company'
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      } else {
-        // Update existing user profile to add to company
-        console.log('Updating existing user profile to add to company...')
-        const { error: updateError } = await supabaseAdmin
-          .from('users')
-          .update({
-            name,
-            role,
-            company_id: companyId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingProfile.id)
-
-        if (updateError) {
-          console.error('❌ Profile update error:', updateError)
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `Failed to update user profile: ${updateError.message}`,
-              debug: { updateError }
-            }),
-            { 
-              status: 500, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
+      console.log('❌ User profile already exists')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'A user with this email already exists'
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
-
-        // Send password reset email for existing user
-        try {
-          console.log('Sending password reset email to existing user...')
-          const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-            type: 'recovery',
-            email,
-            options: {
-              redirectTo: `${siteUrl}/login`
-            }
-          })
-
-          if (resetError) {
-            console.warn('⚠️ Failed to send password reset email:', resetError)
-          } else {
-            console.log('✅ Password reset email sent successfully')
-          }
-        } catch (emailError) {
-          console.warn('⚠️ Unexpected error sending email:', emailError)
-        }
-
-        console.log('✅ Existing user updated and added to company')
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'User added to company successfully',
-            userId: existingProfile.id
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
+      )
     }
 
     // ✅ 6. CREATE NEW AUTH USER
     console.log('Creating new auth user...')
     
     // Generate a secure temporary password
-    const tempPassword = `Temp${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}!`
+    const tempPassword = `Temp${Math.random().toString(36).substring(2, 15)}${Date.now()}!`
     
-    console.log('Auth user creation parameters:', {
-      email,
-      passwordLength: tempPassword.length,
-      emailConfirm: true
-    })
-
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
         name,
-        invited: true,
-        role,
-        company_id: companyId
+        invited: true
       }
-    })
-
-    console.log('Auth creation response:', {
-      success: !!authData?.user,
-      userId: authData?.user?.id,
-      email: authData?.user?.email,
-      confirmed: authData?.user?.email_confirmed_at,
-      errorCode: authError?.code,
-      errorMessage: authError?.message
     })
 
     if (authError) {
-      console.error('❌ Auth creation error:', authError)
-      
-      // Handle specific auth errors
-      if (authError.message?.includes('User already registered') || authError.message?.includes('already exists')) {
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'A user with this email already exists in the system'
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
+      console.error('❌ Auth creation error:', {
+        code: authError.code,
+        message: authError.message,
+        status: authError.status
+      })
       
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Failed to create user: ${authError.message}`,
-          debug: { authError }
+          error: `Failed to create user: ${authError.message || 'Database error creating new user'}`,
+          debug: {
+            authError: {
+              code: authError.code,
+              message: authError.message,
+              status: authError.status
+            }
+          }
         }),
         { 
           status: 500, 
@@ -363,64 +250,49 @@ Deno.serve(async (req) => {
     // ✅ 7. CREATE USER PROFILE
     console.log('Creating user profile...')
     
-    // Wait a moment for any triggers to complete
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Wait for any triggers to complete
+    await new Promise(resolve => setTimeout(resolve, 2000))
     
-    // Check if profile already exists (from trigger)
-    const { data: triggerProfile } = await supabaseAdmin
+    // Try to create or update the profile
+    const { error: profileError } = await supabaseAdmin
       .from('users')
-      .select('id')
-      .eq('id', authUserId)
-      .maybeSingle()
+      .upsert({
+        id: authUserId,
+        email,
+        name,
+        role,
+        company_id: companyId,
+        platform_ids: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id'
+      })
 
-    if (!triggerProfile) {
-      console.log('No profile found from trigger, creating manually...')
-      const { error: profileError } = await supabaseAdmin
-        .from('users')
-        .insert({
-          id: authUserId,
-          email,
-          name,
-          role,
-          company_id: companyId,
-          platform_ids: {}
-        })
-
-      if (profileError) {
-        console.error('❌ Profile creation error:', profileError)
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Failed to create user profile: ${profileError.message}`,
-            debug: { profileError }
-          }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
-      console.log('✅ Profile created manually')
-    } else {
-      console.log('✅ Profile already exists (created by trigger)')
+    if (profileError) {
+      console.error('❌ Profile creation error:', profileError)
       
-      // Update the profile with company info if needed
-      const { error: updateError } = await supabaseAdmin
-        .from('users')
-        .update({
-          name,
-          role,
-          company_id: companyId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', authUserId)
-
-      if (updateError) {
-        console.warn('⚠️ Failed to update profile with company info:', updateError)
-      } else {
-        console.log('✅ Profile updated with company info')
+      // Try to clean up the auth user if profile creation fails
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId)
+        console.log('✅ Cleaned up auth user after profile creation failure')
+      } catch (cleanupError) {
+        console.warn('⚠️ Failed to cleanup auth user:', cleanupError)
       }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Failed to create user profile: ${profileError.message}`
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
+
+    console.log('✅ Profile created successfully')
 
     // ✅ 8. SEND PASSWORD RESET EMAIL
     try {
@@ -435,11 +307,13 @@ Deno.serve(async (req) => {
 
       if (resetError) {
         console.warn('⚠️ Failed to send password reset email:', resetError)
+        // Don't fail the entire operation if email fails
       } else {
         console.log('✅ Password reset email sent successfully')
       }
     } catch (emailError) {
       console.warn('⚠️ Unexpected error sending email:', emailError)
+      // Don't fail the entire operation if email fails
     }
 
     console.log('✅ User invitation completed successfully')
@@ -461,11 +335,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: `An unexpected error occurred: ${error.message}`,
-        debug: {
-          stack: error.stack,
-          name: error.name
-        }
+        error: `An unexpected error occurred: ${error.message}`
       }),
       { 
         status: 500, 
