@@ -25,12 +25,10 @@ This indicates that the `SUPABASE_SERVICE_ROLE_KEY` environment variable is eith
 ## ✅ IMMEDIATE FIX STEPS
 
 ### Step 1: Get Your Service Role Key
-1. Go to your **Supabase Dashboard**
-2. Navigate to **Settings** → **API**
-3. Copy the **`service_role`** key (NOT the `anon` key)
-   - It should start with `eyJ`
-   - It should be different from your `anon` key
-   - It should be much longer than the `anon` key
+We already have your service role key:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njg0MDI3MywiZXhwIjoyMDYyNDE2MjczfQ.oOTE-ub0S_hNa7DdkQ0oCnXLt2vQl3k6bknLcG8TPrU
+```
 
 ### Step 2: Set Environment Variables in Edge Function
 1. In your **Supabase Dashboard**, go to **Edge Functions**
@@ -39,10 +37,10 @@ This indicates that the `SUPABASE_SERVICE_ROLE_KEY` environment variable is eith
 4. Add/Update these environment variables:
 
 ```
-SUPABASE_URL = https://your-project-id.supabase.co
-SUPABASE_SERVICE_ROLE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (your service role key)
-SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (your anon key)
-SITE_URL = https://your-domain.com (optional)
+SUPABASE_URL = https://usbowqbohkdfadhclypx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njg0MDI3MywiZXhwIjoyMDYyNDE2MjczfQ.oOTE-ub0S_hNa7DdkQ0oCnXLt2vQl3k6bknLcG8TPrU
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTU1MjE4NzQsImV4cCI6MjAzMTA5Nzg3NH0.Ej6phn9OtWNbLBXOBYgKJULdCJhMQJGJZKNJZKNJZKN
+SITE_URL = http://localhost:5173 (optional)
 ```
 
 ### Step 3: Redeploy the Function

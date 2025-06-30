@@ -3,6 +3,7 @@
 
 const SUPABASE_URL = 'https://usbowqbohkdfadhclypx.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTU1MjE4NzQsImV4cCI6MjAzMTA5Nzg3NH0.Ej6phn9OtWNbLBXOBYgKJULdCJhMQJGJZKNJZKNJZKN'
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njg0MDI3MywiZXhwIjoyMDYyNDE2MjczfQ.oOTE-ub0S_hNa7DdkQ0oCnXLt2vQl3k6bknLcG8TPrU'
 
 async function getCompanies() {
   console.log('🔍 Fetching companies from database...')
@@ -10,8 +11,8 @@ async function getCompanies() {
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=id,name&limit=3`, {
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SERVICE_KEY,
         'Content-Type': 'application/json'
       }
     })
