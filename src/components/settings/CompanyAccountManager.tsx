@@ -23,7 +23,14 @@ const CompanyAccountManager: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      fetchCompanyAccountIds();
+      console.log('[CompanyAccountManager] User detected, fetching account IDs');
+      if (typeof fetchCompanyAccountIds === 'function') {
+        fetchCompanyAccountIds();
+      } else {
+        console.error('[CompanyAccountManager] fetchCompanyAccountIds is not a function:', fetchCompanyAccountIds);
+      }
+    } else {
+      console.log('[CompanyAccountManager] No user detected, skipping fetch');
     }
   }, [user, fetchCompanyAccountIds]);
 
@@ -131,7 +138,7 @@ const CompanyAccountManager: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          {companyAccountIds.length === 0 ? (
+          {(companyAccountIds || []).length === 0 ? (
             <div className="text-center py-8">
               <Building size={48} className="mx-auto mb-4 text-gray-300" />
               <p className="text-gray-600 mb-4">No platform accounts added yet.</p>
@@ -145,7 +152,7 @@ const CompanyAccountManager: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {companyAccountIds.map(account => (
+              {(companyAccountIds || []).map(account => (
                 <div
                   key={account.id}
                   className="border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:shadow-sm transition-shadow"

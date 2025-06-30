@@ -60,20 +60,27 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       try {
         console.log('[CampaignForm] Starting to fetch company account IDs...');
         
-        // DEBUGGING: Call the debug function from within the app - fix the ambiguous function call
-        console.log('[CampaignForm] Calling debug function with user session...');
-        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions');
-        
-        if (debugError) {
-          console.error('[CampaignForm] Debug function error:', debugError);
-        } else {
-          console.log('[CampaignForm] Debug function result:', debugData);
-          setDebugInfo(debugData);
+        try {
+          // Try to get debug info but don't fail if it doesn't work
+          const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
+          
+          if (debugError) {
+            console.error('[CampaignForm] Debug function error:', debugError);
+          } else {
+            console.log('[CampaignForm] Debug function result:', debugData);
+            setDebugInfo(debugData);
+          }
+        } catch (debugErr) {
+          console.error('[CampaignForm] Error calling debug function:', debugErr);
         }
         
-        await fetchCompanyAccountIds();
-        setAccountsLoaded(true);
-        console.log('[CampaignForm] Successfully fetched company account IDs');
+        if (typeof fetchCompanyAccountIds === 'function') {
+          await fetchCompanyAccountIds();
+          setAccountsLoaded(true);
+          console.log('[CampaignForm] Successfully fetched company account IDs');
+        } else {
+          console.error('[CampaignForm] fetchCompanyAccountIds is not a function:', fetchCompanyAccountIds);
+        }
       } catch (error) {
         console.error('[CampaignForm] Error loading company account IDs:', error);
       } finally {
