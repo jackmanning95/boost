@@ -87,8 +87,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   // Additional useEffect to log when companyAccountIds changes
   useEffect(() => {
     console.log('[CampaignForm] companyAccountIds updated:', companyAccountIds);
-    console.log('[CampaignForm] Number of accounts:', companyAccountIds.length);
-    companyAccountIds.forEach((account, index) => {
+    console.log('[CampaignForm] Number of accounts:', (companyAccountIds || []).length);
+    (companyAccountIds || []).forEach((account, index) => {
       console.log(`[CampaignForm] Account ${index + 1}:`, {
         id: account.id,
         platform: account.platform,
@@ -136,7 +136,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     console.log('[CampaignForm] handleAccountSelection called with:', accountId);
     console.log('[CampaignForm] Available accounts for selection:', companyAccountIds);
     
-    const selectedAccount = companyAccountIds.find(account => account.id === accountId);
+    const selectedAccount = (companyAccountIds || []).find(account => account.id === accountId);
     console.log('[CampaignForm] Found selected account:', selectedAccount);
     
     updateCampaignDetails({ 
@@ -216,13 +216,13 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     }
   };
 
-  const selectedAccount = companyAccountIds.find(account => account.id === activeCampaign.selectedCompanyAccountId);
+  const selectedAccount = (companyAccountIds || []).find(account => account.id === activeCampaign.selectedCompanyAccountId);
 
   // Debug logging for render
   console.log('[CampaignForm] Rendering with state:', {
     isLoadingAccounts,
     accountsLoaded,
-    companyAccountIdsLength: companyAccountIds.length,
+    companyAccountIdsLength: (companyAccountIds || []).length,
     selectedAccountId: activeCampaign.selectedCompanyAccountId,
     selectedAccount,
     userCompanyId: user?.companyId
@@ -265,7 +265,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               <div className="text-xs text-blue-700 space-y-1">
                 <div>Loading Accounts: {isLoadingAccounts ? 'Yes' : 'No'}</div>
                 <div>Accounts Loaded: {accountsLoaded ? 'Yes' : 'No'}</div>
-                <div>Available Accounts: {companyAccountIds.length}</div>
+                <div>Available Accounts: {(companyAccountIds || []).length}</div>
                 <div>User Company ID: {user?.companyId || 'None'}</div>
                 <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
                 {debugInfo && (
@@ -288,10 +288,10 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               >
                 <option value="">
                   {isLoadingAccounts ? 'Loading accounts...' : 
-                   companyAccountIds.length === 0 ? 'No accounts available - add one' : 
+                   (companyAccountIds || []).length === 0 ? 'No accounts available - add one' : 
                    'Select an account'}
                 </option>
-                {companyAccountIds.map(account => (
+                {(companyAccountIds || []).map(account => (
                   <option key={account.id} value={account.id}>
                     {account.platform} - {account.accountName} ({account.accountId})
                   </option>
