@@ -1,491 +1,296 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import Button from '../ui/Button';
-import Input from '../ui/Input';
-import Badge from '../ui/Badge';
+import React, { useState } from 'react';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
-import { CompanyUser } from '../../types';
-import { 
-  Users, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Mail, 
-  Search,
-  Calendar,
-  Shield,
-  UserCheck,
-  UserX,
-  Crown,
-  Send,
-  AlertCircle,
-  Eye,
-  Info
-} from 'lucide-react';
+import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Badge } from '../ui/Badge';
+import { UserPlus, Mail, Shield, User, Trash2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
-const TeamManagement: React.FC = () => {
-  const { companyUsers, currentCompany, loading, inviteUser, updateUserRole, removeUser, fetchCompanyUsers } = useCompany();
-  const { user, isCompanyAdmin, isSuperAdmin } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
+export const TeamManagement: React.FC = () => {
+  const { user } = useAuth();
+  const { company, teamMembers, loading, inviteUser, updateUserRole, removeUser } = useCompany();
   const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteData, setInviteData] = useState({
+  const [inviteForm, setInviteForm] = useState({
     email: '',
-    firstName: '',
-    lastName: '',
+    name: '',
     role: 'user' as 'admin' | 'user'
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [inviteError, setInviteError] = useState('');
-  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
-  // Allow all users to view the team list, but only admins can manage
-  const canManage = isCompanyAdmin || isSuperAdmin;
-
-  const filteredUsers = companyUsers.filter(companyUser =>
-    companyUser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    companyUser.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const isAdmin = user?.role === 'admin';
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteData.email.trim() || !inviteData.firstName.trim() || !inviteData.lastName.trim() || !canManage) return;
+    if (!inviteForm.email || !inviteForm.name) return;
 
-    setIsSubmitting(true);
-    setInviteError('');
-    setInviteSuccess('');
-    
+    setInviteLoading(true);
+    setInviteError(null);
+    setInviteSuccess(null);
+
     try {
-      await inviteUser(inviteData.email, inviteData.role, inviteData.firstName, inviteData.lastName);
-      setInviteData({ email: '', firstName: '', lastName: '', role: 'user' });
+      await inviteUser(inviteForm.email, inviteForm.name, inviteForm.role);
+      setInviteSuccess(`Successfully invited ${inviteForm.name} (${inviteForm.email})`);
+      setInviteForm({ email: '', name: '', role: 'user' });
       setShowInviteForm(false);
-      setInviteSuccess(`Successfully invited ${inviteData.firstName} ${inviteData.lastName} to your team!`);
       
-      // Refresh the user list
-      await fetchCompanyUsers();
+      // Clear success message after 5 seconds
+      setTimeout(() => setInviteSuccess(null), 5000);
     } catch (error) {
       console.error('Error inviting user:', error);
       
-      // Enhanced error handling with specific guidance
-      let errorMessage = 'Failed to invite user. Please try again.';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      setInviteError(errorMessage);
+      // Enhanced error display with better formatting
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setInviteError(`Failed to invite user: ${errorMessage}`);
     } finally {
-      setIsSubmitting(false);
+      setInviteLoading(false);
     }
   };
 
-  const handleUpdateRole = async (userId: string, newRole: 'admin' | 'user') => {
-    if (!canManage) return;
-    
-    if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
-      return;
-    }
-
+  const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
     try {
       await updateUserRole(userId, newRole);
     } catch (error) {
-      console.error('Error updating user role:', error);
-      alert('Failed to update user role. Please try again.');
+      console.error('Error updating role:', error);
+      alert('Failed to update user role');
     }
   };
 
-  const handleRemoveUser = async (userToRemove: CompanyUser) => {
-    if (!canManage) return;
-    
-    if (!confirm(`Are you sure you want to remove "${userToRemove.name}" from the company? This action cannot be undone.`)) {
+  const handleRemoveUser = async (userId: string, userName: string) => {
+    if (!confirm(`Are you sure you want to remove ${userName} from the team?`)) {
       return;
     }
 
     try {
-      await removeUser(userToRemove.id);
+      await removeUser(userId);
     } catch (error) {
       console.error('Error removing user:', error);
-      alert('Failed to remove user. Please try again.');
+      alert('Failed to remove user');
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const getRoleBadge = (role: string, isCurrentUser: boolean) => {
-    if (role === 'admin') {
-      return (
-        <Badge variant="primary" className="flex items-center">
-          <Crown size={12} className="mr-1" />
-          Admin {isCurrentUser && '(You)'}
-        </Badge>
-      );
-    }
+  if (loading) {
     return (
-      <Badge variant="default" className="flex items-center">
-        <UserCheck size={12} className="mr-1" />
-        User {isCurrentUser && '(You)'}
-      </Badge>
+      <Card className="p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          </div>
+        </div>
+      </Card>
     );
-  };
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Users size={28} className="mr-3 text-blue-600" />
-            Team Members
-            {currentCompany && (
-              <span className="ml-3 text-lg font-normal text-gray-600">
-                - {currentCompany.name}
-              </span>
-            )}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            {canManage 
-              ? 'Invite and manage team members within your company'
-              : 'View team members within your company'
-            }
-          </p>
+      {/* Success Message */}
+      {inviteSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+          <div>
+            <p className="text-green-800 font-medium">Invitation Sent!</p>
+            <p className="text-green-700 text-sm">{inviteSuccess}</p>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => fetchCompanyUsers()}
-            icon={<Eye size={18} />}
-          >
-            Refresh
-          </Button>
-          {canManage && (
+      )}
+
+      {/* Error Message */}
+      {inviteError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-800 font-medium">Invitation Failed</p>
+              <div className="text-red-700 text-sm mt-1 whitespace-pre-wrap">{inviteError}</div>
+              
+              {/* Troubleshooting Help */}
+              {inviteError.includes('Edge Function') && (
+                <div className="mt-3 p-3 bg-red-100 rounded border border-red-200">
+                  <p className="text-red-800 font-medium text-sm mb-2">🔧 Troubleshooting Steps:</p>
+                  <ol className="text-red-700 text-sm space-y-1 list-decimal list-inside">
+                    <li>Check that the invite-user Edge Function is deployed</li>
+                    <li>Verify environment variables are set in Supabase Dashboard</li>
+                    <li>Ensure SUPABASE_SERVICE_ROLE_KEY is configured correctly</li>
+                    <li>Check Edge Function logs in Supabase Dashboard</li>
+                  </ol>
+                  <p className="text-red-700 text-sm mt-2">
+                    📖 See <code>CRITICAL-FIX-STEPS.md</code> for detailed instructions.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Team Management</h2>
+            <p className="text-gray-600 mt-1">
+              Manage your team members and their roles
+            </p>
+          </div>
+          {isAdmin && (
             <Button
-              variant="primary"
-              onClick={() => setShowInviteForm(true)}
-              icon={<Plus size={18} />}
+              onClick={() => setShowInviteForm(!showInviteForm)}
+              className="flex items-center gap-2"
             >
-              Invite Team Member
+              <UserPlus className="h-4 w-4" />
+              Invite User
             </Button>
           )}
         </div>
-      </div>
 
-      {/* Success Message */}
-      {inviteSuccess && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
-            <div className="flex items-start">
-              <CheckCircleIcon size={20} className="text-green-600 mt-0.5 mr-3 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-medium text-green-900">{inviteSuccess}</h3>
-                <p className="text-sm text-green-700 mt-1">
-                  The user will receive an email with instructions to set up their account.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users size={20} className="text-blue-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Total Team Members</p>
-                <p className="text-2xl font-bold text-gray-900">{companyUsers.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Crown size={20} className="text-purple-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Administrators</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {companyUsers.filter(u => u.role === 'admin').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <UserCheck size={20} className="text-green-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Regular Users</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {companyUsers.filter(u => u.role === 'user').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder="Search team members by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Invite Form - Only show for admins */}
-      {canManage && showInviteForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Mail size={20} className="mr-2" />
-              Invite New Team Member
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start">
-                <AlertCircle size={20} className="text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
-                <div>
-                  <h3 className="text-sm font-medium text-blue-900 mb-1">How Team Invitations Work</h3>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• A secure invitation will be sent to create their account</li>
-                    <li>• They will receive an email with setup instructions</li>
-                    <li>• They will be automatically added to your company</li>
-                    <li>• You can change their role at any time</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
+        {/* Invite Form */}
+        {showInviteForm && isAdmin && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Invite New Team Member</h3>
             <form onSubmit={handleInviteUser} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="First Name"
-                  type="text"
-                  value={inviteData.firstName}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, firstName: e.target.value }))}
-                  placeholder="John"
-                  required
-                />
-                <Input
-                  label="Last Name"
-                  type="text"
-                  value={inviteData.lastName}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, lastName: e.target.value }))}
-                  placeholder="Smith"
-                  required
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="Email Address"
-                  type="email"
-                  value={inviteData.email}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="colleague@company.com"
-                  required
-                  error={inviteError}
-                />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role
+                    Email Address
                   </label>
-                  <select
-                    value={inviteData.role}
-                    onChange={(e) => setInviteData(prev => ({ ...prev, role: e.target.value as 'admin' | 'user' }))}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="user">User - Can create and manage their own campaigns</option>
-                    <option value="admin">Administrator - Can manage team members and company settings</option>
-                  </select>
+                  <Input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    placeholder="user@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <Input
+                    type="text"
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                    placeholder="John Doe"
+                    required
+                  />
                 </div>
               </div>
-
-              {/* Enhanced error display */}
-              {inviteError && (
-                <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
-                  <div className="flex items-start">
-                    <AlertCircle size={16} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-600" />
-                    <div className="text-sm text-yellow-700">
-                      <div className="whitespace-pre-line">{inviteError}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex justify-end space-x-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={inviteForm.role}
+                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value as 'admin' | 'user' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="flex items-center gap-2"
+                >
+                  {inviteLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Sending Invitation...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4" />
+                      Send Invitation
+                    </>
+                  )}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setShowInviteForm(false);
-                    setInviteError('');
+                    setInviteError(null);
+                    setInviteSuccess(null);
                   }}
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isLoading={isSubmitting}
-                  icon={<Send size={16} />}
-                >
-                  Send Invitation
-                </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Team Members List */}
-      <div className="grid grid-cols-1 gap-4">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
           </div>
-        ) : filteredUsers.length > 0 ? (
-          filteredUsers.map(companyUser => {
-            const isCurrentUser = companyUser.id === user?.id;
-            const canModifyThisUser = canManage && !isCurrentUser;
-            
-            return (
-              <Card key={companyUser.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{companyUser.name}</h3>
-                        {getRoleBadge(companyUser.role, isCurrentUser)}
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div className="flex items-center text-gray-600 min-w-0">
-                          <Mail size={14} className="mr-1 flex-shrink-0" />
-                          <span className="truncate overflow-hidden">{companyUser.email}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Calendar size={14} className="mr-1" />
-                          <span>Joined {formatDate(companyUser.createdAt)}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Shield size={14} className="mr-1" />
-                          <span>Role: {companyUser.role === 'admin' ? 'Administrator' : 'User'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {canModifyThisUser && (
-                      <div className="flex items-center space-x-2">
-                        {companyUser.role === 'user' ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUpdateRole(companyUser.id, 'admin')}
-                            icon={<Crown size={16} />}
-                          >
-                            Promote to Admin
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUpdateRole(companyUser.id, 'user')}
-                            icon={<UserX size={16} />}
-                          >
-                            Remove Admin
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRemoveUser(companyUser)}
-                          icon={<Trash2 size={16} />}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Users size={64} className="mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchTerm ? 'No team members found' : 'No team members yet'}
-              </h3>
-              <p className="text-gray-600 mb-6">
-                {searchTerm 
-                  ? 'Try adjusting your search criteria'
-                  : canManage
-                    ? 'Invite your first team member to get started collaborating'
-                    : 'No team members have been added to your company yet'
-                }
-              </p>
-              {!searchTerm && canManage && (
-                <Button
-                  variant="primary"
-                  onClick={() => setShowInviteForm(true)}
-                  icon={<Plus size={18} />}
-                >
-                  Invite First Team Member
-                </Button>
-              )}
-            </CardContent>
-          </Card>
         )}
-      </div>
+
+        {/* Team Members List */}
+        <div className="space-y-4">
+          {teamMembers.length === 0 ? (
+            <div className="text-center py-8">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No team members found</p>
+              {isAdmin && (
+                <p className="text-gray-400 text-sm mt-2">
+                  Click "Invite User" to add your first team member
+                </p>
+              )}
+            </div>
+          ) : (
+            teamMembers.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <User className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">{member.name || member.email}</h4>
+                    <p className="text-sm text-gray-500">{member.email}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={member.role === 'admin' ? 'default' : 'secondary'}
+                    className="flex items-center gap-1"
+                  >
+                    {member.role === 'admin' ? (
+                      <Shield className="h-3 w-3" />
+                    ) : (
+                      <User className="h-3 w-3" />
+                    )}
+                    {member.role}
+                  </Badge>
+                  
+                  {isAdmin && member.id !== user?.id && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleRoleChange(member.id, e.target.value as 'admin' | 'user')}
+                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRemoveUser(member.id, member.name || member.email)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     </div>
   );
 };
-
-// CheckCircle icon component
-const CheckCircleIcon = ({ size, className }: { size: number, className: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-  </svg>
-);
-
-export default TeamManagement;
