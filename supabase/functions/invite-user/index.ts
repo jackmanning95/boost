@@ -235,7 +235,87 @@ Deno.serve(async (req) => {
     // ✅ 5. CHECK FOR EXISTING USER WITH ENHANCED LOGIC
     console.log('Checking for existing user:', email)
     
-    // FIXED: Use listUsers instead of getUserByEmail which doesn't exist
+    // First check if user exists in public.users table
+    const { data: existingProfile } = await supabaseAdmin
+      .from('users')
+      .select('id, company_id, email, name, role')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (existingProfile) {
+      console.log('User profile found in database:', existingProfile)
+      
+      if (existingProfile.company_id === companyId) {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'User is already a member of this company',
+            userId: existingProfile.id,
+            debug: {
+              idempotent: true,
+              existingUser: {
+                id: existingProfile.id,
+                email: existingProfile.email,
+                role: existingProfile.role
+              }
+            }
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      } else if (existingProfile.company_id) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'User is already a member of another company'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      // User exists but has no company - add them to this company
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          company_id: companyId,
+          role: role,
+          name: name,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingProfile.id)
+
+      if (updateError) {
+        console.error('❌ Error updating existing user:', updateError)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Failed to add existing user to company: ${updateError.message}`
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      console.log('✅ Existing user added to company successfully')
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Existing user added to company successfully',
+          userId: existingProfile.id
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Check if user exists in auth.users but not in public.users
     const { data: existingAuthUsers, error: authLookupError } = await supabaseAdmin.auth.admin.listUsers()
     
     if (authLookupError) {
@@ -256,106 +336,49 @@ Deno.serve(async (req) => {
       )
     }
 
-    const existingUser = existingAuthUsers.users.find(user => user.email === email)
+    const existingAuthUser = existingAuthUsers.users.find(user => user.email === email)
     
-    if (existingUser) {
-      console.log('User already exists in auth.users, checking if they can be added to company...')
+    if (existingAuthUser) {
+      console.log('User exists in auth.users but not in public.users, creating profile...')
       
-      // Check if user has a profile
-      const { data: existingProfile } = await supabaseAdmin
+      // Create profile for existing auth user
+      const { error: profileError } = await supabaseAdmin
         .from('users')
-        .select('id, company_id, email, name, role')
-        .eq('id', existingUser.id)
-        .maybeSingle()
+        .upsert({
+          id: existingAuthUser.id,
+          email,
+          name,
+          role,
+          company_id: companyId,
+          platform_ids: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'id'
+        })
 
-      if (existingProfile) {
-        if (existingProfile.company_id === companyId) {
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              message: 'User is already a member of this company',
-              userId: existingProfile.id,
-              debug: {
-                idempotent: true,
-                existingUser: {
-                  id: existingProfile.id,
-                  email: existingProfile.email,
-                  role: existingProfile.role
-                }
-              }
-            }),
-            { 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
-        } else if (existingProfile.company_id) {
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'User is already a member of another company'
-            }),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
-        }
-        
-        // User exists but has no company - add them to this company
-        const { error: updateError } = await supabaseAdmin
-          .from('users')
-          .update({
-            company_id: companyId,
-            role: role,
-            name: name,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingUser.id)
-
-        if (updateError) {
-          console.error('❌ Error updating existing user:', updateError)
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `Failed to add existing user to company: ${updateError.message}`
-            }),
-            { 
-              status: 500, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
-        }
-
-        console.log('✅ Existing user added to company successfully')
+      if (profileError) {
+        console.error('❌ Error creating profile for existing auth user:', profileError)
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: 'Existing user added to company successfully',
-            userId: existingUser.id
+            success: false, 
+            error: `Failed to create user profile: ${profileError.message}`
           }),
           { 
+            status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
       }
-    }
 
-    // Check public.users table for any orphaned profiles
-    const { data: existingProfile } = await supabaseAdmin
-      .from('users')
-      .select('id, company_id, email')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (existingProfile) {
-      console.log('❌ User profile exists without auth user - data inconsistency')
+      console.log('✅ Profile created for existing auth user')
       return new Response(
         JSON.stringify({ 
-          success: false, 
-          error: 'User data inconsistency detected. Please contact support.'
+          success: true, 
+          message: 'User profile created and added to company successfully',
+          userId: existingAuthUser.id
         }),
         { 
-          status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -392,7 +415,7 @@ Deno.serve(async (req) => {
         status: authError.status
       })
       
-      // Enhanced error handling for specific Auth API errors
+      // Enhanced error handling for specific Auth API errors - FIXED: Handle both user_already_exists and email_exists
       let errorMessage = 'Failed to create user'
       let debugInfo: any = {
         authError: {
@@ -414,8 +437,56 @@ Deno.serve(async (req) => {
         errorMessage = 'User signup is disabled for this project'
       } else if (authError.code === 'email_address_invalid') {
         errorMessage = 'Invalid email address format'
-      } else if (authError.code === 'user_already_exists') {
-        errorMessage = 'A user with this email already exists'
+      } else if (authError.code === 'user_already_exists' || authError.code === 'email_exists') {
+        // FIXED: Handle both error codes for existing users
+        console.log('User already exists in auth, attempting to create profile...')
+        
+        // Try to find the existing user and create their profile
+        const existingUser = existingAuthUsers.users.find(user => user.email === email)
+        if (existingUser) {
+          const { error: profileError } = await supabaseAdmin
+            .from('users')
+            .upsert({
+              id: existingUser.id,
+              email,
+              name,
+              role,
+              company_id: companyId,
+              platform_ids: {},
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'id'
+            })
+
+          if (profileError) {
+            console.error('❌ Error creating profile for existing user:', profileError)
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: `User exists but failed to create profile: ${profileError.message}`
+              }),
+              { 
+                status: 500, 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              }
+            )
+          }
+
+          console.log('✅ Profile created for existing user')
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'Existing user added to company successfully',
+              userId: existingUser.id
+            }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          )
+        } else {
+          errorMessage = 'User already exists but could not be found'
+        }
       }
       
       return new Response(

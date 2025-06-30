@@ -32,7 +32,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
-  // ENHANCED useEffect with comprehensive debugging
+  // ENHANCED useEffect with comprehensive debugging and better error handling
   useEffect(() => {
     const loadAccountIds = async () => {
       console.log('[CampaignForm] useEffect triggered');
@@ -60,18 +60,21 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       try {
         console.log('[CampaignForm] Starting to fetch company account IDs...');
         
+        // Try to get debug info but don't fail if it doesn't work
         try {
-          // Try to get debug info but don't fail if it doesn't work
           const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
           
           if (debugError) {
             console.error('[CampaignForm] Debug function error:', debugError);
+            // Don't set this as a critical error since it's just for debugging
+            console.warn('[CampaignForm] Debug function failed, but continuing with normal operation');
           } else {
             console.log('[CampaignForm] Debug function result:', debugData);
             setDebugInfo(debugData);
           }
         } catch (debugErr) {
           console.error('[CampaignForm] Error calling debug function:', debugErr);
+          console.warn('[CampaignForm] Debug function unavailable, but continuing with normal operation');
         }
         
         if (typeof fetchCompanyAccountIds === 'function') {
@@ -83,6 +86,11 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
         }
       } catch (error) {
         console.error('[CampaignForm] Error loading company account IDs:', error);
+        // Don't show debug errors to users, just log them
+        if (error instanceof Error && !error.message.includes('role') && !error.message.includes('does not exist')) {
+          // Only show non-database-role errors to users
+          console.error('[CampaignForm] User-facing error:', error.message);
+        }
       } finally {
         setIsLoadingAccounts(false);
       }
@@ -266,25 +274,25 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               Select Platform Account
             </label>
             
-            {/* Debug Information Panel */}
-            <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">Debug Information:</h4>
-              <div className="text-xs text-blue-700 space-y-1">
-                <div>Loading Accounts: {isLoadingAccounts ? 'Yes' : 'No'}</div>
-                <div>Accounts Loaded: {accountsLoaded ? 'Yes' : 'No'}</div>
-                <div>Available Accounts: {(companyAccountIds || []).length}</div>
-                <div>User Company ID: {user?.companyId || 'None'}</div>
-                <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
-                {debugInfo && (
+            {/* Debug Information Panel - Only show if debug info is available */}
+            {debugInfo && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <h4 className="text-sm font-medium text-blue-900 mb-2">Debug Information:</h4>
+                <div className="text-xs text-blue-700 space-y-1">
+                  <div>Loading Accounts: {isLoadingAccounts ? 'Yes' : 'No'}</div>
+                  <div>Accounts Loaded: {accountsLoaded ? 'Yes' : 'No'}</div>
+                  <div>Available Accounts: {(companyAccountIds || []).length}</div>
+                  <div>User Company ID: {user?.companyId || 'None'}</div>
+                  <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
                   <details className="mt-2">
                     <summary className="cursor-pointer text-blue-800 font-medium">Session Debug Info</summary>
                     <pre className="mt-2 text-xs bg-blue-100 p-2 rounded overflow-auto max-h-40">
                       {JSON.stringify(debugInfo, null, 2)}
                     </pre>
                   </details>
-                )}
+                </div>
               </div>
-            </div>
+            )}
             
             <div className="flex gap-3">
               <select
