@@ -455,7 +455,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Invite a user to the company - UPDATED WITH FIRST/LAST NAME AND EDGE FUNCTION
+  // Invite a user to the company - ENHANCED WITH BETTER ERROR HANDLING
   const inviteUser = async (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => {
     if (!user || (!isCompanyAdmin && !isSuperAdmin)) {
       throw new Error('Insufficient permissions to invite users');
@@ -499,6 +499,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Call the secure Edge Function to create the user
         const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
         
+        console.log('[CompanyContext] Calling invite-user Edge Function with:', {
+          email,
+          name: fullName,
+          role,
+          companyId: targetCompanyId
+        });
+
         const { data: inviteResponse, error: inviteError } = await supabase.functions.invoke('invite-user', {
           body: {
             email,
@@ -508,22 +515,66 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         });
 
+        console.log('[CompanyContext] Edge Function response:', {
+          data: inviteResponse,
+          error: inviteError
+        });
+
         if (inviteError) {
-          console.error('Edge function error:', inviteError);
-          throw new Error('Failed to send invitation. Please try again.');
+          console.error('[CompanyContext] Edge function error:', inviteError);
+          
+          // Enhanced error handling for Edge Function errors
+          if (inviteError.message?.includes('FunctionsHttpError')) {
+            throw new Error('Edge function error: The invitation service is currently unavailable. Please try again later.');
+          } else if (inviteError.message?.includes('FunctionsFetchError')) {
+            throw new Error('Network error: Unable to send invitation. Please check your connection and try again.');
+          } else {
+            throw new Error(`Edge function error: ${inviteError.message || 'Unknown error occurred'}`);
+          }
         }
 
-        if (!inviteResponse.success) {
-          throw new Error(inviteResponse.error || 'Failed to create user invitation');
+        if (!inviteResponse?.success) {
+          console.error('[CompanyContext] Edge function returned error:', inviteResponse);
+          
+          // Extract detailed error information from the response
+          let errorMessage = inviteResponse?.error || 'Failed to create user invitation';
+          
+          // Check for specific error patterns and provide helpful messages
+          if (inviteResponse?.debug) {
+            const debug = inviteResponse.debug;
+            
+            if (debug.missingVars && debug.missingVars.length > 0) {
+              errorMessage = 'Server configuration error: Missing environment variables. Please contact support.';
+            } else if (debug.authError?.code === 'unexpected_failure') {
+              errorMessage = 'Authentication service error: Please try again in a few minutes. If the problem persists, contact support.';
+            } else if (debug.profileError) {
+              errorMessage = 'Database error: Unable to create user profile. Please contact support.';
+            } else if (debug.troubleshooting) {
+              errorMessage = `${errorMessage}. This appears to be a configuration issue.`;
+            }
+          }
+          
+          throw new Error(errorMessage);
         }
+
+        console.log('[CompanyContext] User invitation successful:', inviteResponse);
       }
 
       // Refresh company users
       await fetchCompanyUsers(targetCompanyId);
 
     } catch (err) {
-      console.error('Error inviting user:', err);
-      throw err;
+      console.error('[CompanyContext] Error inviting user:', err);
+      
+      // Re-throw with enhanced error message if it's a generic error
+      if (err instanceof Error) {
+        if (err.message === 'Failed to send invitation. Please try again.') {
+          throw new Error('Unable to send invitation. This may be due to a temporary service issue. Please try again in a few minutes.');
+        }
+        throw err;
+      } else {
+        throw new Error('An unexpected error occurred while inviting the user. Please try again.');
+      }
     }
   };
 
