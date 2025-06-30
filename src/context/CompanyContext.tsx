@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Company, CompanyUser, UserInvitation, CompanyAccountId } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
-import { inviteUserDirectly } from '../lib/directAuth';
 
 interface CompanyContextType {
   // Data
@@ -456,34 +455,55 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Invite a user to the company - USING DIRECT AUTH IMPLEMENTATION
+  // Invite a user to the company - USING EDGE FUNCTION
   const inviteUser = async (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => {
     if (!user || (!isCompanyAdmin && !isSuperAdmin)) {
       throw new Error('Insufficient permissions to invite users');
     }
 
+    if (!user.companyId) {
+      throw new Error('No company associated with user');
+    }
+
     try {
-      console.log('CompanyContext: Starting direct user invitation');
+      console.log('CompanyContext: Starting user invitation via Edge Function');
       
-      // Use the direct auth implementation instead of Edge Function
-      const result = await inviteUserDirectly(
-        email, 
-        role, 
-        firstName, 
-        lastName, 
-        user.companyId
-      );
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to invite user');
+      // Get the current user's session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
       }
+
+      // Call the invite-user Edge Function
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: email.trim(),
+          role,
+          firstName: firstName?.trim(),
+          lastName: lastName?.trim(),
+          companyId: user.companyId
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error('CompanyContext: Edge Function error:', error);
+        throw new Error(`Failed to invite user: ${error.message}`);
+      }
+
+      if (!data?.success) {
+        console.error('CompanyContext: Edge Function returned failure:', data);
+        throw new Error(data?.error || 'Failed to invite user');
+      }
+
+      console.log('CompanyContext: User invited successfully via Edge Function:', data);
       
-      console.log('CompanyContext: User invited successfully with ID:', result.userId);
-      
-      // Refresh company users
+      // Refresh company users to show the new user
       await fetchCompanyUsers(user.companyId);
       
-      return result.userId;
+      return data.userId;
     } catch (err) {
       console.error('CompanyContext: Error inviting user:', err);
       throw err;
