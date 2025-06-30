@@ -20,13 +20,15 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173'
 
+    // ENHANCED LOGGING: Log the actual service key being used (first/last 10 chars only for security)
     console.log('Environment check:', {
       hasUrl: !!supabaseUrl,
       hasServiceKey: !!supabaseServiceKey,
       hasAnonKey: !!supabaseAnonKey,
       serviceKeyLength: supabaseServiceKey?.length || 0,
-      serviceKeyPrefix: supabaseServiceKey?.substring(0, 20) || 'missing',
-      anonKeyPrefix: supabaseAnonKey?.substring(0, 20) || 'missing',
+      serviceKeyStart: supabaseServiceKey?.substring(0, 10) || 'missing',
+      serviceKeyEnd: supabaseServiceKey?.substring(supabaseServiceKey.length - 10) || 'missing',
+      anonKeyStart: supabaseAnonKey?.substring(0, 10) || 'missing',
       keysAreDifferent: supabaseServiceKey !== supabaseAnonKey
     })
 
@@ -128,7 +130,7 @@ Deno.serve(async (req) => {
     // ✅ 3. CREATE SUPABASE CLIENT WITH ENHANCED ERROR HANDLING
     console.log('Creating Supabase admin client...')
     
-    // FIXED: Ensure we're using the environment variables directly, not process.env
+    // ENHANCED LOGGING: Ensure we're using the environment variables directly, not process.env
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({ 
@@ -364,6 +366,13 @@ Deno.serve(async (req) => {
     
     // Generate a secure temporary password
     const tempPassword = `Temp${Math.random().toString(36).substring(2, 15)}${Date.now()}!`
+    
+    // ENHANCED LOGGING: Log the exact service key being used (first/last 10 chars only)
+    console.log('Using service key for Auth API:', {
+      keyStart: supabaseServiceKey.substring(0, 10),
+      keyEnd: supabaseServiceKey.substring(supabaseServiceKey.length - 10),
+      keyLength: supabaseServiceKey.length
+    })
     
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
