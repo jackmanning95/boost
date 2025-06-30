@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export const TeamManagement: React.FC = () => {
-  const { companyUsers, currentCompany, loading, inviteUser, updateUserRole, removeUser, fetchCompanyUsers } = useCompany();
+  const { teamMembers, company, loading, inviteUser, updateUserRole, removeUser, refreshTeamMembers } = useCompany();
   const { user, isCompanyAdmin, isSuperAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -46,9 +46,9 @@ export const TeamManagement: React.FC = () => {
     );
   }
 
-  const filteredUsers = (companyUsers || []).filter(companyUser =>
-    companyUser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    companyUser.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = (teamMembers || []).filter(teamMember =>
+    teamMember.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    teamMember.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleInviteUser = async (e: React.FormEvent) => {
@@ -59,7 +59,7 @@ export const TeamManagement: React.FC = () => {
     setInviteError('');
     
     try {
-      await inviteUser(inviteData.email, inviteData.role, inviteData.firstName, inviteData.lastName);
+      await inviteUser(inviteData.email, inviteData.firstName, inviteData.lastName, inviteData.role);
       setInviteData({ email: '', firstName: '', lastName: '', role: 'user' });
       setShowInviteForm(false);
     } catch (error) {
@@ -150,9 +150,9 @@ export const TeamManagement: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900 flex items-center">
             <Users size={28} className="mr-3 text-blue-600" />
             Team Members
-            {currentCompany && (
+            {company && (
               <span className="ml-3 text-lg font-normal text-gray-600">
-                - {currentCompany.name}
+                - {company.name}
               </span>
             )}
           </h2>
@@ -163,7 +163,7 @@ export const TeamManagement: React.FC = () => {
         <div className="flex gap-3">
           <Button
             variant="outline"
-            onClick={() => fetchCompanyUsers()}
+            onClick={() => refreshTeamMembers()}
             icon={<UserCheck size={18} />}
           >
             Refresh
@@ -214,7 +214,7 @@ export const TeamManagement: React.FC = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Total Team Members</p>
-                <p className="text-2xl font-bold text-gray-900">{(companyUsers || []).length}</p>
+                <p className="text-2xl font-bold text-gray-900">{(teamMembers || []).length}</p>
               </div>
             </div>
           </CardContent>
@@ -229,7 +229,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Administrators</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {(companyUsers || []).filter(u => u.role === 'admin').length}
+                  {(teamMembers || []).filter(u => u.role === 'admin').length}
                 </p>
               </div>
             </div>
@@ -245,7 +245,7 @@ export const TeamManagement: React.FC = () => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Regular Users</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {(companyUsers || []).filter(u => u.role === 'user').length}
+                  {(teamMembers || []).filter(u => u.role === 'user').length}
                 </p>
               </div>
             </div>
@@ -390,43 +390,43 @@ export const TeamManagement: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
           </div>
         ) : filteredUsers.length > 0 ? (
-          filteredUsers.map(companyUser => {
-            const isCurrentUser = companyUser.id === user?.id;
+          filteredUsers.map(teamMember => {
+            const isCurrentUser = teamMember.id === user?.id;
             const canModifyThisUser = !isCurrentUser && (isCompanyAdmin || isSuperAdmin);
             
             return (
-              <Card key={companyUser.id} className="hover:shadow-md transition-shadow">
+              <Card key={teamMember.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{companyUser.name}</h3>
-                        {getRoleBadge(companyUser.role, isCurrentUser)}
+                        <h3 className="text-lg font-semibold text-gray-900">{teamMember.name || teamMember.email}</h3>
+                        {getRoleBadge(teamMember.role, isCurrentUser)}
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div className="flex items-center text-gray-600">
                           <Mail size={14} className="mr-1" />
-                          <span>{companyUser.email}</span>
+                          <span>{teamMember.email}</span>
                         </div>
                         <div className="flex items-center text-gray-600">
                           <Calendar size={14} className="mr-1" />
-                          <span>Joined {formatDate(companyUser.createdAt)}</span>
+                          <span>Joined {formatDate(teamMember.createdAt)}</span>
                         </div>
                         <div className="flex items-center text-gray-600">
                           <Shield size={14} className="mr-1" />
-                          <span>Role: {companyUser.role === 'admin' ? 'Administrator' : 'User'}</span>
+                          <span>Role: {teamMember.role === 'admin' ? 'Administrator' : 'User'}</span>
                         </div>
                       </div>
                     </div>
                     
                     {canModifyThisUser && (
                       <div className="flex items-center space-x-2">
-                        {companyUser.role === 'user' ? (
+                        {teamMember.role === 'user' ? (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdateRole(companyUser.id, 'admin')}
+                            onClick={() => handleUpdateRole(teamMember.id, 'admin')}
                             icon={<Crown size={16} />}
                           >
                             Promote to Admin
@@ -435,7 +435,7 @@ export const TeamManagement: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdateRole(companyUser.id, 'user')}
+                            onClick={() => handleUpdateRole(teamMember.id, 'user')}
                             icon={<UserX size={16} />}
                           >
                             Remove Admin
@@ -444,7 +444,7 @@ export const TeamManagement: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRemoveUser(companyUser)}
+                          onClick={() => handleRemoveUser(teamMember)}
                           icon={<Trash2 size={16} />}
                           className="text-red-600 hover:text-red-700"
                         >

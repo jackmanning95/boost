@@ -10,7 +10,7 @@ interface CompanyContextType {
   error: string | null;
   refreshCompany: () => Promise<void>;
   refreshTeamMembers: () => Promise<void>;
-  inviteUser: (email: string, name: string, role: 'admin' | 'user') => Promise<void>;
+  inviteUser: (email: string, firstName: string, lastName: string, role: 'admin' | 'user') => Promise<void>;
   updateUserRole: (userId: string, role: 'admin' | 'user') => Promise<void>;
   removeUser: (userId: string) => Promise<void>;
 }
@@ -37,7 +37,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
   const [error, setError] = useState<string | null>(null);
 
   const refreshCompany = async () => {
-    if (!user?.company_id) {
+    if (!user?.companyId) {
       setCompany(null);
       setLoading(false);
       return;
@@ -48,7 +48,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
       const { data, error } = await supabase
         .from('companies')
         .select('*')
-        .eq('id', user.company_id)
+        .eq('id', user.companyId)
         .single();
 
       if (error) throw error;
@@ -62,7 +62,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
   };
 
   const refreshTeamMembers = async () => {
-    if (!user?.company_id) {
+    if (!user?.companyId) {
       setTeamMembers([]);
       return;
     }
@@ -72,7 +72,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('company_id', user.company_id)
+        .eq('company_id', user.companyId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -83,13 +83,16 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
     }
   };
 
-  const inviteUser = async (email: string, name: string, role: 'admin' | 'user') => {
-    if (!user?.company_id) {
+  const inviteUser = async (email: string, firstName: string, lastName: string, role: 'admin' | 'user') => {
+    if (!user?.companyId) {
       throw new Error('No company ID available');
     }
 
     try {
       setError(null);
+      
+      // Construct full name from firstName and lastName
+      const name = `${firstName} ${lastName}`.trim();
       
       // Get the Supabase URL from environment
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -101,7 +104,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
       
       console.log('Calling invite-user function:', {
         url: functionUrl,
-        payload: { email, name, role, companyId: user.company_id }
+        payload: { email, name, role, companyId: user.companyId }
       });
 
       const response = await fetch(functionUrl, {
@@ -114,7 +117,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
           email,
           name,
           role,
-          companyId: user.company_id,
+          companyId: user.companyId,
         }),
       });
 
