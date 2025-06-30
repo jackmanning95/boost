@@ -40,8 +40,8 @@ export async function inviteUserDirectly(
     
     console.log('DirectAuth: Using company ID:', companyId);
     
-    // Step 1: Check if user already exists
-    const { data: existingUsers, error: lookupError } = await supabase
+    // Step 1: Check if user profile already exists in public.users
+    const { data: existingProfile, error: lookupError } = await supabase
       .from('users')
       .select('id, company_id, email')
       .eq('email', email)
@@ -52,15 +52,55 @@ export async function inviteUserDirectly(
       return { success: false, error: `Database error: ${lookupError.message}` };
     }
     
-    if (existingUsers) {
-      if (existingUsers.company_id === companyId) {
-        return { 
-          success: true, 
-          userId: existingUsers.id,
-          error: 'User is already a member of this company' 
-        };
-      } else if (existingUsers.company_id) {
-        return { success: false, error: 'User is already a member of another company' };
+    if (existingProfile) {
+      console.log('DirectAuth: Found existing profile:', existingProfile);
+      
+      // Check if this profile has a corresponding auth user
+      const { data: authUser, error: authLookupError } = await supabase.auth.admin.getUserById(existingProfile.id);
+      
+      if (authLookupError || !authUser?.user) {
+        // This is an orphaned profile - delete it to clear the constraint
+        console.log('DirectAuth: Detected orphaned profile, cleaning up...');
+        const { error: deleteError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', existingProfile.id);
+          
+        if (deleteError) {
+          console.error('DirectAuth: Error deleting orphaned profile:', deleteError);
+          return { success: false, error: `Failed to clean up orphaned profile: ${deleteError.message}` };
+        }
+        
+        console.log('DirectAuth: Orphaned profile cleaned up successfully');
+      } else {
+        // Valid user exists
+        if (existingProfile.company_id === companyId) {
+          return { 
+            success: true, 
+            userId: existingProfile.id,
+            error: 'User is already a member of this company' 
+          };
+        } else if (existingProfile.company_id) {
+          return { success: false, error: 'User is already a member of another company' };
+        } else {
+          // User exists but has no company - update their profile
+          console.log('DirectAuth: Updating existing user with company info');
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              company_id: companyId,
+              role: role,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingProfile.id);
+            
+          if (updateError) {
+            console.error('DirectAuth: Error updating existing user:', updateError);
+            return { success: false, error: `Failed to update user: ${updateError.message}` };
+          }
+          
+          return { success: true, userId: existingProfile.id };
+        }
       }
     }
     
@@ -93,12 +133,12 @@ export async function inviteUserDirectly(
     const userId = authData.user.id;
     console.log('DirectAuth: Auth user created with ID:', userId);
     
-    // Step 4: Create or update user profile
+    // Step 4: Create user profile (using insert instead of upsert to avoid conflicts)
     const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
     
     const { error: profileError } = await supabase
       .from('users')
-      .upsert({
+      .insert({
         id: userId,
         email,
         name: fullName,
@@ -107,12 +147,19 @@ export async function inviteUserDirectly(
         platform_ids: {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'id'
       });
       
     if (profileError) {
       console.error('DirectAuth: Profile creation error:', profileError);
+      
+      // If profile creation fails, clean up the auth user
+      try {
+        await supabase.auth.admin.deleteUser(userId);
+        console.log('DirectAuth: Cleaned up auth user after profile creation failure');
+      } catch (cleanupError) {
+        console.error('DirectAuth: Failed to clean up auth user:', cleanupError);
+      }
+      
       return { success: false, error: `Profile error: ${profileError.message}` };
     }
     
