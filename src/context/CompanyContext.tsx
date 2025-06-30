@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Company, CompanyUser, UserInvitation, CompanyAccountId } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { inviteUserDirectly } from '../lib/directAuth';
 
 interface CompanyContextType {
   // Data
@@ -178,7 +179,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       console.log('[CompanyContext] Using Supabase URL:', supabaseUrl);
       
-      const { data, error: fetchError } = await supabase
+      const { data, error: searchError } = await supabase
         .from('company_account_ids')
         .select('*')
         .eq('company_id', targetCompanyId)
@@ -187,14 +188,14 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       console.log('[CompanyContext] Supabase response for company_account_ids:', {
         data,
-        error: fetchError,
+        error: searchError,
         targetCompanyId,
         queryUsed: `company_account_ids where company_id = ${targetCompanyId} and is_active = true`
       });
 
-      if (fetchError) {
-        console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
-        throw fetchError;
+      if (searchError) {
+        console.error('[CompanyContext] Error fetching company account IDs:', searchError);
+        throw searchError;
       }
 
       console.log('[CompanyContext] Raw data from Supabase:', data);
@@ -455,138 +456,37 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Invite a user to the company - ENHANCED WITH BETTER ERROR HANDLING AND ENVIRONMENT VARIABLE GUIDANCE
+  // Invite a user to the company - USING DIRECT AUTH IMPLEMENTATION
   const inviteUser = async (email: string, role: 'admin' | 'user', firstName?: string, lastName?: string) => {
     if (!user || (!isCompanyAdmin && !isSuperAdmin)) {
       throw new Error('Insufficient permissions to invite users');
     }
 
-    const targetCompanyId = user.companyId;
-    if (!targetCompanyId && !isSuperAdmin) {
-      throw new Error('No company associated with user');
-    }
-
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id, company_id')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existingUser) {
-        if (existingUser.company_id === targetCompanyId) {
-          throw new Error('User is already a member of this company');
-        } else if (existingUser.company_id) {
-          throw new Error('User is already a member of another company');
-        }
-        
-        // User exists but has no company - add them to this company
-        const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
-        
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            company_id: targetCompanyId,
-            role: role,
-            name: fullName,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingUser.id);
-
-        if (updateError) throw updateError;
-      } else {
-        // Call the secure Edge Function to create the user
-        const fullName = firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0];
-        
-        console.log('[CompanyContext] Calling invite-user Edge Function with:', {
-          email,
-          name: fullName,
-          role,
-          companyId: targetCompanyId
-        });
-
-        const { data: inviteResponse, error: inviteError } = await supabase.functions.invoke('invite-user', {
-          body: {
-            email,
-            name: fullName,
-            role,
-            companyId: targetCompanyId
-          }
-        });
-
-        console.log('[CompanyContext] Edge Function response:', {
-          data: inviteResponse,
-          error: inviteError
-        });
-
-        if (inviteError) {
-          console.error('[CompanyContext] Edge function error:', inviteError);
-          
-          // Enhanced error handling for Edge Function errors with specific guidance
-          if (inviteError.message?.includes('FunctionsHttpError')) {
-            throw new Error('🚨 ENVIRONMENT VARIABLE ISSUE: The invite-user Edge Function is not configured properly. Please check that SUPABASE_SERVICE_ROLE_KEY is set correctly in the Edge Function settings. Go to Supabase Dashboard → Edge Functions → invite-user → Settings and verify your environment variables.');
-          } else if (inviteError.message?.includes('FunctionsFetchError')) {
-            throw new Error('Network error: Unable to send invitation. Please check your connection and try again.');
-          } else if (inviteError.message?.includes('Edge Function returned a non-2xx status code')) {
-            throw new Error('🚨 CONFIGURATION ERROR: The invite-user Edge Function is failing. This is usually caused by missing or incorrect SUPABASE_SERVICE_ROLE_KEY. Please check the Edge Function environment variables in your Supabase Dashboard.');
-          } else {
-            throw new Error(`Edge function error: ${inviteError.message || 'Unknown error occurred'}`);
-          }
-        }
-
-        if (!inviteResponse?.success) {
-          console.error('[CompanyContext] Edge function returned error:', inviteResponse);
-          
-          // Extract detailed error information from the response
-          let errorMessage = inviteResponse?.error || 'Failed to create user invitation';
-          
-          // Check for specific error patterns and provide helpful messages
-          if (inviteResponse?.debug) {
-            const debug = inviteResponse.debug;
-            
-            if (debug.missingVars && debug.missingVars.length > 0) {
-              errorMessage = '🚨 SERVER CONFIGURATION ERROR: Missing environment variables in Edge Function. The SUPABASE_SERVICE_ROLE_KEY is not set properly. Please go to Supabase Dashboard → Edge Functions → invite-user → Settings and add the correct service role key.';
-            } else if (debug.authError?.code === 'unexpected_failure') {
-              errorMessage = '🚨 AUTH API ERROR: This is usually caused by an incorrect SUPABASE_SERVICE_ROLE_KEY. Please verify that you are using the SERVICE_ROLE key (not the anon key) in your Edge Function environment variables.';
-            } else if (debug.profileError) {
-              errorMessage = 'Database error: Unable to create user profile. Please contact support.';
-            } else if (debug.troubleshooting) {
-              errorMessage = `${errorMessage}. This appears to be a configuration issue. Please check your Edge Function environment variables.`;
-            }
-          }
-          
-          // Add specific guidance for the most common error
-          if (errorMessage.includes('Auth API unexpected failure')) {
-            errorMessage = '🚨 URGENT FIX NEEDED: The invite-user Edge Function is missing the SUPABASE_SERVICE_ROLE_KEY environment variable. Please:\n\n1. Go to Supabase Dashboard → Settings → API\n2. Copy your SERVICE_ROLE key (not anon key)\n3. Go to Edge Functions → invite-user → Settings\n4. Add SUPABASE_SERVICE_ROLE_KEY with the copied value\n5. Redeploy the function\n\nThis is the most common cause of invitation failures.';
-          }
-          
-          throw new Error(errorMessage);
-        }
-
-        console.log('[CompanyContext] User invitation successful:', inviteResponse);
-      }
-
-      // Refresh company users
-      await fetchCompanyUsers(targetCompanyId);
-
-    } catch (err) {
-      console.error('[CompanyContext] Error inviting user:', err);
+      console.log('CompanyContext: Starting direct user invitation');
       
-      // Re-throw with enhanced error message if it's a generic error
-      if (err instanceof Error) {
-        // Don't modify specific error messages that already contain guidance
-        if (err.message.includes('🚨') || err.message.includes('ENVIRONMENT VARIABLE') || err.message.includes('CONFIGURATION ERROR')) {
-          throw err;
-        }
-        
-        if (err.message === 'Failed to send invitation. Please try again.') {
-          throw new Error('Unable to send invitation. This may be due to a temporary service issue or missing environment variables in the Edge Function. Please verify your Edge Function configuration and try again.');
-        }
-        throw err;
-      } else {
-        throw new Error('An unexpected error occurred while inviting the user. This may be due to missing environment variables in the invite-user Edge Function. Please check your configuration.');
+      // Use the direct auth implementation instead of Edge Function
+      const result = await inviteUserDirectly(
+        email, 
+        role, 
+        firstName, 
+        lastName, 
+        user.companyId
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to invite user');
       }
+      
+      console.log('CompanyContext: User invited successfully with ID:', result.userId);
+      
+      // Refresh company users
+      await fetchCompanyUsers(user.companyId);
+      
+      return result.userId;
+    } catch (err) {
+      console.error('CompanyContext: Error inviting user:', err);
+      throw err;
     }
   };
 

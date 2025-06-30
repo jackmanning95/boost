@@ -21,7 +21,8 @@ import {
   Send,
   AlertCircle,
   Eye,
-  Settings
+  Settings,
+  Info
 } from 'lucide-react';
 
 const TeamManagement: React.FC = () => {
@@ -37,6 +38,7 @@ const TeamManagement: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
 
   // Allow all users to view the team list, but only admins can manage
   const canManage = isCompanyAdmin || isSuperAdmin;
@@ -52,35 +54,27 @@ const TeamManagement: React.FC = () => {
 
     setIsSubmitting(true);
     setInviteError('');
+    setInviteSuccess('');
     
     try {
       await inviteUser(inviteData.email, inviteData.role, inviteData.firstName, inviteData.lastName);
       setInviteData({ email: '', firstName: '', lastName: '', role: 'user' });
       setShowInviteForm(false);
+      setInviteSuccess(`Successfully invited ${inviteData.firstName} ${inviteData.lastName} to your team!`);
+      
+      // Refresh the user list
+      await fetchCompanyUsers();
     } catch (error) {
       console.error('Error inviting user:', error);
       
-      // Enhanced error handling with specific guidance for environment variable issues
+      // Enhanced error handling with specific guidance
       let errorMessage = 'Failed to invite user. Please try again.';
       
       if (error instanceof Error) {
         errorMessage = error.message;
-        
-        // Check for specific error patterns that indicate environment variable issues
-        if (error.message.includes('🚨') || 
-            error.message.includes('ENVIRONMENT VARIABLE') || 
-            error.message.includes('CONFIGURATION ERROR') ||
-            error.message.includes('Auth API unexpected failure') ||
-            error.message.includes('Edge Function returned a non-2xx status code')) {
-          // These are configuration errors that need immediate attention
-          setInviteError(error.message);
-        } else {
-          // Generic error handling
-          setInviteError(errorMessage);
-        }
-      } else {
-        setInviteError('An unexpected error occurred. This may be due to missing environment variables in the invite-user Edge Function.');
       }
+      
+      setInviteError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -182,31 +176,38 @@ const TeamManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Environment Variable Warning - Show if there are invitation errors */}
-      {inviteError && (inviteError.includes('🚨') || inviteError.includes('ENVIRONMENT VARIABLE') || inviteError.includes('CONFIGURATION ERROR')) && (
-        <Card className="border-red-200 bg-red-50">
+      {/* Success Message */}
+      {inviteSuccess && (
+        <Card className="border-green-200 bg-green-50">
           <CardContent className="p-4">
             <div className="flex items-start">
-              <Settings size={20} className="text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+              <CheckCircleIcon size={20} className="text-green-600 mt-0.5 mr-3 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-red-900 mb-2">Configuration Issue Detected</h3>
-                <div className="text-sm text-red-700 space-y-2">
-                  <p>The invite-user Edge Function needs to be configured properly:</p>
-                  <ol className="list-decimal list-inside space-y-1 ml-2">
-                    <li>Go to your <strong>Supabase Dashboard</strong></li>
-                    <li>Navigate to <strong>Settings → API</strong></li>
-                    <li>Copy your <strong>service_role</strong> key (NOT the anon key)</li>
-                    <li>Go to <strong>Edge Functions → invite-user → Settings</strong></li>
-                    <li>Add <strong>SUPABASE_SERVICE_ROLE_KEY</strong> with the copied value</li>
-                    <li>Click <strong>Deploy</strong> to redeploy the function</li>
-                  </ol>
-                  <p className="mt-2 font-medium">This is the most common cause of invitation failures.</p>
-                </div>
+                <h3 className="text-sm font-medium text-green-900">{inviteSuccess}</h3>
+                <p className="text-sm text-green-700 mt-1">
+                  The user will receive an email with instructions to set up their account.
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Direct Auth Implementation Notice */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="p-4">
+          <div className="flex items-start">
+            <Info size={20} className="text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">Using Direct Auth Implementation</h3>
+              <p className="text-sm text-blue-700 mt-1">
+                User invitations are now processed directly through the Supabase Auth API, bypassing the Edge Function.
+                This provides a more reliable way to invite users to your team.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -344,18 +345,10 @@ const TeamManagement: React.FC = () => {
 
               {/* Enhanced error display */}
               {inviteError && (
-                <div className={`p-4 rounded-lg ${
-                  inviteError.includes('🚨') || inviteError.includes('ENVIRONMENT VARIABLE') || inviteError.includes('CONFIGURATION ERROR')
-                    ? 'bg-red-50 border border-red-200'
-                    : 'bg-yellow-50 border border-yellow-200'
-                }`}>
+                <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
                   <div className="flex items-start">
-                    <AlertCircle size={16} className={`mt-0.5 mr-2 flex-shrink-0 ${
-                      inviteError.includes('🚨') ? 'text-red-600' : 'text-yellow-600'
-                    }`} />
-                    <div className={`text-sm ${
-                      inviteError.includes('🚨') ? 'text-red-700' : 'text-yellow-700'
-                    }`}>
+                    <AlertCircle size={16} className="mt-0.5 mr-2 flex-shrink-0 text-yellow-600" />
+                    <div className="text-sm text-yellow-700">
                       <div className="whitespace-pre-line">{inviteError}</div>
                     </div>
                   </div>
@@ -492,5 +485,24 @@ const TeamManagement: React.FC = () => {
     </div>
   );
 };
+
+// CheckCircle icon component
+const CheckCircleIcon = ({ size, className }: { size: number, className: string }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+  </svg>
+);
 
 export default TeamManagement;
