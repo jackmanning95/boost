@@ -62,7 +62,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
         
         // DEBUGGING: Call the debug function from within the app - fix the ambiguous function call
         console.log('[CampaignForm] Calling debug function with user session...');
-        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
+        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions');
         
         if (debugError) {
           console.error('[CampaignForm] Debug function error:', debugError);
