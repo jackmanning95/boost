@@ -52,13 +52,21 @@ export async function inviteUserDirectly(
       return { success: false, error: `Database error: ${lookupError.message}` };
     }
     
+    // If a profile exists with this email, we need to handle it properly
     if (existingProfile) {
       console.log('DirectAuth: Found existing profile:', existingProfile);
       
       // Check if this profile has a corresponding auth user
-      const { data: authUser, error: authLookupError } = await supabase.auth.admin.getUserById(existingProfile.id);
+      const { data: authUserData, error: authLookupError } = await supabase.auth.admin.getUserById(existingProfile.id);
       
-      if (authLookupError || !authUser?.user) {
+      if (authLookupError) {
+        console.error('DirectAuth: Error looking up auth user:', authLookupError);
+        // Continue with the process - this might be an orphaned profile
+      }
+      
+      const authUser = authUserData?.user;
+      
+      if (!authUser) {
         // This is an orphaned profile - delete it to clear the constraint
         console.log('DirectAuth: Detected orphaned profile, cleaning up...');
         const { error: deleteError } = await supabase
@@ -90,6 +98,7 @@ export async function inviteUserDirectly(
             .update({
               company_id: companyId,
               role: role,
+              name: firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0],
               updated_at: new Date().toISOString()
             })
             .eq('id', existingProfile.id);
@@ -109,15 +118,14 @@ export async function inviteUserDirectly(
     
     // Step 3: Create the user in Auth
     console.log('DirectAuth: Creating new user in Auth');
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password: tempPassword,
-      options: {
-        data: {
-          name: firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0],
-          invited: true,
-          company_id: companyId
-        }
+      email_confirm: true,
+      user_metadata: {
+        name: firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0],
+        invited: true,
+        company_id: companyId
       }
     });
     
