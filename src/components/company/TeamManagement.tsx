@@ -21,7 +21,6 @@ import {
   Send,
   AlertCircle,
   Eye,
-  Settings,
   Info
 } from 'lucide-react';
 
@@ -192,22 +191,6 @@ const TeamManagement: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Direct Auth Implementation Notice */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="p-4">
-          <div className="flex items-start">
-            <Info size={20} className="text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
-            <div>
-              <h3 className="text-sm font-medium text-blue-900">Using Direct Auth Implementation</h3>
-              <p className="text-sm text-blue-700 mt-1">
-                User invitations are now processed directly through the Supabase Auth API, bypassing the Edge Function.
-                This provides a more reliable way to invite users to your team.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -402,9 +385,9 @@ const TeamManagement: React.FC = () => {
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div className="flex items-center text-gray-600">
-                          <Mail size={14} className="mr-1" />
-                          <span>{companyUser.email}</span>
+                        <div className="flex items-center text-gray-600 min-w-0">
+                          <Mail size={14} className="mr-1 flex-shrink-0" />
+                          <span className="truncate overflow-hidden">{companyUser.email}</span>
                         </div>
                         <div className="flex items-center text-gray-600">
                           <Calendar size={14} className="mr-1" />
