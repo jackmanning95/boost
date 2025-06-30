@@ -144,7 +144,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Fetch company account IDs - ENHANCED WITH DEBUGGING
+  // Fetch company account IDs - ENHANCED WITH BETTER ERROR HANDLING
   const fetchCompanyAccountIds = async (companyId?: string) => {
     if (!user) {
       console.log('[CompanyContext] fetchCompanyAccountIds: No user available');
@@ -173,6 +173,10 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         companyId: user.companyId,
         role: user.role
       });
+
+      // Check if Supabase URL is accessible
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      console.log('[CompanyContext] Using Supabase URL:', supabaseUrl);
       
       const { data, error: fetchError } = await supabase
         .from('company_account_ids')
@@ -234,7 +238,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     } catch (err) {
       console.error('[CompanyContext] Error in fetchCompanyAccountIds:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
+      
+      // Enhanced error handling for network issues
+      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        const errorMessage = 'Network error: Unable to connect to Supabase. Please check your internet connection and verify the Supabase URL in your environment configuration.';
+        console.error('[CompanyContext] Network connectivity issue detected');
+        console.error('[CompanyContext] Current Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+        console.error('[CompanyContext] Please verify this URL matches your Supabase project settings');
+        setError(errorMessage);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
+      }
     } finally {
       setLoading(false);
     }
