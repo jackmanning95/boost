@@ -11,7 +11,7 @@ import CampaignActivityTimeline from '../components/campaigns/CampaignActivityTi
 import AdminStatusUpdater from '../components/campaigns/AdminStatusUpdater';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Calendar, DollarSign, Monitor, Users, Activity } from 'lucide-react';
+import { ArrowLeft, Calendar, DollarSign, Monitor, Users, Activity, X } from 'lucide-react';
 
 const CampaignDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -164,7 +164,6 @@ const CampaignDetailPage: React.FC = () => {
                       {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
                     </p>
                   </div>
-                  
                   <div>
                     <p className="text-sm text-gray-500">Budget</p>
                     <p className="font-medium flex items-center">
@@ -173,7 +172,6 @@ const CampaignDetailPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
-
                 {(campaign.platforms.social.length > 0 || campaign.platforms.programmatic.length > 0) && (
                   <div className="mt-6">
                     <p className="text-sm text-gray-500 mb-2 flex items-center">
@@ -218,26 +216,23 @@ const CampaignDetailPage: React.FC = () => {
                 {campaign.audiences.length > 0 ? (
                   <div className="space-y-3">
                     {campaign.audiences.map(audience => (
-                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-start">
-                        <div className="flex-1">
+                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                        <div>
                           <h4 className="font-medium text-gray-900">{audience.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
+                          <p className="text-sm text-gray-600">{audience.description}</p>
                           {audience.dataSupplier && (
-                            <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
+                            <p className="text-xs text-gray-500">{audience.dataSupplier}</p>
                           )}
-                          <div className="text-xs text-gray-500 mt-1">
-                            Est. Reach: {audience.reach?.toLocaleString() || 'N/A'}
-                          </div>
+                          <p className="text-xs text-gray-500">Est. Reach: {audience.reach?.toLocaleString() || 'N/A'}</p>
                         </div>
-                        <div className="flex flex-col items-end ml-4">
-                          <Button 
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeAudienceFromCampaign(audience)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          icon={<X size={14} />}
+                          onClick={() => removeAudienceFromCampaign(audience)}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     ))}
                   </div>
