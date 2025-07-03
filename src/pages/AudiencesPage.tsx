@@ -23,9 +23,9 @@ const AudiencesPage: React.FC = () => {
     initializeCampaign, 
     isCampaignOperationLoading, 
     waitForCampaignReady,
-    resetCampaign // ✅ You'll need this in your CampaignContext!
+    resetCampaign
   } = useCampaign();
-  const { user, isSuperAdmin } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,9 +44,16 @@ const AudiencesPage: React.FC = () => {
   };
 
   const handleCreateNewCampaign = async () => {
-    resetCampaign(); // Clear existing campaign
-    const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-    await initializeCampaign(defaultName);
+    try {
+      resetCampaign();
+      // Give React time to apply the reset
+      await new Promise(resolve => setTimeout(resolve, 0)); 
+      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+      await initializeCampaign(defaultName);
+    } catch (error) {
+      console.error('[AudiencesPage] handleCreateNewCampaign - Error:', error);
+      alert('Failed to create new campaign. Please try again.');
+    }
   };
 
   const handleSelectAudience = async (audience: AudienceSegment) => {
