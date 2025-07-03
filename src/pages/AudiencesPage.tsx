@@ -21,7 +21,7 @@ const AudiencesPage: React.FC = () => {
     addAudienceToCampaign, 
     removeAudienceFromCampaign, 
     isCampaignOperationLoading, 
-    waitForCampaignReady
+    waitForCampaignReady 
   } = useCampaign();
   const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
@@ -44,11 +44,13 @@ const AudiencesPage: React.FC = () => {
 
   const handleNewCampaign = async () => {
     try {
-      if (activeCampaign && activeCampaign.audiences) {
-        for (const audience of activeCampaign.audiences) {
+      if (activeCampaign?.audiences?.length) {
+        for (const audience of [...activeCampaign.audiences]) {
           await removeAudienceFromCampaign(audience);
         }
       }
+      setShowSelectedOnly(false);
+      setCurrentPage(1);
     } catch (error) {
       console.error('[AudiencesPage] handleNewCampaign - Error:', error);
       alert('Failed to clear selected audiences. Please try again.');
@@ -86,11 +88,13 @@ const AudiencesPage: React.FC = () => {
   const selectedAudiences = activeCampaign?.audiences || [];
   const canEditAudiences = !isSuperAdmin;
 
+  // 🟢 Fix: When showing selected only, show ALL selected audiences on 1 page
   const displayedAudiences = showSelectedOnly
-    ? searchResults.filter(a => selectedAudiences.some(s => s.id === a.id))
+    ? selectedAudiences
     : searchResults;
 
-  const pageCount = Math.ceil(totalCount / PAGE_SIZE);
+  // If showing selected only, we want no pagination
+  const showPagination = !showSelectedOnly && Math.ceil(totalCount / PAGE_SIZE) > 1;
 
   return (
     <Layout>
@@ -148,7 +152,7 @@ const AudiencesPage: React.FC = () => {
           onSearchResults={handleSearchResults}
           onPageChange={handlePageChange}
           currentPage={currentPage}
-          totalPages={pageCount}
+          totalPages={Math.ceil(totalCount / PAGE_SIZE)}
         />
       </div>
 
@@ -169,7 +173,7 @@ const AudiencesPage: React.FC = () => {
                 ? `Selected Audiences (${displayedAudiences.length})`
                 : (searchResults.length === audiences.length 
                   ? 'All Audiences' 
-                  : `Search Results (${totalCount})`)}
+                  : `Search Results (${displayedAudiences.length})`)}
             </h2>
           </div>
 
@@ -185,13 +189,13 @@ const AudiencesPage: React.FC = () => {
             ))}
           </div>
 
-          {!showSelectedOnly && pageCount > 1 && (
+          {showPagination && (
             <div className="flex justify-center mt-8">
               <ReactPaginate
                 previousLabel={<ChevronLeft size={16} />}
                 nextLabel={<ChevronRight size={16} />}
                 breakLabel="..."
-                pageCount={pageCount}
+                pageCount={Math.ceil(totalCount / PAGE_SIZE)}
                 marginPagesDisplayed={2}
                 pageRangeDisplayed={5}
                 onPageChange={({ selected }) => handlePageChange(selected + 1)}
