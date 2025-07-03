@@ -10,21 +10,25 @@ import { AudienceSegment } from '../types';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import ReactPaginate from 'react-paginate';
-import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, Users } from 'lucide-react';
+import { PlusCircle, ShoppingCart, ChevronLeft, ChevronRight, Sparkles, Users, RefreshCw } from 'lucide-react';
 
 const PAGE_SIZE = 12;
 
 const AudiencesPage: React.FC = () => {
   const { audiences, loading, error, totalCount } = useTaxonomy();
-  const { activeCampaign, addAudienceToCampaign, removeAudienceFromCampaign, initializeCampaign, isCampaignOperationLoading, waitForCampaignReady } = useCampaign();
+  const { 
+    activeCampaign, 
+    addAudienceToCampaign, 
+    removeAudienceFromCampaign, 
+    initializeCampaign, 
+    isCampaignOperationLoading, 
+    waitForCampaignReady,
+    resetCampaign // ✅ You'll need this in your CampaignContext!
+  } = useCampaign();
   const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // ✅ DEBUGGING: Add comprehensive logging
-  console.log('[AudiencesPage] Render - activeCampaign:', activeCampaign);
-  console.log('[AudiencesPage] Render - isCampaignOperationLoading:', isCampaignOperationLoading);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -39,70 +43,42 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  // ✅ FIXED: Proper async handling with debugging
-  const handleCreateCampaign = async () => {
-    console.log('[AudiencesPage] handleCreateCampaign - Starting');
+  const handleCreateNewCampaign = async () => {
+    resetCampaign(); // Clear existing campaign
     const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-    try {
-      await initializeCampaign(defaultName);
-      console.log('[AudiencesPage] handleCreateCampaign - Completed successfully');
-    } catch (error) {
-      console.error('[AudiencesPage] handleCreateCampaign - Error:', error);
-    }
+    await initializeCampaign(defaultName);
   };
 
-  // ✅ FIXED: Use waitForCampaignReady to ensure campaign is available before adding audience
   const handleSelectAudience = async (audience: AudienceSegment) => {
-    console.log('[AudiencesPage] handleSelectAudience - Starting for audience:', audience.id);
     try {
       if (!activeCampaign) {
-        console.log('[AudiencesPage] handleSelectAudience - No active campaign, initializing');
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
       }
-      
-      // ✅ RACE CONDITION FIX: Wait for campaign to be ready before proceeding
-      console.log('[AudiencesPage] handleSelectAudience - Waiting for campaign to be ready...');
       await waitForCampaignReady();
-      
-      console.log('[AudiencesPage] handleSelectAudience - Adding audience to campaign');
       await addAudienceToCampaign(audience);
-      console.log('[AudiencesPage] handleSelectAudience - Completed successfully');
     } catch (error) {
       console.error('[AudiencesPage] handleSelectAudience - Error:', error);
-      alert('Failed to add audience to campaign. Please try again.');
+      alert('Failed to add audience. Please try again.');
     }
   };
 
-  // ✅ FIXED: Navigate directly to campaign form page
   const handleNavigateToCampaignForm = async () => {
-    console.log('[AudiencesPage] handleNavigateToCampaignForm - Starting');
-    console.log('[AudiencesPage] handleNavigateToCampaignForm - Current activeCampaign:', activeCampaign);
-    
     try {
       if (!activeCampaign) {
-        console.log('[AudiencesPage] handleNavigateToCampaignForm - No active campaign, initializing');
         const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
         await initializeCampaign(defaultName);
-        console.log('[AudiencesPage] handleNavigateToCampaignForm - Campaign initialized');
       }
-      
-      // ✅ RACE CONDITION FIX: Wait for campaign to be ready before navigating
-      console.log('[AudiencesPage] handleNavigateToCampaignForm - Waiting for campaign to be ready...');
       await waitForCampaignReady();
-      
-      console.log('[AudiencesPage] handleNavigateToCampaignForm - Navigating to /campaign/build');
       navigate('/campaign/build');
     } catch (error) {
       console.error('[AudiencesPage] handleNavigateToCampaignForm - Error:', error);
-      alert('Failed to navigate to campaign form. Please try again.');
+      alert('Failed to continue to campaign form. Please try again.');
     }
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
-
-  // ✅ FIXED: Allow company admins to edit audiences, only block super admins
   const canEditAudiences = !isSuperAdmin;
 
   return (
@@ -113,44 +89,31 @@ const AudiencesPage: React.FC = () => {
           <p className="text-gray-600 mt-1">Browse and select audience segments for your campaigns</p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {canEditAudiences && activeCampaign && selectedAudiences.length > 0 && (
-            <div className="flex items-center">
-              <div className="mr-4 text-right hidden md:block">
-                <p className="text-sm text-gray-600">Current Campaign</p>
-                <p className="font-medium">{activeCampaign.name}</p>
-              </div>
-              <Button 
-                variant="primary"
-                icon={<ShoppingCart size={18} />}
-                onClick={handleNavigateToCampaignForm}
-                disabled={isCampaignOperationLoading}
-                isLoading={isCampaignOperationLoading}
-              >
-                Continue to Campaign Form ({selectedAudiences.length})
-              </Button>
-            </div>
-          )}
-
-          {canEditAudiences && !activeCampaign && (
-            <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canEditAudiences && (
+            <>
               <Button 
                 variant="outline"
-                icon={<Users size={18} />}
-                onClick={handleCreateCampaign}
+                icon={<RefreshCw size={18} />}
+                onClick={handleCreateNewCampaign}
                 disabled={isCampaignOperationLoading}
                 isLoading={isCampaignOperationLoading}
               >
-                Start with Audiences
+                New Campaign
               </Button>
-              <Button 
-                variant="primary"
-                icon={<PlusCircle size={18} />}
-                onClick={() => navigate('/campaigns/new')}
-              >
-                Create Campaign
-              </Button>
-            </div>
+
+              {selectedAudiences.length > 0 && (
+                <Button 
+                  variant="primary"
+                  icon={<ShoppingCart size={18} />}
+                  onClick={handleNavigateToCampaignForm}
+                  disabled={isCampaignOperationLoading}
+                  isLoading={isCampaignOperationLoading}
+                >
+                  Selected Audiences ({selectedAudiences.length})
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -174,15 +137,13 @@ const AudiencesPage: React.FC = () => {
         </div>
       ) : searchResults.length > 0 ? (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <Sparkles size={20} className="text-[#509fe0] mr-2" />
-              <h2 className="text-xl font-semibold">
-                {searchResults.length === audiences.length 
-                  ? 'All Audiences' 
-                  : `Search Results (${totalCount})`}
-              </h2>
-            </div>
+          <div className="flex items-center mb-4">
+            <Sparkles size={20} className="text-[#509fe0] mr-2" />
+            <h2 className="text-xl font-semibold">
+              {searchResults.length === audiences.length 
+                ? 'All Audiences' 
+                : `Search Results (${totalCount})`}
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
