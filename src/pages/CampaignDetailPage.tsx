@@ -25,7 +25,8 @@ const CampaignDetailPage: React.FC = () => {
     fetchWorkflowHistory,
     fetchActivityLog,
     addComment,
-    updateCampaignStatus
+    updateCampaignStatus,
+    removeAudienceFromCampaign
   } = useCampaign();
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -40,7 +41,6 @@ const CampaignDetailPage: React.FC = () => {
       return;
     }
 
-    // Only load data once
     if (!dataLoaded) {
       const loadCampaignData = async () => {
         setLoading(true);
@@ -115,7 +115,6 @@ const CampaignDetailPage: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <Button
@@ -146,12 +145,9 @@ const CampaignDetailPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Status Tracker */}
             <CampaignStatusTracker campaign={campaign} />
 
-            {/* Campaign Details */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -178,7 +174,6 @@ const CampaignDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Platforms */}
                 {(campaign.platforms.social.length > 0 || campaign.platforms.programmatic.length > 0) && (
                   <div className="mt-6">
                     <p className="text-sm text-gray-500 mb-2 flex items-center">
@@ -196,7 +191,6 @@ const CampaignDetailPage: React.FC = () => {
                           </div>
                         </div>
                       )}
-                      
                       {campaign.platforms.programmatic.length > 0 && (
                         <div>
                           <p className="text-xs text-gray-400 mb-1">Programmatic Platforms</p>
@@ -213,7 +207,6 @@ const CampaignDetailPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Selected Audiences */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -225,19 +218,25 @@ const CampaignDetailPage: React.FC = () => {
                 {campaign.audiences.length > 0 ? (
                   <div className="space-y-3">
                     {campaign.audiences.map(audience => (
-                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900">{audience.name}</h4>
-                            <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
-                            {audience.dataSupplier && (
-                              <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
-                            )}
+                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">{audience.name}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{audience.description}</p>
+                          {audience.dataSupplier && (
+                            <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
+                          )}
+                          <div className="text-xs text-gray-500 mt-1">
+                            Est. Reach: {audience.reach?.toLocaleString() || 'N/A'}
                           </div>
-                          <div className="text-right text-sm ml-4">
-                            <p className="text-gray-500">Est. Reach</p>
-                            <p className="font-medium">{audience.reach?.toLocaleString() || 'N/A'}</p>
-                          </div>
+                        </div>
+                        <div className="flex flex-col items-end ml-4">
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeAudienceFromCampaign(audience)}
+                          >
+                            Remove
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -248,9 +247,7 @@ const CampaignDetailPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Tabbed Content */}
             <div className="bg-white border border-gray-200 rounded-lg">
-              {/* Tab Headers */}
               <div className="border-b border-gray-200">
                 <nav className="flex space-x-8 px-6">
                   <button
@@ -287,7 +284,6 @@ const CampaignDetailPage: React.FC = () => {
                 </nav>
               </div>
 
-              {/* Tab Content */}
               <div className="p-6">
                 {activeTab === 'comments' && (
                   <CampaignComments
@@ -305,9 +301,7 @@ const CampaignDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-8">
-            {/* Admin Status Updater */}
             {isAdmin && (
               <AdminStatusUpdater
                 campaign={campaign}
