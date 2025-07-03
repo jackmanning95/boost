@@ -20,10 +20,8 @@ const AudiencesPage: React.FC = () => {
     activeCampaign, 
     addAudienceToCampaign, 
     removeAudienceFromCampaign, 
-    initializeCampaign, 
     isCampaignOperationLoading, 
-    waitForCampaignReady,
-    resetCampaign
+    waitForCampaignReady
   } = useCampaign();
   const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
@@ -44,22 +42,24 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleCreateNewCampaign = async () => {
+  const handleNewCampaign = async () => {
     try {
-      await resetCampaign(); // Ensure resetCampaign is a Promise in your CampaignContext
-      const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-      await initializeCampaign(defaultName);
+      if (activeCampaign && activeCampaign.audiences) {
+        for (const audience of activeCampaign.audiences) {
+          await removeAudienceFromCampaign(audience);
+        }
+      }
     } catch (error) {
-      console.error('[AudiencesPage] handleCreateNewCampaign - Error:', error);
-      alert('Failed to create new campaign. Please try again.');
+      console.error('[AudiencesPage] handleNewCampaign - Error:', error);
+      alert('Failed to clear selected audiences. Please try again.');
     }
   };
 
   const handleSelectAudience = async (audience: AudienceSegment) => {
     try {
       if (!activeCampaign) {
-        const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-        await initializeCampaign(defaultName);
+        alert('Please create a campaign first.');
+        return;
       }
       await waitForCampaignReady();
       await addAudienceToCampaign(audience);
@@ -72,8 +72,8 @@ const AudiencesPage: React.FC = () => {
   const handleNavigateToCampaignForm = async () => {
     try {
       if (!activeCampaign) {
-        const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
-        await initializeCampaign(defaultName);
+        alert('Please create a campaign first.');
+        return;
       }
       await waitForCampaignReady();
       navigate('/campaign/build');
@@ -106,7 +106,7 @@ const AudiencesPage: React.FC = () => {
               <Button 
                 variant="outline"
                 icon={<RefreshCw size={18} />}
-                onClick={handleCreateNewCampaign}
+                onClick={handleNewCampaign}
                 disabled={isCampaignOperationLoading}
                 isLoading={isCampaignOperationLoading}
               >
