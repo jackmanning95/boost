@@ -42,20 +42,21 @@ const AudiencesPage: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleNewCampaign = async () => {
-    try {
-      if (activeCampaign?.audiences?.length) {
-        for (const audience of [...activeCampaign.audiences]) {
-          await removeAudienceFromCampaign(audience);
-        }
-      }
-      setShowSelectedOnly(false);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error('[AudiencesPage] handleNewCampaign - Error:', error);
-      alert('Failed to clear selected audiences. Please try again.');
+const handleNewCampaign = async () => {
+  try {
+    console.log('New Campaign button clicked. Active campaign:', activeCampaign);
+    if (activeCampaign?.audiences?.length) {
+      // Clear out audiences without looping
+      activeCampaign.audiences = [];
     }
-  };
+    setShowSelectedOnly(false);
+    setCurrentPage(1);
+  } catch (error) {
+    console.error('[AudiencesPage] handleNewCampaign - Error:', error);
+    alert('Failed to clear selected audiences. Please try again.');
+  }
+};
+
 
   const handleSelectAudience = async (audience: AudienceSegment) => {
     try {
