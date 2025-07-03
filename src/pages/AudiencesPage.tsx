@@ -29,6 +29,7 @@ const AudiencesPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchResults, setSearchResults] = useState<AudienceSegment[]>(audiences);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
   useEffect(() => {
     setSearchResults(audiences);
@@ -45,9 +46,7 @@ const AudiencesPage: React.FC = () => {
 
   const handleCreateNewCampaign = async () => {
     try {
-      resetCampaign();
-      // Give React time to apply the reset
-      await new Promise(resolve => setTimeout(resolve, 0)); 
+      await resetCampaign(); // Ensure resetCampaign is a Promise in your CampaignContext
       const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
       await initializeCampaign(defaultName);
     } catch (error) {
@@ -85,8 +84,13 @@ const AudiencesPage: React.FC = () => {
   };
 
   const selectedAudiences = activeCampaign?.audiences || [];
-  const pageCount = Math.ceil(totalCount / PAGE_SIZE);
   const canEditAudiences = !isSuperAdmin;
+
+  const displayedAudiences = showSelectedOnly
+    ? searchResults.filter(a => selectedAudiences.some(s => s.id === a.id))
+    : searchResults;
+
+  const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <Layout>
@@ -125,6 +129,20 @@ const AudiencesPage: React.FC = () => {
         </div>
       </div>
 
+      {selectedAudiences.length > 0 && (
+        <div className="mb-4">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showSelectedOnly}
+              onChange={() => setShowSelectedOnly(!showSelectedOnly)}
+              className="form-checkbox"
+            />
+            <span className="text-sm text-gray-700">See Selected Audiences Only</span>
+          </label>
+        </div>
+      )}
+
       <div className="mb-8">
         <AudienceSearch 
           onSearchResults={handleSearchResults}
@@ -142,19 +160,21 @@ const AudiencesPage: React.FC = () => {
         <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
           <p className="text-red-600 mb-4">{error.message}</p>
         </div>
-      ) : searchResults.length > 0 ? (
+      ) : displayedAudiences.length > 0 ? (
         <div>
           <div className="flex items-center mb-4">
             <Sparkles size={20} className="text-[#509fe0] mr-2" />
             <h2 className="text-xl font-semibold">
-              {searchResults.length === audiences.length 
-                ? 'All Audiences' 
-                : `Search Results (${totalCount})`}
+              {showSelectedOnly
+                ? `Selected Audiences (${displayedAudiences.length})`
+                : (searchResults.length === audiences.length 
+                  ? 'All Audiences' 
+                  : `Search Results (${totalCount})`)}
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {searchResults.map(audience => (
+            {displayedAudiences.map(audience => (
               <AudienceCard
                 key={audience.id}
                 audience={audience}
@@ -165,7 +185,7 @@ const AudiencesPage: React.FC = () => {
             ))}
           </div>
 
-          {pageCount > 1 && (
+          {!showSelectedOnly && pageCount > 1 && (
             <div className="flex justify-center mt-8">
               <ReactPaginate
                 previousLabel={<ChevronLeft size={16} />}
@@ -191,7 +211,7 @@ const AudiencesPage: React.FC = () => {
             </div>
           )}
 
-          {canEditAudiences && (
+          {canEditAudiences && !showSelectedOnly && (
             <AudienceRecommendations
               selectedAudiences={selectedAudiences}
               onSelectAudience={handleSelectAudience}
