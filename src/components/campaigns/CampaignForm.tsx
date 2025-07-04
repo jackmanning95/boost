@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
@@ -31,75 +31,69 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // ENHANCED useEffect with comprehensive debugging and better error handling
-  useEffect(() => {
-    const loadAccountIds = async () => {
-      console.log('[CampaignForm] useEffect triggered');
-      console.log('[CampaignForm] Current user:', user);
-      console.log('[CampaignForm] User company ID:', user?.companyId);
-      console.log('[CampaignForm] Current companyAccountIds:', companyAccountIds);
-      console.log('[CampaignForm] Accounts already loaded:', accountsLoaded);
+  // Memoize the account loading function to prevent unnecessary re-renders
+  const loadAccountIds = useCallback(async () => {
+    console.log('[CampaignForm] loadAccountIds called');
+    console.log('[CampaignForm] Current user:', user);
+    console.log('[CampaignForm] User company ID:', user?.companyId);
+    console.log('[CampaignForm] Accounts already loaded:', accountsLoaded);
 
-      if (!user) {
-        console.log('[CampaignForm] No user available, skipping account load');
-        return;
-      }
+    if (!user?.companyId) {
+      console.log('[CampaignForm] No user or company ID available');
+      setLoadError('User company information not available');
+      return;
+    }
 
-      if (!user.companyId) {
-        console.log('[CampaignForm] User has no company ID, skipping account load');
-        return;
-      }
+    if (accountsLoaded) {
+      console.log('[CampaignForm] Accounts already loaded, skipping');
+      return;
+    }
 
-      if (accountsLoaded) {
-        console.log('[CampaignForm] Accounts already loaded, skipping reload');
-        return;
-      }
+    setIsLoadingAccounts(true);
+    setLoadError(null);
 
-      setIsLoadingAccounts(true);
+    try {
+      console.log('[CampaignForm] Starting to fetch company account IDs...');
+      
+      // Try to get debug info but don't fail if it doesn't work
       try {
-        console.log('[CampaignForm] Starting to fetch company account IDs...');
+        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
         
-        // Try to get debug info but don't fail if it doesn't work
-        try {
-          const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
-          
-          if (debugError) {
-            console.error('[CampaignForm] Debug function error:', debugError);
-            // Don't set this as a critical error since it's just for debugging
-            console.warn('[CampaignForm] Debug function failed, but continuing with normal operation');
-          } else {
-            console.log('[CampaignForm] Debug function result:', debugData);
-            setDebugInfo(debugData);
-          }
-        } catch (debugErr) {
-          console.error('[CampaignForm] Error calling debug function:', debugErr);
-          console.warn('[CampaignForm] Debug function unavailable, but continuing with normal operation');
-        }
-        
-        if (typeof fetchCompanyAccountIds === 'function') {
-          await fetchCompanyAccountIds();
-          setAccountsLoaded(true);
-          console.log('[CampaignForm] Successfully fetched company account IDs');
+        if (debugError) {
+          console.warn('[CampaignForm] Debug function error:', debugError);
         } else {
-          console.error('[CampaignForm] fetchCompanyAccountIds is not a function:', fetchCompanyAccountIds);
+          console.log('[CampaignForm] Debug function result:', debugData);
+          setDebugInfo(debugData);
         }
-      } catch (error) {
-        console.error('[CampaignForm] Error loading company account IDs:', error);
-        // Don't show debug errors to users, just log them
-        if (error instanceof Error && !error.message.includes('role') && !error.message.includes('does not exist')) {
-          // Only show non-database-role errors to users
-          console.error('[CampaignForm] User-facing error:', error.message);
-        }
-      } finally {
-        setIsLoadingAccounts(false);
+      } catch (debugErr) {
+        console.warn('[CampaignForm] Debug function unavailable:', debugErr);
       }
-    };
+      
+      // Fetch the company account IDs
+      if (typeof fetchCompanyAccountIds === 'function') {
+        await fetchCompanyAccountIds();
+        setAccountsLoaded(true);
+        console.log('[CampaignForm] Successfully fetched company account IDs');
+      } else {
+        console.error('[CampaignForm] fetchCompanyAccountIds is not a function');
+        setLoadError('Account loading function not available');
+      }
+    } catch (error) {
+      console.error('[CampaignForm] Error loading company account IDs:', error);
+      setLoadError('Failed to load platform accounts. Please try refreshing the page.');
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  }, [user?.companyId, accountsLoaded, fetchCompanyAccountIds]);
 
+  // Load account IDs when component mounts or user changes
+  useEffect(() => {
     loadAccountIds();
-  }, [user, fetchCompanyAccountIds, accountsLoaded]);
+  }, [loadAccountIds]);
 
-  // Additional useEffect to log when companyAccountIds changes
+  // Log when companyAccountIds changes
   useEffect(() => {
     console.log('[CampaignForm] companyAccountIds updated:', companyAccountIds);
     console.log('[CampaignForm] Number of accounts:', (companyAccountIds || []).length);
@@ -151,13 +145,24 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     console.log('[CampaignForm] handleAccountSelection called with:', accountId);
     console.log('[CampaignForm] Available accounts for selection:', companyAccountIds);
     
+    if (!accountId) {
+      // Clear selection
+      updateCampaignDetails({ 
+        selectedCompanyAccountId: '',
+        advertiserName: ''
+      });
+      return;
+    }
+
     const selectedAccount = (companyAccountIds || []).find(account => account.id === accountId);
     console.log('[CampaignForm] Found selected account:', selectedAccount);
     
-    updateCampaignDetails({ 
-      selectedCompanyAccountId: accountId,
-      advertiserName: selectedAccount?.accountName // Set advertiser name from account
-    });
+    if (selectedAccount) {
+      updateCampaignDetails({ 
+        selectedCompanyAccountId: accountId,
+        advertiserName: selectedAccount.accountName
+      });
+    }
     
     if (formErrors.selectedCompanyAccountId) {
       setFormErrors(prev => {
@@ -177,13 +182,23 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       // Automatically select the newly created account
       updateCampaignDetails({ 
         selectedCompanyAccountId: newAccount.id,
-        advertiserName: newAccount.accountName // Set advertiser name from new account
+        advertiserName: newAccount.accountName
       });
       setShowAccountModal(false);
+      
+      // Refresh the accounts list
+      setAccountsLoaded(false);
+      await loadAccountIds();
     } catch (error) {
       console.error('[CampaignForm] Error creating account:', error);
       throw error;
     }
+  };
+
+  const handleRetryLoadAccounts = () => {
+    setAccountsLoaded(false);
+    setLoadError(null);
+    loadAccountIds();
   };
 
   const validateForm = () => {
@@ -240,7 +255,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     companyAccountIdsLength: (companyAccountIds || []).length,
     selectedAccountId: activeCampaign.selectedCompanyAccountId,
     selectedAccount,
-    userCompanyId: user?.companyId
+    userCompanyId: user?.companyId,
+    loadError
   });
 
   return (
@@ -274,6 +290,23 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               Select Platform Account
             </label>
             
+            {/* Error Display */}
+            {loadError && (
+              <div className="mb-4 p-3 bg-red-50 rounded-md border border-red-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-red-600">{loadError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryLoadAccounts}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Debug Information Panel - Only show if debug info is available */}
             {debugInfo && (
               <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
@@ -284,6 +317,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                   <div>Available Accounts: {(companyAccountIds || []).length}</div>
                   <div>User Company ID: {user?.companyId || 'None'}</div>
                   <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
+                  <div>Load Error: {loadError || 'None'}</div>
                   <details className="mt-2">
                     <summary className="cursor-pointer text-blue-800 font-medium">Session Debug Info</summary>
                     <pre className="mt-2 text-xs bg-blue-100 p-2 rounded overflow-auto max-h-40">
@@ -303,6 +337,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
               >
                 <option value="">
                   {isLoadingAccounts ? 'Loading accounts...' : 
+                   loadError ? 'Error loading accounts' :
                    (companyAccountIds || []).length === 0 ? 'No accounts available - add one' : 
                    'Select an account'}
                 </option>
