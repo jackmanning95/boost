@@ -24,15 +24,27 @@ const CompanyAccountManager: React.FC = () => {
   useEffect(() => {
     if (user) {
       console.log('[CompanyAccountManager] User detected, fetching account IDs');
-      if (typeof fetchCompanyAccountIds === 'function') {
-        fetchCompanyAccountIds();
-      } else {
-        console.error('[CompanyAccountManager] fetchCompanyAccountIds is not a function:', fetchCompanyAccountIds);
+      try {
+        if (typeof fetchCompanyAccountIds === 'function') {
+          fetchCompanyAccountIds();
+        } else {
+          console.error('[CompanyAccountManager] fetchCompanyAccountIds is not a function');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('[CompanyAccountManager] Error fetching account IDs:', error);
+        setLoading(false);
       }
     } else {
       console.log('[CompanyAccountManager] No user detected, skipping fetch');
+      setLoading(false);
     }
   }, [user, fetchCompanyAccountIds]);
+
+  // Log when companyAccountIds changes
+  useEffect(() => {
+    console.log('[CompanyAccountManager] companyAccountIds updated:', companyAccountIds);
+  }, [companyAccountIds]);
 
   const handleAdd = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => {
     try {
