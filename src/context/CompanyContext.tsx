@@ -147,7 +147,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Fetch company account IDs - ENHANCED WITH BETTER ERROR HANDLING
   const fetchCompanyAccountIds = async (companyId?: string) => {
     if (!user) {
-      console.log('[CompanyContext] No user available, skipping fetch');
+      // Skip fetch if no user
       setCompanyAccountIds([]);
       setLoading(false);
       return;
@@ -155,7 +155,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const targetCompanyId = companyId || user.companyId;
     if (!targetCompanyId) {
-      console.error('[CompanyContext] fetchCompanyAccountIds: No company ID available');
+      console.warn('[CompanyContext] No company ID available for account IDs fetch');
       setCompanyAccountIds([]);
       setLoading(false);
       return;
@@ -165,38 +165,52 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(true);
       setError(null);
 
+      console.log(`[CompanyContext] Fetching account IDs for company: ${targetCompanyId}`);
+      
       const { data, error: fetchError } = await supabase
         .from('company_account_ids')
         .select('*')
         .eq('company_id', targetCompanyId)
         .order('created_at', { ascending: false });
 
+      // Log response for debugging
+      console.log(`[CompanyContext] Supabase response for company_account_ids:`, {
+        data: data || [],
+        error: fetchError,
+        targetCompanyId
+      });
+
       if (fetchError) {
-        console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
-        setCompanyAccountIds([]);
         throw fetchError;
+      } else {
+        // Process the data
+        console.log(`[CompanyContext] Raw data from Supabase:`, data || []);
+        console.log(`[CompanyContext] Number of records found:`, data?.length || 0);
+        
+        const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
+            id: account.id,
+            companyId: account.company_id,
+            platform: account.platform,
+            accountId: account.account_id,
+            accountName: account.account_name,
+            isActive: account.is_active,
+            createdAt: account.created_at,
+            updatedAt: account.updated_at
+        }));
+        
+        console.log(`[CompanyContext] Transformed accounts:`, transformedAccounts);
+        setCompanyAccountIds(transformedAccounts);
+        
+        if (transformedAccounts.length === 0) {
+          console.log(`[CompanyContext] No account IDs found. Checking RLS permissions...`);
+        }
       }
-
-      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
-          id: account.id,
-          companyId: account.company_id,
-          platform: account.platform,
-          accountId: account.account_id,
-          accountName: account.account_name,
-          isActive: account.is_active,
-          createdAt: account.created_at,
-          updatedAt: account.updated_at
-      }));
-
-      setCompanyAccountIds(transformedAccounts);
     } catch (err) {
       console.error('[CompanyContext] Error in fetchCompanyAccountIds:', err);
       
       // Enhanced error handling for network issues
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        const errorMessage = 'Network error: Unable to connect to Supabase. Please check your internet connection and verify the Supabase URL in your environment configuration.';
-        console.error('[CompanyContext] Network connectivity issue detected');
-        setError(errorMessage);
+        setError('Network error: Unable to connect to Supabase. Please check your internet connection.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
       }
