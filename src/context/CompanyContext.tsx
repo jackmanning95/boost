@@ -165,38 +165,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(true);
       setError(null);
 
-      console.log('[CompanyContext] Fetching account IDs for company:', targetCompanyId);
-      console.log('[CompanyContext] Current user:', {
-        id: user.id,
-        email: user.email,
-        companyId: user.companyId,
-        role: user.role
-      });
-
-      // Check if Supabase URL is accessible
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      console.log('[CompanyContext] Using Supabase URL:', supabaseUrl);
-      
       const { data, error: fetchError } = await supabase
         .from('company_account_ids')
         .select('*')
         .eq('company_id', targetCompanyId)
         .order('created_at', { ascending: false });
 
-      console.log('[CompanyContext] Supabase response for company_account_ids:', {
-        data,
-        error: fetchError,
-        targetCompanyId
-      });
-
       if (fetchError) {
         console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
         setCompanyAccountIds([]);
         throw fetchError;
       }
-
-      console.log('[CompanyContext] Raw data from Supabase:', data);
-      console.log('[CompanyContext] Number of records found:', data?.length || 0);
 
       const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
           id: account.id,
@@ -209,14 +188,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           updatedAt: account.updated_at
       }));
 
-      console.log('[CompanyContext] Transformed accounts:', transformedAccounts);
       setCompanyAccountIds(transformedAccounts);
-
-      // Additional debugging for RLS issues
-      if (data && data.length === 0) {
-        console.warn('[CompanyContext] No account IDs found. Checking RLS permissions...');
-      }
-
     } catch (err) {
       console.error('[CompanyContext] Error in fetchCompanyAccountIds:', err);
       
@@ -241,9 +213,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      console.log('[CompanyContext] Creating account ID with data:', accountData);
-      console.log('[CompanyContext] For company ID:', user.companyId);
-      
       const insertData = {
         company_id: user.companyId,
         platform: accountData.platform,
@@ -251,9 +220,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         account_name: accountData.accountName,
         is_active: accountData.isActive
       };
-      
-      console.log('[CompanyContext] Insert data:', insertData);
-      
+
       const { data, error } = await supabase
         .from('company_account_ids')
         .insert(insertData)
@@ -264,8 +231,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.error('[CompanyContext] Error creating company account ID:', error);
         throw error;
       }
-
-      console.log('[CompanyContext] Created account ID successfully:', data);
 
       const newAccount: CompanyAccountId = {
         id: data.id,
@@ -281,7 +246,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Update local state
       setCompanyAccountIds(prev => {
         const updated = [newAccount, ...prev];
-        console.log('[CompanyContext] Updated local state with new account:', updated);
         return updated;
       });
       
@@ -652,12 +616,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Initialize data on mount - ENHANCED WITH DEBUGGING
   useEffect(() => {
     if (user) {
-      console.log('[CompanyContext] User detected, initializing data for user:', {
-        id: user.id,
-        email: user.email,
-        companyId: user.companyId,
-        role: user.role
-      });
       refreshData();
     } else {
       console.log('[CompanyContext] No user detected, skipping data initialization');

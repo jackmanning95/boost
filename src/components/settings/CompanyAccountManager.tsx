@@ -24,27 +24,21 @@ const CompanyAccountManager: React.FC = () => {
   useEffect(() => {
     if (user) {
       console.log('[CompanyAccountManager] User detected, fetching account IDs');
-      try {
-        if (typeof fetchCompanyAccountIds === 'function') {
-          fetchCompanyAccountIds();
-        } else {
-          console.error('[CompanyAccountManager] fetchCompanyAccountIds is not a function');
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('[CompanyAccountManager] Error fetching account IDs:', error);
-        setLoading(false);
-      }
-    } else {
-      console.log('[CompanyAccountManager] No user detected, skipping fetch');
-      setLoading(false);
+      fetchCompanyAccountIds().catch(error => {
+        console.error('Error fetching account IDs:', error);
+      });
     }
   }, [user, fetchCompanyAccountIds]);
 
-  // Log when companyAccountIds changes
+  // Add a separate effect to ensure loading state is reset
   useEffect(() => {
-    console.log('[CompanyAccountManager] companyAccountIds updated:', companyAccountIds);
-  }, [companyAccountIds]);
+    if (companyAccountIds) {
+      // If we have account IDs (even empty array), we're done loading
+      if (loading) {
+        console.log('[CompanyAccountManager] Account IDs loaded, setting loading to false');
+      }
+    }
+  }, [companyAccountIds, loading]);
 
   const handleAdd = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => {
     try {

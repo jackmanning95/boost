@@ -36,10 +36,11 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   // Memoize the account loading function to prevent unnecessary re-renders
   const loadAccountIds = useCallback(async () => {
     console.log('[CampaignForm] loadAccountIds called');
-
+    
     if (!user?.companyId) {
       console.log('[CampaignForm] No user or company ID available');
       setLoadError('User company information not available');
+      setAccountsLoaded(true); // Mark as loaded to prevent infinite loop
       return;
     }
 
@@ -51,34 +52,11 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     setIsLoadingAccounts(true);
     setLoadError(null);
 
-    try {
-      console.log('[CampaignForm] Starting to fetch company account IDs...');
-      
-      // Skip debug info - it's causing errors
-      /*
-      try {
-        const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
-        
-        if (debugError) {
-          console.warn('[CampaignForm] Debug function error:', debugError);
-        } else {
-          console.log('[CampaignForm] Debug function result:', debugData);
-          setDebugInfo(debugData);
-        }
-      } catch (debugErr) {
-        console.warn('[CampaignForm] Debug function unavailable:', debugErr);
-      }
-      */
-      
+    try {      
       // Fetch the company account IDs
-      if (typeof fetchCompanyAccountIds === 'function') {
-        await fetchCompanyAccountIds();
-        setAccountsLoaded(true);
-        console.log('[CampaignForm] Successfully fetched company account IDs');
-      } else {
-        console.error('[CampaignForm] fetchCompanyAccountIds is not a function');
-        setLoadError('Account loading function not available');
-      }
+      await fetchCompanyAccountIds();
+      setAccountsLoaded(true);
+      console.log('[CampaignForm] Successfully fetched company account IDs');
     } catch (error) {
       console.error('[CampaignForm] Error loading company account IDs:', error);
       setLoadError('Failed to load platform accounts. Please try refreshing the page.');
@@ -92,21 +70,6 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   useEffect(() => {
     loadAccountIds();
   }, [loadAccountIds]);
-
-  // Log when companyAccountIds changes
-  useEffect(() => {
-    console.log('[CampaignForm] companyAccountIds updated:', companyAccountIds);
-    console.log('[CampaignForm] Number of accounts:', (companyAccountIds || []).length);
-    (companyAccountIds || []).forEach((account, index) => {
-      console.log(`[CampaignForm] Account ${index + 1}:`, {
-        id: account.id,
-        platform: account.platform,
-        accountName: account.accountName,
-        accountId: account.accountId,
-        isActive: account.isActive
-      });
-    });
-  }, [companyAccountIds]);
 
   if (!activeCampaign) return null;
 
