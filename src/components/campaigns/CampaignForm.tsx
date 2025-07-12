@@ -36,9 +36,6 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   // Memoize the account loading function to prevent unnecessary re-renders
   const loadAccountIds = useCallback(async () => {
     console.log('[CampaignForm] loadAccountIds called');
-    console.log('[CampaignForm] Current user:', user);
-    console.log('[CampaignForm] User company ID:', user?.companyId);
-    console.log('[CampaignForm] Accounts already loaded:', accountsLoaded);
 
     if (!user?.companyId) {
       console.log('[CampaignForm] No user or company ID available');
@@ -57,7 +54,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     try {
       console.log('[CampaignForm] Starting to fetch company account IDs...');
       
-      // Try to get debug info but don't fail if it doesn't work
+      // Skip debug info - it's causing errors
+      /*
       try {
         const { data: debugData, error: debugError } = await supabase.rpc('debug_company_account_permissions', {});
         
@@ -70,6 +68,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       } catch (debugErr) {
         console.warn('[CampaignForm] Debug function unavailable:', debugErr);
       }
+      */
       
       // Fetch the company account IDs
       if (typeof fetchCompanyAccountIds === 'function') {
@@ -83,6 +82,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     } catch (error) {
       console.error('[CampaignForm] Error loading company account IDs:', error);
       setLoadError('Failed to load platform accounts. Please try refreshing the page.');
+      setAccountsLoaded(true); // Mark as loaded even on error to prevent infinite loop
     } finally {
       setIsLoadingAccounts(false);
     }
@@ -280,7 +280,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       {/* Platform Account Selection */}
       <div>
         <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <Building size={20} className="mr-2 text-blue-600" />
+          <Building size={20} className="mr-2 text-blue-600" /> 
           Platform Account & Advertiser
         </h2>
         
@@ -308,7 +308,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
             )}
 
             {/* Debug Information Panel - Only show if debug info is available */}
-            {debugInfo && (
+            {false && debugInfo && (
               <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
                 <h4 className="text-sm font-medium text-blue-900 mb-2">Debug Information:</h4>
                 <div className="text-xs text-blue-700 space-y-1">
@@ -338,7 +338,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                 <option value="">
                   {isLoadingAccounts ? 'Loading accounts...' : 
                    loadError ? 'Error loading accounts' :
-                   (companyAccountIds || []).length === 0 ? 'No accounts available - add one' : 
+                   !companyAccountIds || companyAccountIds.length === 0 ? 'No accounts available - add one' : 
                    'Select an account'}
                 </option>
                 {(companyAccountIds || []).map(account => (

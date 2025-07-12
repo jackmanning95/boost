@@ -147,18 +147,17 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Fetch company account IDs - ENHANCED WITH BETTER ERROR HANDLING
   const fetchCompanyAccountIds = async (companyId?: string) => {
     if (!user) {
-      console.log('[CompanyContext] fetchCompanyAccountIds: No user available');
+      console.log('[CompanyContext] No user available, skipping fetch');
+      setCompanyAccountIds([]);
+      setLoading(false);
       return;
     }
 
     const targetCompanyId = companyId || user.companyId;
     if (!targetCompanyId) {
       console.error('[CompanyContext] fetchCompanyAccountIds: No company ID available');
-      console.log('[CompanyContext] Debug info:', {
-        providedCompanyId: companyId,
-        userCompanyId: user.companyId,
-        user: user
-      });
+      setCompanyAccountIds([]);
+      setLoading(false);
       return;
     }
 
@@ -187,21 +186,19 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.log('[CompanyContext] Supabase response for company_account_ids:', {
         data,
         error: fetchError,
-        targetCompanyId,
-        queryUsed: `company_account_ids where company_id = ${targetCompanyId}`
+        targetCompanyId
       });
 
       if (fetchError) {
         console.error('[CompanyContext] Error fetching company account IDs:', fetchError);
+        setCompanyAccountIds([]);
         throw fetchError;
       }
 
       console.log('[CompanyContext] Raw data from Supabase:', data);
       console.log('[CompanyContext] Number of records found:', data?.length || 0);
 
-      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => {
-        console.log('[CompanyContext] Transforming account:', account);
-        return {
+      const transformedAccounts: CompanyAccountId[] = (data || []).map(account => ({
           id: account.id,
           companyId: account.company_id,
           platform: account.platform,
@@ -210,8 +207,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isActive: account.is_active,
           createdAt: account.created_at,
           updatedAt: account.updated_at
-        };
-      });
+      }));
 
       console.log('[CompanyContext] Transformed accounts:', transformedAccounts);
       setCompanyAccountIds(transformedAccounts);
@@ -219,20 +215,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Additional debugging for RLS issues
       if (data && data.length === 0) {
         console.warn('[CompanyContext] No account IDs found. Checking RLS permissions...');
-        
-        // Test if we can read from the table at all
-        const { data: testData, error: testError } = await supabase
-          .from('company_account_ids')
-          .select('count')
-          .limit(1);
-        
-        console.log('[CompanyContext] RLS test query result:', { testData, testError });
-        
-        if (testError) {
-          console.error('[CompanyContext] RLS test failed - user cannot read company_account_ids table:', testError);
-        } else {
-          console.log('[CompanyContext] RLS test passed - user can read table, but no records match the filter');
-        }
       }
 
     } catch (err) {
@@ -242,12 +224,11 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
         const errorMessage = 'Network error: Unable to connect to Supabase. Please check your internet connection and verify the Supabase URL in your environment configuration.';
         console.error('[CompanyContext] Network connectivity issue detected');
-        console.error('[CompanyContext] Current Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-        console.error('[CompanyContext] Please verify this URL matches your Supabase project settings');
         setError(errorMessage);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to fetch company account IDs');
       }
+      setCompanyAccountIds([]);
     } finally {
       setLoading(false);
     }
