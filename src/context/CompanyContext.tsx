@@ -259,7 +259,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         // Add timeout to prevent hanging requests
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
+          setTimeout(() => reject(new Error('Request timeout')), 30000)
         );
         
         // Race the fetch against the timeout
