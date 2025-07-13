@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import Button from '../ui/Button';
-import AdvertiserAccountModal from './AdvertiserAccountModal';
+import AdvertiserAccountModal from '../settings/AdvertiserAccountModal';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
 import { Building, Plus, Edit, Trash2, Calendar, AlertCircle } from 'lucide-react';
@@ -57,6 +57,7 @@ const AdvertiserAccountManager: React.FC = () => {
   // Debug logging for loading states
   useEffect(() => {
     console.log('[AdvertiserAccountManager] Loading states:', { 
+      isModalOpen,
       localLoading: loading, 
       contextLoading: companyContextLoading,
       accountsLength: advertiserAccounts?.length || 0
@@ -119,6 +120,7 @@ const AdvertiserAccountManager: React.FC = () => {
   const handleAddNew = () => {
     setEditingAccount(null);
     setIsModalOpen(true);
+    console.log('[AdvertiserAccountManager] Opening modal for new account, isModalOpen:', true);
   };
 
   const handleSave = async (data: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
@@ -169,9 +171,16 @@ const AdvertiserAccountManager: React.FC = () => {
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-blue-600 flex items-center">
             <Building size={20} className="mr-2" />
-            Advertiser Accounts
+            Platform Accounts
           </CardTitle>
-          <Button variant="primary" onClick={handleAddNew} icon={<Plus size={16} />}>
+          <Button 
+            variant="primary" 
+            onClick={() => {
+              console.log('[AdvertiserAccountManager] Add Account button clicked');
+              handleAddNew();
+            }} 
+            icon={<Plus size={16} />}
+          >
             Add Account
           </Button>
         </CardHeader>
@@ -237,12 +246,17 @@ const AdvertiserAccountManager: React.FC = () => {
       </Card>
 
       {/* Modal */}
-      <AdvertiserAccountModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSave}
-        account={editingAccount}
-      />
+      {isModalOpen && (
+        <AdvertiserAccountModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            console.log('[AdvertiserAccountManager] Closing modal');
+            setIsModalOpen(false);
+          }}
+          onSave={handleSave}
+          account={editingAccount}
+        />
+      )}
     </>
   );
 };
