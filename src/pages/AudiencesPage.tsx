@@ -45,10 +45,9 @@ const AudiencesPage: React.FC = () => {
 const handleNewCampaign = async () => {
   try {
     console.log('New Campaign button clicked. Active campaign:', activeCampaign);
-    if (activeCampaign?.audiences?.length) {
-      // Clear out audiences without looping
-      activeCampaign.audiences = [];
-    }
+    // Initialize a completely new campaign instead of just clearing audiences
+    const defaultName = `Campaign ${new Date().toLocaleDateString()}`;
+    await initializeCampaign(defaultName);
     setShowSelectedOnly(false);
     setCurrentPage(1);
   } catch (error) {
