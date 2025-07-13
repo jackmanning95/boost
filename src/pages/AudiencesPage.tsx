@@ -21,7 +21,8 @@ const AudiencesPage: React.FC = () => {
     addAudienceToCampaign, 
     removeAudienceFromCampaign, 
     isCampaignOperationLoading, 
-    waitForCampaignReady 
+    waitForCampaignReady,
+    initializeCampaign
   } = useCampaign();
   const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
