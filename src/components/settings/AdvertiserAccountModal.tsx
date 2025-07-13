@@ -36,6 +36,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   account
 }) => {
   console.log('[AdvertiserAccountModal] isOpen prop received:', isOpen);
+  console.log('[AdvertiserAccountModal] account prop received:', account ? 'Account object present' : 'No account');
   const [platform, setPlatform] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
@@ -64,6 +65,12 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   }, [account, isOpen]);
 
   const validateForm = () => {
+    console.log('[AdvertiserAccountModal] Validating form with values:', {
+      platform,
+      customPlatform: customPlatform || 'N/A',
+      advertiserName,
+      advertiserId
+    });
     const newErrors: Record<string, string> = {};
 
     if (!platform) {
@@ -87,6 +94,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('[AdvertiserAccountModal] Form submitted');
     e.preventDefault();
 
     if (!validateForm()) return;
@@ -107,7 +115,12 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    console.log('[AdvertiserAccountModal] Modal not rendering because isOpen is false');
+    return null;
+  }
+  
+  console.log('[AdvertiserAccountModal] Rendering modal content');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => {

@@ -22,6 +22,12 @@ const AdvertiserAccountManager: React.FC = () => {
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Add effect to log loading and error states
+  useEffect(() => {
+    console.log('[AdvertiserAccountManager] Current loading state:', loading);
+    console.log('[AdvertiserAccountManager] Current error state:', error);
+  }, [loading, error]);
+
   useEffect(() => {
     if (user) {
       console.log('[AdvertiserAccountManager] User detected, fetching advertiser accounts');
@@ -57,10 +63,11 @@ const AdvertiserAccountManager: React.FC = () => {
   // Debug logging for loading states
   useEffect(() => {
     console.log('[AdvertiserAccountManager] Loading states:', { 
-      isModalOpen,
+      isModalOpen, 
       localLoading: loading, 
       contextLoading: companyContextLoading,
-      accountsLength: advertiserAccounts?.length || 0
+      accountsLength: advertiserAccounts?.length || 0,
+      hasError: !!error
     });
     
     // Force loading to false after 10 seconds to prevent infinite loading
@@ -176,8 +183,8 @@ const AdvertiserAccountManager: React.FC = () => {
         <Button 
           variant="primary" 
           onClick={() => {
-            console.log('Add Account button clicked!'); // Simple log message
-            // handleAddNew(); // Temporarily comment out the original function call
+            console.log('Add Account button clicked!'); // Log the click event
+            handleAddNew(); // Re-enable the original function call
           }} 
           icon={<Plus size={16} />}
         >
@@ -196,8 +203,8 @@ const AdvertiserAccountManager: React.FC = () => {
               <Button 
                 variant="primary" 
                 onClick={() => {
-                  console.log('Add Your First Account button clicked!'); // Simple log message
-                  // handleAddNew(); // Temporarily comment out the original function call
+                  console.log('Add Your First Account button clicked!'); // Log the click event
+                  handleAddNew(); // Re-enable the original function call
                 }} 
                 icon={<Plus size={16} />}
               >
@@ -253,15 +260,15 @@ const AdvertiserAccountManager: React.FC = () => {
       </Card>
 
       {/* Modal */}
-    <AdvertiserAccountModal
-      isOpen={isModalOpen}
-      onClose={() => {
-        console.log('[AdvertiserAccountManager] Closing modal');
-        setIsModalOpen(false);
-      }}
-      onSave={handleSave}
-      account={editingAccount}
-    />
+      <AdvertiserAccountModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          console.log('[AdvertiserAccountManager] Closing modal');
+          setIsModalOpen(false);
+        }}
+        onSave={handleSave}
+        account={editingAccount}
+      />
     </>
   );
 };
