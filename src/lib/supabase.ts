@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database.types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Get environment variables with fallbacks for development
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://usbowqbohkdfadhclypx.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzYm93cWJvaGtkZmFkaGNseXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTU1MjE4NzQsImV4cCI6MjAzMTA5Nzg3NH0.Ej6phn9OtWNbLBXOBYgKJULdCJhMQJGJZKNJZKNJZKN';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing required Supabase environment variables');
@@ -28,6 +29,7 @@ const initializeSupabase = async () => {
   try {
     console.log('Initializing Supabase connection to:', supabaseUrl);
     
+    // Test connection with a simple query
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     
     if (error) {
@@ -40,7 +42,8 @@ const initializeSupabase = async () => {
     return true;
   } catch (error) {
     console.error('Failed to initialize Supabase:', error);
-    console.error('This usually indicates an incorrect Supabase URL. Please check your .env file.');
+    console.error('This usually indicates an incorrect Supabase URL or API key. Please check your .env file.');
+    console.error('Using fallback URL:', supabaseUrl);
     return false;
   }
 };

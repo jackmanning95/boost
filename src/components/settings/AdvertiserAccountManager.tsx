@@ -25,16 +25,21 @@ const AdvertiserAccountManager: React.FC = () => {
   useEffect(() => {
     if (user) {
       console.log('[AdvertiserAccountManager] User detected, fetching advertiser accounts');
-      setLoading(true);
-      fetchAdvertiserAccounts()
-      .then(() => {
-        console.log('[AdvertiserAccountManager] Advertiser accounts fetched successfully');
+      try {
+        setLoading(true);
+        fetchAdvertiserAccounts()
+          .then(() => {
+            console.log('[AdvertiserAccountManager] Advertiser accounts fetched successfully');
+            setLoading(false);
+          })
+          .catch(error => {
+            console.error('[AdvertiserAccountManager] Error fetching advertiser accounts:', error);
+            setLoading(false);
+          });
+      } catch (error) {
+        console.error('[AdvertiserAccountManager] Exception in useEffect:', error);
         setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error fetching advertiser accounts:', error);
-        setLoading(false);
-      });
+      }
     }
   }, [user, fetchAdvertiserAccounts]);
 
@@ -42,11 +47,12 @@ const AdvertiserAccountManager: React.FC = () => {
   useEffect(() => {
     if (advertiserAccounts) {
       // If we have accounts (even empty array), we're done loading
-      if (companyContextLoading) {
-        console.log('[AdvertiserAccountManager] Advertiser accounts loaded, companyContextLoading:', companyContextLoading);
+      if (loading || companyContextLoading) {
+        console.log('[AdvertiserAccountManager] Accounts loaded, setting loading to false');
+        setLoading(false);
       }
     }
-  }, [advertiserAccounts, companyContextLoading]);
+  }, [advertiserAccounts, loading, companyContextLoading]);
   
   // Debug logging for loading states
   useEffect(() => {
@@ -55,6 +61,16 @@ const AdvertiserAccountManager: React.FC = () => {
       contextLoading: companyContextLoading,
       accountsLength: advertiserAccounts?.length || 0
     });
+    
+    // Force loading to false after 10 seconds to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.log('[AdvertiserAccountManager] Force ending loading state after timeout');
+        setLoading(false);
+      }
+    }, 10000);
+    
+    return () => clearTimeout(timeout);
   }, [loading, companyContextLoading, advertiserAccounts]);
 
   const handleAdd = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {

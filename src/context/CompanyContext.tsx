@@ -251,47 +251,72 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       console.log(`[CompanyContext] Fetching advertiser accounts for user: ${targetUserId}`);
       
-      const { data, error: fetchError } = await supabase
-        .from('advertiser_accounts')
-        .select('*')
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false });
-
-      // Log response for debugging
-      console.log(`[CompanyContext] Supabase response for advertiser_accounts:`, {
-        data: data || [],
-        error: fetchError,
-        targetUserId
-      });
-
-      if (fetchError) {
-        throw fetchError;
-      } else {
-        // Process the data
-        console.log(`[CompanyContext] Raw data from Supabase:`, data || []);
-        console.log(`[CompanyContext] Number of records found:`, data?.length || 0);
-        
-        const transformedAccounts: AdvertiserAccount[] = (data || []).map(account => ({
-            id: account.id,
-            platform: account.platform,
-            advertiserName: account.advertiser_name,
-            advertiserId: account.advertiser_id,
-            createdAt: account.created_at
-        }));
-        
-        console.log(`[CompanyContext] Transformed advertiser accounts:`, transformedAccounts);
-        setAdvertiserAccounts(transformedAccounts);
-        
-        if (transformedAccounts.length === 0) {
-          console.log(`[CompanyContext] No advertiser accounts found.`);
+      try {
+        // Check if supabase client is initialized properly
+        if (!supabase) {
+          throw new Error('Supabase client is not initialized');
         }
+        
+        // Add timeout to prevent hanging requests
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        );
+        
+        // Race the fetch against the timeout
+        const fetchPromise = supabase
+          .from('advertiser_accounts')
+          .select('*')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false });
+          
+        const { data, error: fetchError } = await Promise.race([
+          fetchPromise,
+          timeoutPromise
+        ]) as any;
+
+        // Log response for debugging
+        console.log(`[CompanyContext] Supabase response for advertiser_accounts:`, {
+          data: data || [],
+          error: fetchError,
+          targetUserId
+        });
+
+        if (fetchError) {
+          throw fetchError;
+        } else {
+          // Process the data
+          console.log(`[CompanyContext] Raw data from Supabase:`, data || []);
+          console.log(`[CompanyContext] Number of records found:`, data?.length || 0);
+          
+          const transformedAccounts: AdvertiserAccount[] = (data || []).map(account => ({
+              id: account.id,
+              platform: account.platform,
+              advertiserName: account.advertiser_name,
+              advertiserId: account.advertiser_id,
+              createdAt: account.created_at
+          }));
+          
+          console.log(`[CompanyContext] Transformed advertiser accounts:`, transformedAccounts);
+          setAdvertiserAccounts(transformedAccounts);
+          
+          if (transformedAccounts.length === 0) {
+            console.log(`[CompanyContext] No advertiser accounts found.`);
+          }
+        }
+      } catch (fetchError) {
+        throw fetchError;
       }
     } catch (err) {
-      console.error('[CompanyContext] Error in fetchAdvertiserAccounts:', err instanceof Error ? err.message : err);
+      console.error('[CompanyContext] Error in fetchAdvertiserAccounts:', err);
+      console.error('[CompanyContext] Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace',
+        type: err?.constructor?.name || typeof err
+      });
       
       // Enhanced error handling for network issues
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        setError('Network error: Unable to connect to Supabase. Please check your internet connection.');
+        setError('Network error: Unable to connect to Supabase. Please check your internet connection and Supabase configuration.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to fetch advertiser accounts');
       }
