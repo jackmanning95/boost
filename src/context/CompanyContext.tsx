@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Company, CompanyUser, UserInvitation, CompanyAccountId } from '../types';
+import { Company, CompanyUser, UserInvitation, CompanyAccountId, AdvertiserAccount } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -8,7 +8,8 @@ interface CompanyContextType {
   companies: Company[];
   companyUsers: CompanyUser[];
   userInvitations: UserInvitation[];
-  companyAccountIds: CompanyAccountId[];
+  companyAccountIds: CompanyAccountId[]; // Legacy support
+  advertiserAccounts: AdvertiserAccount[];
   currentCompany: Company | null;
   loading: boolean;
   error: string | null;
@@ -25,9 +26,13 @@ interface CompanyContextType {
   
   // Company Account Management
   fetchCompanyAccountIds: (companyId?: string) => Promise<void>;
+  fetchAdvertiserAccounts: (userId?: string) => Promise<void>;
   createCompanyAccountId: (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => Promise<CompanyAccountId>;
   updateCompanyAccountId: (accountId: string, updates: Partial<CompanyAccountId>) => Promise<void>;
   deleteCompanyAccountId: (accountId: string) => Promise<void>;
+  createAdvertiserAccount: (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => Promise<AdvertiserAccount>;
+  updateAdvertiserAccount: (accountId: string, updates: Partial<AdvertiserAccount>) => Promise<void>;
+  deleteAdvertiserAccount: (accountId: string) => Promise<void>;
   
   // Data Fetching
   fetchCompanies: () => Promise<void>;
@@ -46,6 +51,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
   const [userInvitations, setUserInvitations] = useState<UserInvitation[]>([]);
   const [companyAccountIds, setCompanyAccountIds] = useState<CompanyAccountId[]>([]);
+  const [advertiserAccounts, setAdvertiserAccounts] = useState<AdvertiserAccount[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +223,174 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCompanyAccountIds([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch advertiser accounts for the current user
+  const fetchAdvertiserAccounts = async (userId?: string) => {
+    if (!user) {
+      // Skip fetch if no user
+      setAdvertiserAccounts([]);
+      setLoading(false);
+      return;
+    }
+
+    const targetUserId = userId || user.id;
+    if (!targetUserId) {
+      console.warn('[CompanyContext] No user ID available for advertiser accounts fetch');
+      setAdvertiserAccounts([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log(`[CompanyContext] Fetching advertiser accounts for user: ${targetUserId}`);
+      
+      const { data, error: fetchError } = await supabase
+        .from('advertiser_accounts')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false });
+
+      // Log response for debugging
+      console.log(`[CompanyContext] Supabase response for advertiser_accounts:`, {
+        data: data || [],
+        error: fetchError,
+        targetUserId
+      });
+
+      if (fetchError) {
+        throw fetchError;
+      } else {
+        // Process the data
+        console.log(`[CompanyContext] Raw data from Supabase:`, data || []);
+        console.log(`[CompanyContext] Number of records found:`, data?.length || 0);
+        
+        const transformedAccounts: AdvertiserAccount[] = (data || []).map(account => ({
+            id: account.id,
+            platform: account.platform,
+            advertiserName: account.advertiser_name,
+            advertiserId: account.advertiser_id,
+            createdAt: account.created_at
+        }));
+        
+        console.log(`[CompanyContext] Transformed advertiser accounts:`, transformedAccounts);
+        setAdvertiserAccounts(transformedAccounts);
+        
+        if (transformedAccounts.length === 0) {
+          console.log(`[CompanyContext] No advertiser accounts found.`);
+        }
+      }
+    } catch (err) {
+      console.error('[CompanyContext] Error in fetchAdvertiserAccounts:', err);
+      
+      // Enhanced error handling for network issues
+      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        setError('Network error: Unable to connect to Supabase. Please check your internet connection.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to fetch advertiser accounts');
+      }
+      setAdvertiserAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create a new advertiser account
+  const createAdvertiserAccount = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>): Promise<AdvertiserAccount> => {
+    if (!user?.id) {
+      throw new Error('No user ID available');
+    }
+
+    try {
+      const insertData = {
+        user_id: user.id,
+        platform: accountData.platform,
+        advertiser_id: accountData.advertiserId,
+        advertiser_name: accountData.advertiserName
+      };
+
+      const { data, error } = await supabase
+        .from('advertiser_accounts')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[CompanyContext] Error creating advertiser account:', error);
+        throw error;
+      }
+
+      const newAccount: AdvertiserAccount = {
+        id: data.id,
+        platform: data.platform,
+        advertiserName: data.advertiser_name,
+        advertiserId: data.advertiser_id,
+        createdAt: data.created_at
+      };
+
+      // Update local state
+      setAdvertiserAccounts(prev => {
+        const updated = [newAccount, ...prev];
+        return updated;
+      });
+      
+      return newAccount;
+
+    } catch (err) {
+      console.error('[CompanyContext] Error creating advertiser account:', err);
+      throw err;
+    }
+  };
+
+  // Update advertiser account
+  const updateAdvertiserAccount = async (accountId: string, updates: Partial<AdvertiserAccount>) => {
+    try {
+      const updateData: any = {};
+      if (updates.platform) updateData.platform = updates.platform;
+      if (updates.advertiserId) updateData.advertiser_id = updates.advertiserId;
+      if (updates.advertiserName !== undefined) updateData.advertiser_name = updates.advertiserName;
+
+      const { error } = await supabase
+        .from('advertiser_accounts')
+        .update(updateData)
+        .eq('id', accountId);
+
+      if (error) throw error;
+
+      // Update local state
+      setAdvertiserAccounts(prev => 
+        prev.map(account => 
+          account.id === accountId 
+            ? { ...account, ...updates }
+            : account
+        )
+      );
+
+    } catch (err) {
+      console.error('Error updating advertiser account:', err);
+      throw err;
+    }
+  };
+
+  // Delete advertiser account
+  const deleteAdvertiserAccount = async (accountId: string) => {
+    try {
+      const { error } = await supabase
+        .from('advertiser_accounts')
+        .delete()
+        .eq('id', accountId);
+
+      if (error) throw error;
+
+      setAdvertiserAccounts(prev => prev.filter(account => account.id !== accountId));
+
+    } catch (err) {
+      console.error('Error deleting advertiser account:', err);
+      throw err;
     }
   };
 
@@ -630,9 +804,16 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Initialize data on mount - ENHANCED WITH DEBUGGING
   useEffect(() => {
     if (user) {
-      refreshData();
+      refreshData(); 
     } else {
       console.log('[CompanyContext] No user detected, skipping data initialization');
+    }
+  }, [user]);
+
+  // Add a separate effect to fetch advertiser accounts when user changes
+  useEffect(() => {
+    if (user) {
+      fetchAdvertiserAccounts();
     }
   }, [user]);
 
@@ -642,6 +823,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       companyUsers,
       userInvitations,
       companyAccountIds,
+      advertiserAccounts,
       currentCompany,
       loading,
       error,
@@ -652,9 +834,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateUserRole,
       removeUser,
       fetchCompanyAccountIds,
+      fetchAdvertiserAccounts,
       createCompanyAccountId,
       updateCompanyAccountId,
       deleteCompanyAccountId,
+      createAdvertiserAccount,
+      updateAdvertiserAccount,
+      deleteAdvertiserAccount,
       fetchCompanies,
       fetchCompanyUsers,
       fetchUserInvitations,
