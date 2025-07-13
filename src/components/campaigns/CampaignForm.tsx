@@ -5,9 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
-import CompanyAccountModal from '../settings/CompanyAccountModal';
+import AdvertiserAccountModal from '../settings/AdvertiserAccountModal';
 import { Calendar, DollarSign, Monitor, Building, Plus, Edit, Hash } from 'lucide-react';
-import { CompanyAccountId } from '../../types';
+import { AdvertiserAccount } from '../../types';
 
 interface CampaignFormProps {
   onComplete: () => void;
@@ -22,7 +22,7 @@ const PLATFORM_OPTIONS = {
 
 const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const { activeCampaign, updateCampaignDetails } = useCampaign();
-  const { companyAccountIds, fetchCompanyAccountIds, createCompanyAccountId } = useCompany();
+  const { advertiserAccounts, fetchAdvertiserAccounts, createAdvertiserAccount } = useCompany();
   const { user } = useAuth();
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [customSocial, setCustomSocial] = useState('');
@@ -33,13 +33,13 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Memoize the account loading function to prevent unnecessary re-renders
-  const loadAccountIds = useCallback(async () => {
-    console.log('[CampaignForm] loadAccountIds called');
+  // Memoize the advertiser accounts loading function to prevent unnecessary re-renders
+  const loadAdvertiserAccounts = useCallback(async () => {
+    console.log('[CampaignForm] loadAdvertiserAccounts called');
     
-    if (!user?.companyId) {
-      console.log('[CampaignForm] No user or company ID available');
-      setLoadError('User company information not available');
+    if (!user?.id) {
+      console.log('[CampaignForm] No user ID available');
+      setLoadError('User information not available');
       setAccountsLoaded(true); // Mark as loaded to prevent infinite loop
       return;
     }
@@ -53,23 +53,23 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     setLoadError(null);
 
     try {      
-      // Fetch the company account IDs
-      await fetchCompanyAccountIds();
+      // Fetch the advertiser accounts
+      await fetchAdvertiserAccounts();
       setAccountsLoaded(true);
-      console.log('[CampaignForm] Successfully fetched company account IDs');
+      console.log('[CampaignForm] Successfully fetched advertiser accounts');
     } catch (error) {
-      console.error('[CampaignForm] Error loading company account IDs:', error);
+      console.error('[CampaignForm] Error loading advertiser accounts:', error);
       setLoadError('Failed to load platform accounts. Please try refreshing the page.');
       setAccountsLoaded(true); // Mark as loaded even on error to prevent infinite loop
     } finally {
       setIsLoadingAccounts(false);
     }
-  }, [user?.companyId, accountsLoaded, fetchCompanyAccountIds]);
+  }, [user?.id, accountsLoaded, fetchAdvertiserAccounts]);
 
-  // Load account IDs when component mounts or user changes
+  // Load advertiser accounts when component mounts or user changes
   useEffect(() => {
-    loadAccountIds();
-  }, [loadAccountIds]);
+    loadAdvertiserAccounts();
+  }, [loadAdvertiserAccounts]);
 
   if (!activeCampaign) return null;
 
@@ -104,54 +104,54 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     }
   };
 
-  const handleAccountSelection = (accountId: string) => {
-    console.log('[CampaignForm] handleAccountSelection called with:', accountId);
-    console.log('[CampaignForm] Available accounts for selection:', companyAccountIds);
+  const handleAdvertiserSelection = (accountId: string) => {
+    console.log('[CampaignForm] handleAdvertiserSelection called with:', accountId);
+    console.log('[CampaignForm] Available accounts for selection:', advertiserAccounts);
     
     if (!accountId) {
       // Clear selection
       updateCampaignDetails({ 
-        selectedCompanyAccountId: '',
+        selectedAdvertiserAccountId: '',
         advertiserName: ''
       });
       return;
     }
 
-    const selectedAccount = (companyAccountIds || []).find(account => account.id === accountId);
+    const selectedAccount = (advertiserAccounts || []).find(account => account.id === accountId);
     console.log('[CampaignForm] Found selected account:', selectedAccount);
     
     if (selectedAccount) {
       updateCampaignDetails({ 
-        selectedCompanyAccountId: accountId,
-        advertiserName: selectedAccount.accountName
+        selectedAdvertiserAccountId: accountId,
+        advertiserName: selectedAccount.advertiserName
       });
     }
     
-    if (formErrors.selectedCompanyAccountId) {
+    if (formErrors.selectedAdvertiserAccountId) {
       setFormErrors(prev => {
         const updated = { ...prev };
-        delete updated.selectedCompanyAccountId;
+        delete updated.selectedAdvertiserAccountId;
         return updated;
       });
     }
   };
 
-  const handleCreateAccount = async (accountData: Omit<CompanyAccountId, 'id' | 'createdAt' | 'updatedAt' | 'companyId'>) => {
+  const handleCreateAccount = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
     try {
       console.log('[CampaignForm] Creating new account with data:', accountData);
-      const newAccount = await createCompanyAccountId(accountData);
+      const newAccount = await createAdvertiserAccount(accountData);
       console.log('[CampaignForm] Created new account:', newAccount);
       
       // Automatically select the newly created account
       updateCampaignDetails({ 
-        selectedCompanyAccountId: newAccount.id,
-        advertiserName: newAccount.accountName
+        selectedAdvertiserAccountId: newAccount.id,
+        advertiserName: newAccount.advertiserName
       });
       setShowAccountModal(false);
       
       // Refresh the accounts list
       setAccountsLoaded(false);
-      await loadAccountIds();
+      await loadAdvertiserAccounts();
     } catch (error) {
       console.error('[CampaignForm] Error creating account:', error);
       throw error;
@@ -161,7 +161,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
   const handleRetryLoadAccounts = () => {
     setAccountsLoaded(false);
     setLoadError(null);
-    loadAccountIds();
+    loadAdvertiserAccounts();
   };
 
   const validateForm = () => {
@@ -209,16 +209,16 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
     }
   };
 
-  const selectedAccount = (companyAccountIds || []).find(account => account.id === activeCampaign.selectedCompanyAccountId);
+  const selectedAccount = (advertiserAccounts || []).find(account => account.id === activeCampaign.selectedAdvertiserAccountId);
 
   // Debug logging for render
   console.log('[CampaignForm] Rendering with state:', {
     isLoadingAccounts,
     accountsLoaded,
-    companyAccountIdsLength: (companyAccountIds || []).length,
-    selectedAccountId: activeCampaign.selectedCompanyAccountId,
+    advertiserAccountsLength: (advertiserAccounts || []).length,
+    selectedAccountId: activeCampaign.selectedAdvertiserAccountId,
     selectedAccount,
-    userCompanyId: user?.companyId,
+    userId: user?.id,
     loadError
   });
 
@@ -277,9 +277,9 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                 <div className="text-xs text-blue-700 space-y-1">
                   <div>Loading Accounts: {isLoadingAccounts ? 'Yes' : 'No'}</div>
                   <div>Accounts Loaded: {accountsLoaded ? 'Yes' : 'No'}</div>
-                  <div>Available Accounts: {(companyAccountIds || []).length}</div>
-                  <div>User Company ID: {user?.companyId || 'None'}</div>
-                  <div>Selected Account ID: {activeCampaign.selectedCompanyAccountId || 'None'}</div>
+                  <div>Available Accounts: {(advertiserAccounts || []).length}</div>
+                  <div>User ID: {user?.id || 'None'}</div>
+                  <div>Selected Account ID: {activeCampaign.selectedAdvertiserAccountId || 'None'}</div>
                   <div>Load Error: {loadError || 'None'}</div>
                   <details className="mt-2">
                     <summary className="cursor-pointer text-blue-800 font-medium">Session Debug Info</summary>
@@ -293,20 +293,20 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
             
             <div className="flex gap-3">
               <select
-                value={activeCampaign.selectedCompanyAccountId || ''}
-                onChange={(e) => handleAccountSelection(e.target.value)}
+                value={activeCampaign.selectedAdvertiserAccountId || ''}
+                onChange={(e) => handleAdvertiserSelection(e.target.value)}
                 className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={isLoadingAccounts}
               >
                 <option value="">
                   {isLoadingAccounts ? 'Loading accounts...' : 
                    loadError ? 'Error loading accounts' :
-                   !companyAccountIds || companyAccountIds.length === 0 ? 'No accounts available - add one' : 
+                   !advertiserAccounts || advertiserAccounts.length === 0 ? 'No accounts available - add one' : 
                    'Select an account'}
                 </option>
-                {(companyAccountIds || []).map(account => (
+                {(advertiserAccounts || []).map(account => (
                   <option key={account.id} value={account.id}>
-                    {account.platform} - {account.accountName} ({account.accountId})
+                    {account.platform} - {account.advertiserName} ({account.advertiserId})
                   </option>
                 ))}
               </select>
@@ -316,11 +316,11 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                 onClick={() => setShowAccountModal(true)}
                 icon={<Plus size={16} />}
               >
-                Add New
+                Add New Account
               </Button>
             </div>
-            {formErrors.selectedCompanyAccountId && (
-              <p className="mt-1 text-sm text-red-600">{formErrors.selectedCompanyAccountId}</p>
+            {formErrors.selectedAdvertiserAccountId && (
+              <p className="mt-1 text-sm text-red-600">{formErrors.selectedAdvertiserAccountId}</p>
             )}
             
             {selectedAccount && (
@@ -331,14 +331,14 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
                       Selected: {selectedAccount.platform}
                     </p>
                     <p className="text-sm text-blue-700">
-                      {selectedAccount.accountName} • ID: {selectedAccount.accountId}
+                      {selectedAccount.advertiserName} • ID: {selectedAccount.advertiserId}
                     </p>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleAccountSelection('')}
+                    onClick={() => handleAdvertiserSelection('')}
                   >
                     Clear
                   </Button>
@@ -474,7 +474,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
       </div>
 
       {/* Company Account Modal */}
-      <CompanyAccountModal
+      <AdvertiserAccountModal
         isOpen={showAccountModal}
         onClose={() => setShowAccountModal(false)}
         onSave={handleCreateAccount}
