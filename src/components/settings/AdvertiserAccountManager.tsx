@@ -21,6 +21,7 @@ const AdvertiserAccountManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // Add effect to log loading and error states
   useEffect(() => {
@@ -127,7 +128,19 @@ const AdvertiserAccountManager: React.FC = () => {
   const handleAddNew = () => {
     setEditingAccount(null);
     setIsModalOpen(true);
-    console.log('[AdvertiserAccountManager] Opening modal for new account, isModalOpen:', true);
+    console.log('[AdvertiserAccountManager] Opening modal for new account');
+    
+    // Force update with setTimeout to ensure state change is processed
+    setTimeout(() => {
+      console.log('[AdvertiserAccountManager] Checking modal state after timeout:', isModalOpen);
+    }, 100);
+    
+    // Debug info to track state changes
+    setDebugInfo({
+      timestamp: new Date().toISOString(),
+      action: 'handleAddNew called',
+      isModalOpenBefore: isModalOpen
+    });
   };
 
   const handleSave = async (data: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
@@ -177,15 +190,29 @@ const AdvertiserAccountManager: React.FC = () => {
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-blue-600 flex items-center">
-            <Building size={20} className="mr-2" />
-            Platform Accounts
+            <Building size={20} className="mr-2" /> 
+            Platform Accounts {debugInfo && `(Debug: ${isModalOpen ? 'Modal Open' : 'Modal Closed'})`}
           </CardTitle>
         <Button 
           variant="primary" 
-          onClick={() => {
-            console.log('Add Account button clicked!'); // Log the click event
-            handleAddNew(); // Re-enable the original function call
-          }} 
+          onClick={(e) => {
+            e.preventDefault(); // Prevent any default behavior
+            console.log('Add Account button clicked!');
+            
+            // Direct state update with callback to verify
+            setIsModalOpen(true);
+            console.log('Set isModalOpen to true directly');
+            
+            // Skip the handleAddNew function for now
+            setEditingAccount(null);
+            
+            // Debug info
+            setDebugInfo({
+              timestamp: new Date().toISOString(),
+              action: 'Add Account button clicked',
+              isModalOpenBefore: isModalOpen
+            });
+          }}
           icon={<Plus size={16} />}
         >
           Add Account
@@ -202,10 +229,24 @@ const AdvertiserAccountManager: React.FC = () => {
               </p>
               <Button 
                 variant="primary" 
-                onClick={() => {
-                  console.log('Add Your First Account button clicked!'); // Log the click event
-                  handleAddNew(); // Re-enable the original function call
-                }} 
+                onClick={(e) => {
+                  e.preventDefault(); // Prevent any default behavior
+                  console.log('Add Your First Account button clicked!');
+                  
+                  // Direct state update with callback to verify
+                  setIsModalOpen(true);
+                  console.log('Set isModalOpen to true directly');
+                  
+                  // Skip the handleAddNew function for now
+                  setEditingAccount(null);
+                  
+                  // Debug info
+                  setDebugInfo({
+                    timestamp: new Date().toISOString(),
+                    action: 'Add Your First Account button clicked',
+                    isModalOpenBefore: isModalOpen
+                  });
+                }}
                 icon={<Plus size={16} />}
               >
                 Add Your First Account
@@ -260,15 +301,27 @@ const AdvertiserAccountManager: React.FC = () => {
       </Card>
 
       {/* Modal */}
-      <AdvertiserAccountModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          console.log('[AdvertiserAccountManager] Closing modal');
-          setIsModalOpen(false);
-        }}
-        onSave={handleSave}
-        account={editingAccount}
-      />
+      {/* Always render the modal and log its props */}
+      <div className="modal-container">
+        {console.log('[AdvertiserAccountManager] Rendering modal with isOpen:', isModalOpen)}
+        <AdvertiserAccountModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            console.log('[AdvertiserAccountManager] Closing modal');
+            setIsModalOpen(false);
+          }}
+          onSave={handleSave}
+          account={editingAccount}
+        />
+      </div>
+      
+      {/* Debug info display - only visible in development */}
+      {process.env.NODE_ENV === 'development' && debugInfo && (
+        <div className="fixed bottom-0 right-0 bg-black bg-opacity-75 text-white p-2 text-xs max-w-xs z-50">
+          <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+          <div>Modal state: {isModalOpen ? 'OPEN' : 'CLOSED'}</div>
+        </div>
+      )}
     </>
   );
 };

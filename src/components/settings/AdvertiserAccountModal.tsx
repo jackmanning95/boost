@@ -36,7 +36,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   account
 }) => {
   console.log('[AdvertiserAccountModal] isOpen prop received:', isOpen);
-  console.log('[AdvertiserAccountModal] account prop received:', account ? 'Account object present' : 'No account');
+  console.log('[AdvertiserAccountModal] account prop received:', account ? 'Account object present' : 'No account', 'isOpen:', isOpen);
   const [platform, setPlatform] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
@@ -116,14 +116,14 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   };
 
   if (!isOpen) {
-    console.log('[AdvertiserAccountModal] Modal not rendering because isOpen is false');
+    console.log('[AdvertiserAccountModal] Modal not rendering because isOpen is false', new Date().toISOString());
     return null;
   }
   
-  console.log('[AdvertiserAccountModal] Rendering modal content');
+  console.log('[AdvertiserAccountModal] Rendering modal content', new Date().toISOString());
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => {
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" onClick={(e) => {
       // Close when clicking outside the modal
       if (e.target === e.currentTarget) onClose();
     }}>
