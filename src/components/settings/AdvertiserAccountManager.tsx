@@ -168,13 +168,13 @@ const AdvertiserAccountManager: React.FC = () => {
             <Building size={20} className="mr-2" /> 
             Platform Accounts
           </CardTitle>
-        <Button 
-          variant="primary" 
-          onClick={handleAddNew}
-          icon={<Plus size={16} />}
-        >
-          Add Account
-        </Button>
+          <Button 
+            variant="primary" 
+            onClick={handleAddNew}
+            icon={<Plus size={16} />}
+          >
+            Add Account
+          </Button>
         </CardHeader>
         <CardContent>
           {(advertiserAccounts || []).length === 0 ? (
@@ -187,17 +187,16 @@ const AdvertiserAccountManager: React.FC = () => {
               </p>
               <Button 
                 variant="primary" 
-                onClick={(e) => {
-                  e.preventDefault(); // Prevent any default behavior
-                  console.log('Add Your First Account button clicked!');
-                  
-                  // Direct state update with callback to verify
-                  setIsModalOpen(true);
-                  console.log('Set isModalOpen to true directly');
-                  
-                <Button
-                  variant="primary"
-                  onClick={handleAddNew}
+                onClick={handleAddNew}
+              >
+                Add Your First Account
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {advertiserAccounts.map(account => (
+                <div
+                  key={account.id}
                   className="border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:shadow-sm transition-shadow"
                 >
                   <div className="flex-1">
