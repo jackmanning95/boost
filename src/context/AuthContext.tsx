@@ -2,11 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { User, Company } from '../types';
 import { supabase } from '../lib/supabase';
 
+type AuthProvider = 'google' | 'email';
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signUp: (data: SignUpData) => Promise<void>;
+  handleOAuthLogin: (provider: AuthProvider) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -18,7 +21,7 @@ interface SignUpData {
   email: string;
   password: string;
   name: string;
-  companyName?: string;
+  companyName: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -211,6 +214,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handleOAuthLogin = async (provider: AuthProvider) => {
+    try {
+      setLoading(true);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/login`
+        }
+      });
+
+      if (error) throw error;
+      
+      // Note: We don't need to fetch user profile here as the onAuthStateChange
+      // event will handle that when the OAuth redirect completes
+      
+    } catch (error) {
+      console.error('OAuth login error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       setLoading(true);
@@ -234,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading, 
       login, 
       signUp, 
+      handleOAuthLogin,
       logout, 
       isAdmin,
       isSuperAdmin,
