@@ -173,16 +173,16 @@ const AdvertiserAccountManager: React.FC = () => {
             <Building size={20} className="mr-2" />
             Platform Accounts
           </CardTitle>
-          <Button 
-            variant="primary" 
-            onClick={() => {
-              console.log('[AdvertiserAccountManager] Add Account button clicked');
-              handleAddNew();
-            }} 
-            icon={<Plus size={16} />}
-          >
-            Add Account
-          </Button>
+        <Button 
+          variant="primary" 
+          onClick={() => {
+            console.log('Add Account button clicked!'); // Simple log message
+            // handleAddNew(); // Temporarily comment out the original function call
+          }} 
+          icon={<Plus size={16} />}
+        >
+          Add Account
+        </Button>
         </CardHeader>
         <CardContent>
           {(advertiserAccounts || []).length === 0 ? (
@@ -193,7 +193,14 @@ const AdvertiserAccountManager: React.FC = () => {
                 Add your advertiser accounts to track and manage your advertising campaigns. 
                 All team members in your company will be able to access these accounts.
               </p>
-              <Button variant="primary" onClick={handleAddNew} icon={<Plus size={16} />}>
+              <Button 
+                variant="primary" 
+                onClick={() => {
+                  console.log('Add Your First Account button clicked!'); // Simple log message
+                  // handleAddNew(); // Temporarily comment out the original function call
+                }} 
+                icon={<Plus size={16} />}
+              >
                 Add Your First Account
               </Button>
             </div>
@@ -246,17 +253,15 @@ const AdvertiserAccountManager: React.FC = () => {
       </Card>
 
       {/* Modal */}
-      {isModalOpen && (
-        <AdvertiserAccountModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            console.log('[AdvertiserAccountManager] Closing modal');
-            setIsModalOpen(false);
-          }}
-          onSave={handleSave}
-          account={editingAccount}
-        />
-      )}
+    <AdvertiserAccountModal
+      isOpen={isModalOpen}
+      onClose={() => {
+        console.log('[AdvertiserAccountManager] Closing modal');
+        setIsModalOpen(false);
+      }}
+      onSave={handleSave}
+      account={editingAccount}
+    />
     </>
   );
 };

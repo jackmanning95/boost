@@ -35,6 +35,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   onSave,
   account
 }) => {
+  console.log('[AdvertiserAccountModal] isOpen prop received:', isOpen);
   const [platform, setPlatform] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
