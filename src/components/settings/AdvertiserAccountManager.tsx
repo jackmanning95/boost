@@ -11,7 +11,7 @@ const AdvertiserAccountManager: React.FC = () => {
   const { user } = useAuth();
   const { 
     advertiserAccounts, 
-    loading, 
+    loading: companyContextLoading, 
     error, 
     fetchAdvertiserAccounts, 
     createAdvertiserAccount, 
@@ -20,12 +20,20 @@ const AdvertiserAccountManager: React.FC = () => {
   } = useCompany();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       console.log('[AdvertiserAccountManager] User detected, fetching advertiser accounts');
-      fetchAdvertiserAccounts().catch(error => {
+      setLoading(true);
+      fetchAdvertiserAccounts()
+      .then(() => {
+        console.log('[AdvertiserAccountManager] Advertiser accounts fetched successfully');
+        setLoading(false);
+      })
+      .catch(error => {
         console.error('Error fetching advertiser accounts:', error);
+        setLoading(false);
       });
     }
   }, [user, fetchAdvertiserAccounts]);
@@ -34,11 +42,20 @@ const AdvertiserAccountManager: React.FC = () => {
   useEffect(() => {
     if (advertiserAccounts) {
       // If we have accounts (even empty array), we're done loading
-      if (loading) {
-        console.log('[AdvertiserAccountManager] Advertiser accounts loaded, setting loading to false');
+      if (companyContextLoading) {
+        console.log('[AdvertiserAccountManager] Advertiser accounts loaded, companyContextLoading:', companyContextLoading);
       }
     }
-  }, [advertiserAccounts, loading]);
+  }, [advertiserAccounts, companyContextLoading]);
+  
+  // Debug logging for loading states
+  useEffect(() => {
+    console.log('[AdvertiserAccountManager] Loading states:', { 
+      localLoading: loading, 
+      contextLoading: companyContextLoading,
+      accountsLength: advertiserAccounts?.length || 0
+    });
+  }, [loading, companyContextLoading, advertiserAccounts]);
 
   const handleAdd = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
     try {

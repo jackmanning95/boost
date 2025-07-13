@@ -229,6 +229,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Fetch advertiser accounts for the current user
   const fetchAdvertiserAccounts = async (userId?: string) => {
     if (!user) {
+      console.log('[CompanyContext] fetchAdvertiserAccounts: No user, skipping fetch');
       // Skip fetch if no user
       setAdvertiserAccounts([]);
       setLoading(false);
@@ -244,6 +245,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
+      console.log('[CompanyContext] fetchAdvertiserAccounts: Setting loading to true');
       setLoading(true);
       setError(null);
 
@@ -285,7 +287,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
     } catch (err) {
-      console.error('[CompanyContext] Error in fetchAdvertiserAccounts:', err);
+      console.error('[CompanyContext] Error in fetchAdvertiserAccounts:', err instanceof Error ? err.message : err);
       
       // Enhanced error handling for network issues
       if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
@@ -295,6 +297,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       setAdvertiserAccounts([]);
     } finally {
+      console.log('[CompanyContext] fetchAdvertiserAccounts: Setting loading to false');
       setLoading(false);
     }
   };
@@ -796,7 +799,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fetchCompanies(),
       fetchCompanyUsers(),
       fetchUserInvitations(),
-      fetchCompanyAccountIds()
+      fetchAdvertiserAccounts()
     ]);
     console.log('[CompanyContext] Data refresh completed');
   };
