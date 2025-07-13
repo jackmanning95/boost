@@ -5,7 +5,7 @@ import AdvertiserAccountModal from '../settings/AdvertiserAccountModal';
 import { useCompany } from '../../context/CompanyContext';
 import { useAuth } from '../../context/AuthContext';
 import { Building, Plus, Edit, Trash2, Calendar, AlertCircle } from 'lucide-react';
-import { AdvertiserAccount } from '../../types';
+import { AdvertiserAccount } from '../../types'; 
 
 const AdvertiserAccountManager: React.FC = () => {
   const { user } = useAuth();
@@ -21,13 +21,6 @@ const AdvertiserAccountManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AdvertiserAccount | null>(null);
   const [loading, setLoading] = useState(true);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-
-  // Add effect to log loading and error states
-  useEffect(() => {
-    console.log('[AdvertiserAccountManager] Current loading state:', loading);
-    console.log('[AdvertiserAccountManager] Current error state:', error);
-  }, [loading, error]);
 
   useEffect(() => {
     if (user) {
@@ -35,8 +28,7 @@ const AdvertiserAccountManager: React.FC = () => {
       try {
         setLoading(true);
         fetchAdvertiserAccounts()
-          .then(() => {
-            console.log('[AdvertiserAccountManager] Advertiser accounts fetched successfully');
+          .then(() => { 
             setLoading(false);
           })
           .catch(error => {
@@ -55,37 +47,16 @@ const AdvertiserAccountManager: React.FC = () => {
     if (advertiserAccounts) {
       // If we have accounts (even empty array), we're done loading
       if (loading || companyContextLoading) {
-        console.log('[AdvertiserAccountManager] Accounts loaded, setting loading to false');
         setLoading(false);
       }
     }
   }, [advertiserAccounts, loading, companyContextLoading]);
   
-  // Debug logging for loading states
-  useEffect(() => {
-    console.log('[AdvertiserAccountManager] Loading states:', { 
-      isModalOpen, 
-      localLoading: loading, 
-      contextLoading: companyContextLoading,
-      accountsLength: advertiserAccounts?.length || 0,
-      hasError: !!error
-    });
-    
-    // Force loading to false after 10 seconds to prevent infinite loading
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.log('[AdvertiserAccountManager] Force ending loading state after timeout');
-        setLoading(false);
-      }
-    }, 10000);
-    
-    return () => clearTimeout(timeout);
-  }, [loading, companyContextLoading, advertiserAccounts]);
-
   const handleAdd = async (accountData: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
     try {
-      console.log('Adding advertiser account:', accountData);
       await createAdvertiserAccount(accountData);
+      alert('Account added successfully!');
+      await fetchAdvertiserAccounts(); // Refresh the list
     } catch (error) {
       console.error('Error adding advertiser account:', error);
       alert('Failed to add advertiser account. Please try again.');
@@ -94,12 +65,13 @@ const AdvertiserAccountManager: React.FC = () => {
 
   const handleUpdate = async (account: AdvertiserAccount) => {
     try {
-      console.log('Updating advertiser account:', account);
       await updateAdvertiserAccount(account.id, {
         platform: account.platform,
         advertiserId: account.advertiserId,
         advertiserName: account.advertiserName
       });
+      alert('Account updated successfully!');
+      await fetchAdvertiserAccounts(); // Refresh the list
     } catch (error) {
       console.error('Error updating advertiser account:', error);
       alert('Failed to update advertiser account. Please try again.');
@@ -112,8 +84,9 @@ const AdvertiserAccountManager: React.FC = () => {
     }
 
     try {
-      console.log('Deleting advertiser account:', id);
       await deleteAdvertiserAccount(id);
+      alert('Account deleted successfully!');
+      await fetchAdvertiserAccounts(); // Refresh the list
     } catch (error) {
       console.error('Error deleting advertiser account:', error);
       alert('Failed to delete advertiser account. Please try again.');
@@ -122,34 +95,36 @@ const AdvertiserAccountManager: React.FC = () => {
 
   const handleEdit = (account: AdvertiserAccount) => {
     setEditingAccount(account);
-    setIsModalOpen(true);
+    setTimeout(() => {
+      setIsModalOpen(true);
+    }, 0);
   };
 
   const handleAddNew = () => {
     setEditingAccount(null);
-    setIsModalOpen(true);
-    console.log('[AdvertiserAccountManager] Opening modal for new account');
-    
-    // Force update with setTimeout to ensure state change is processed
     setTimeout(() => {
-      console.log('[AdvertiserAccountManager] Checking modal state after timeout:', isModalOpen);
-    }, 100);
-    
-    // Debug info to track state changes
-    setDebugInfo({
-      timestamp: new Date().toISOString(),
-      action: 'handleAddNew called',
-      isModalOpenBefore: isModalOpen
-    });
+      setIsModalOpen(true);
+    }, 0);
   };
 
   const handleSave = async (data: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => {
-    if (editingAccount) {
-      await handleUpdate({ ...editingAccount, ...data });
-    } else {
-      await handleAdd(data);
+    try {
+      if (editingAccount) {
+        // Update existing account
+        await updateAdvertiserAccount(editingAccount.id, data);
+        alert('Account updated successfully!');
+      } else {
+        // Create new account
+        await createAdvertiserAccount(data);
+        alert('Account added successfully!');
+      }
+      setIsModalOpen(false); // Close modal on success
+      setEditingAccount(null); // Clear editing state
+      await fetchAdvertiserAccounts(); // Refresh the list
+    } catch (error) {
+      console.error('Error saving account:', error);
+      alert(`Failed to save account: ${error instanceof Error ? error.message : String(error)}`);
     }
-    setIsModalOpen(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -191,28 +166,11 @@ const AdvertiserAccountManager: React.FC = () => {
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-blue-600 flex items-center">
             <Building size={20} className="mr-2" /> 
-            Platform Accounts {debugInfo && `(Debug: ${isModalOpen ? 'Modal Open' : 'Modal Closed'})`}
+            Platform Accounts
           </CardTitle>
         <Button 
           variant="primary" 
-          onClick={(e) => {
-            e.preventDefault(); // Prevent any default behavior
-            console.log('Add Account button clicked!');
-            
-            // Direct state update with callback to verify
-            setIsModalOpen(true);
-            console.log('Set isModalOpen to true directly');
-            
-            // Skip the handleAddNew function for now
-            setEditingAccount(null);
-            
-            // Debug info
-            setDebugInfo({
-              timestamp: new Date().toISOString(),
-              action: 'Add Account button clicked',
-              isModalOpenBefore: isModalOpen
-            });
-          }}
+          onClick={handleAddNew}
           icon={<Plus size={16} />}
         >
           Add Account
@@ -237,26 +195,9 @@ const AdvertiserAccountManager: React.FC = () => {
                   setIsModalOpen(true);
                   console.log('Set isModalOpen to true directly');
                   
-                  // Skip the handleAddNew function for now
-                  setEditingAccount(null);
-                  
-                  // Debug info
-                  setDebugInfo({
-                    timestamp: new Date().toISOString(),
-                    action: 'Add Your First Account button clicked',
-                    isModalOpenBefore: isModalOpen
-                  });
-                }}
-                icon={<Plus size={16} />}
-              >
-                Add Your First Account
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {(advertiserAccounts || []).map(account => (
-                <div
-                  key={account.id}
+                <Button
+                  variant="primary"
+                  onClick={handleAddNew}
                   className="border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:shadow-sm transition-shadow"
                 >
                   <div className="flex-1">
@@ -301,27 +242,15 @@ const AdvertiserAccountManager: React.FC = () => {
       </Card>
 
       {/* Modal */}
-      {/* Always render the modal and log its props */}
-      <div className="modal-container">
-        {console.log('[AdvertiserAccountManager] Rendering modal with isOpen:', isModalOpen)}
-        <AdvertiserAccountModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            console.log('[AdvertiserAccountManager] Closing modal');
-            setIsModalOpen(false);
-          }}
-          onSave={handleSave}
-          account={editingAccount}
-        />
-      </div>
-      
-      {/* Debug info display - only visible in development */}
-      {process.env.NODE_ENV === 'development' && debugInfo && (
-        <div className="fixed bottom-0 right-0 bg-black bg-opacity-75 text-white p-2 text-xs max-w-xs z-50">
-          <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-          <div>Modal state: {isModalOpen ? 'OPEN' : 'CLOSED'}</div>
-        </div>
-      )}
+      <AdvertiserAccountModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingAccount(null);
+        }}
+        onSave={handleSave}
+        account={editingAccount}
+      />
     </>
   );
 };

@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { AdvertiserAccount } from '../../types';
 
 interface AdvertiserAccountModalProps {
-  isOpen: boolean;
+  isOpen: boolean; 
   onClose: () => void;
   onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => Promise<void>;
   account?: AdvertiserAccount | null;
@@ -30,13 +30,11 @@ const PLATFORMS = [
 ];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
-  isOpen,
+  isOpen, 
   onClose,
   onSave,
   account
 }) => {
-  console.log('[AdvertiserAccountModal] isOpen prop received:', isOpen);
-  console.log('[AdvertiserAccountModal] account prop received:', account ? 'Account object present' : 'No account', 'isOpen:', isOpen);
   const [platform, setPlatform] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
   const [advertiserName, setAdvertiserName] = useState('');
@@ -65,12 +63,6 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   }, [account, isOpen]);
 
   const validateForm = () => {
-    console.log('[AdvertiserAccountModal] Validating form with values:', {
-      platform,
-      customPlatform: customPlatform || 'N/A',
-      advertiserName,
-      advertiserId
-    });
     const newErrors: Record<string, string> = {};
 
     if (!platform) {
@@ -94,7 +86,6 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('[AdvertiserAccountModal] Form submitted');
     e.preventDefault();
 
     if (!validateForm()) return;
@@ -115,13 +106,8 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     }
   };
 
-  if (!isOpen) {
-    console.log('[AdvertiserAccountModal] Modal not rendering because isOpen is false', new Date().toISOString());
-    return null;
-  }
-  
-  console.log('[AdvertiserAccountModal] Rendering modal content', new Date().toISOString());
-
+  if (!isOpen) return null;
+    
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" onClick={(e) => {
       // Close when clicking outside the modal
