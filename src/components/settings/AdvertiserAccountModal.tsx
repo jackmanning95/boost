@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { AdvertiserAccount } from '../../types';
 
 interface AdvertiserAccountModalProps {
-  isOpen: boolean; 
+  isOpen: boolean;
   onClose: () => void;
   onSave: (account: Omit<AdvertiserAccount, 'id' | 'createdAt'>) => Promise<void>;
   account?: AdvertiserAccount | null;
@@ -30,7 +30,7 @@ const PLATFORMS = [
 ];
 
 const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
-  isOpen, 
+  isOpen,
   onClose,
   onSave,
   account
@@ -42,22 +42,19 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Reset modal state when opened or closed
   useEffect(() => {
     if (account) {
-      setPlatform(account.platform);
+      const isCustom = !PLATFORMS.includes(account.platform);
+      setPlatform(isCustom ? 'Other' : account.platform);
+      setCustomPlatform(isCustom ? account.platform : '');
       setAdvertiserName(account.advertiserName);
       setAdvertiserId(account.advertiserId);
-      if (!PLATFORMS.includes(account.platform)) {
-        setCustomPlatform(account.platform);
-        setPlatform('Other');
-      } else {
-        setCustomPlatform('');
-      }
     } else {
       setPlatform('');
+      setCustomPlatform('');
       setAdvertiserName('');
       setAdvertiserId('');
-      setCustomPlatform('');
     }
     setErrors({});
   }, [account, isOpen]);
@@ -70,14 +67,14 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
     }
 
     if (platform === 'Other' && !customPlatform.trim()) {
-      newErrors.platform = 'Please specify a platform';
+      newErrors.platform = 'Please specify a custom platform name';
     }
 
-    if (!advertiserName) {
+    if (!advertiserName.trim()) {
       newErrors.advertiserName = 'Advertiser name is required';
     }
 
-    if (!advertiserId) {
+    if (!advertiserId.trim()) {
       newErrors.advertiserId = 'Advertiser ID is required';
     }
 
@@ -107,12 +104,14 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
   };
 
   if (!isOpen) return null;
-    
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" onClick={(e) => {
-      // Close when clicking outside the modal
-      if (e.target === e.currentTarget) onClose();
-    }}>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">
@@ -128,10 +127,9 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Platform dropdown */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Platform
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
             <select
               value={platform}
               onChange={(e) => setPlatform(e.target.value)}
@@ -146,6 +144,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
                 </option>
               ))}
             </select>
+
             {platform === 'Other' && (
               <input
                 type="text"
@@ -155,11 +154,13 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
                 className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             )}
+
             {errors.platform && (
               <p className="mt-1 text-sm text-red-600">{errors.platform}</p>
             )}
           </div>
 
+          {/* Advertiser Name */}
           <Input
             label="Advertiser Name"
             value={advertiserName}
@@ -168,6 +169,7 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
             placeholder="e.g., Client A"
           />
 
+          {/* Advertiser ID */}
           <Input
             label="Advertiser ID"
             value={advertiserId}
@@ -176,12 +178,14 @@ const AdvertiserAccountModal: React.FC<AdvertiserAccountModalProps> = ({
             placeholder="Enter the platform-specific ID"
           />
 
+          {/* Submit Error */}
           {errors.submit && (
             <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
               {errors.submit}
             </div>
           )}
 
+          {/* Buttons */}
           <div className="flex justify-end space-x-3 pt-4">
             <Button
               type="button"
