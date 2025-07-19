@@ -122,12 +122,20 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         `)
         .order('created_at', { ascending: false });
 
+      // DEBUG: Log the user's role and email to verify super admin status
+      console.log('[CampaignContext] DEBUG - User details:', {
+        email: user.email,
+        role: user.role,
+        isSuperAdmin: isSuperAdmin,
+        emailEndsWithBoostdata: user.email?.endsWith('@boostdata.io')
+      });
+
       // CRITICAL FIX: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL campaigns');
+        console.log('[CampaignContext] Super Admin - fetching ALL campaigns (no filters applied)');
       }
 
       const { data, error: fetchError } = await query;
@@ -137,7 +145,10 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw fetchError;
       }
 
-      console.log('[CampaignContext] Fetched campaigns:', data?.length || 0);
+      console.log('[CampaignContext] Raw data from Supabase:', {
+        campaignCount: data?.length || 0,
+        campaigns: data?.map(c => ({ id: c.id, name: c.name, client_id: c.client_id })) || []
+      });
 
       const transformedCampaigns: Campaign[] = (data || []).map(campaign => ({
         id: campaign.id,
@@ -160,6 +171,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }));
 
       setCampaigns(transformedCampaigns);
+      console.log('[CampaignContext] Set campaigns in state:', transformedCampaigns.length);
       setError(null);
 
     } catch (err) {
