@@ -11,7 +11,7 @@ import CampaignActivityTimeline from '../components/campaigns/CampaignActivityTi
 import AdminStatusUpdater from '../components/campaigns/AdminStatusUpdater';
 import { useCampaign } from '../context/CampaignContext';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Calendar, DollarSign, Monitor, Users, Activity, X } from 'lucide-react';
+import { ArrowLeft, Calendar, DollarSign, Monitor, Users, Activity } from 'lucide-react';
 
 const CampaignDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,7 +31,6 @@ const CampaignDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'comments' | 'workflow' | 'activity'>('comments');
-  const [localAudiences, setLocalAudiences] = useState<any[]>([]);
 
   const campaign = id ? getCampaignById(id) : null;
 
@@ -50,9 +49,6 @@ const CampaignDetailPage: React.FC = () => {
             fetchWorkflowHistory(id),
             fetchActivityLog(id)
           ]);
-          if (campaign) {
-            setLocalAudiences(campaign.audiences);
-          }
           setDataLoaded(true);
         } catch (error) {
           console.error('Error loading campaign data:', error);
@@ -66,10 +62,6 @@ const CampaignDetailPage: React.FC = () => {
       setLoading(false);
     }
   }, [id, dataLoaded, fetchCampaignComments, fetchWorkflowHistory, fetchActivityLog, navigate, campaign]);
-
-  const handleRemoveAudience = (audienceId: string) => {
-    setLocalAudiences(prev => prev.filter(a => a.id !== audienceId));
-  };
 
   if (!campaign) {
     return (
@@ -160,14 +152,14 @@ const CampaignDetailPage: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Users size={20} className="mr-2 text-blue-600" />
-                  Selected Audiences ({localAudiences.length})
+                  Selected Audiences ({campaign.audiences.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {localAudiences.length > 0 ? (
+                {campaign.audiences.length > 0 ? (
                   <div className="space-y-3">
-                    {localAudiences.map(audience => (
-                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                    {campaign.audiences.map(audience => (
+                      <div key={audience.id} className="p-4 bg-gray-50 rounded-lg">
                         <div>
                           <h4 className="font-medium text-gray-900">{audience.name}</h4>
                           <p className="text-sm text-gray-600">{audience.description}</p>
@@ -176,16 +168,14 @@ const CampaignDetailPage: React.FC = () => {
                           )}
                           <p className="text-xs text-gray-500">Est. Reach: {audience.reach?.toLocaleString() || 'N/A'}</p>
                         </div>
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          icon={<X size={14} />}
-                          onClick={() => handleRemoveAudience(audience.id)}
-                        >
-                          Remove
-                        </Button>
                       </div>
                     ))}
+                    <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                      <p className="text-sm text-blue-700">
+                        <strong>Note:</strong> Audiences cannot be modified after campaign submission. 
+                        Contact support if changes are needed.
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-gray-500 italic">No audiences selected</p>

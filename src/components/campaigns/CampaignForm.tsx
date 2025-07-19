@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import AdvertiserAccountModal from '../settings/AdvertiserAccountModal';
-import { Calendar, DollarSign, Monitor, Building, Plus, Edit, Hash } from 'lucide-react';
+import { Calendar, DollarSign, Monitor, Building, Plus, Edit, Hash, Users, X, ArrowRight } from 'lucide-react';
 import { AdvertiserAccount } from '../../types';
 
 interface CampaignFormProps {
@@ -21,7 +21,7 @@ const PLATFORM_OPTIONS = {
 };
 
 const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
-  const { activeCampaign, updateCampaignDetails } = useCampaign();
+  const { activeCampaign, updateCampaignDetails, removeAudienceFromCampaign } = useCampaign();
   const { advertiserAccounts, fetchAdvertiserAccounts, createAdvertiserAccount } = useCompany();
   const { user } = useAuth();
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -465,6 +465,67 @@ const CampaignForm: React.FC<CampaignFormProps> = ({ onComplete }) => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Selected Audiences Section */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Users size={20} className="mr-2 text-blue-600" />
+          Selected Audiences ({activeCampaign.audiences.length})
+        </h2>
+        
+        {activeCampaign.audiences.length > 0 ? (
+          <div className="space-y-3">
+            {activeCampaign.audiences.map(audience => (
+              <div key={audience.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900">{audience.name}</h4>
+                  <p className="text-sm text-gray-600">{audience.description}</p>
+                  {audience.dataSupplier && (
+                    <p className="text-xs text-gray-500 mt-1">{audience.dataSupplier}</p>
+                  )}
+                  <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                    <span>Est. Reach: {audience.reach?.toLocaleString() || 'N/A'}</span>
+                    {audience.cpm && (
+                      <span>CPM: ${audience.cpm.toFixed(2)}</span>
+                    )}
+                  </div>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  icon={<X size={14} />}
+                  onClick={() => removeAudienceFromCampaign(audience.id)}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <div className="mt-4 p-3 bg-green-50 rounded-md border border-green-200">
+              <p className="text-sm text-green-700">
+                <strong>Note:</strong> You can add or remove audiences during campaign creation. 
+                Once submitted, audience changes will require a new campaign request.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
+            <Users size={48} className="mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No audiences selected</h3>
+            <p className="text-gray-600 mb-4">
+              Add audiences to your campaign to define your target market.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.open('/audiences', '_blank')}
+              icon={<ArrowRight size={16} />}
+            >
+              Browse Audiences
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="pt-4">
