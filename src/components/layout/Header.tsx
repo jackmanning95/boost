@@ -19,7 +19,6 @@ const Header: React.FC = () => {
     { label: 'Audiences', path: '/audiences', show: !!user },
     { label: 'Campaigns', path: '/campaigns', show: !!user },
     { label: 'Requests', path: '/requests', show: !!user && isSuperAdmin },
-    { label: 'Admin', path: '/admin', show: !!user && (isCompanyAdmin || isSuperAdmin) },
     { label: 'Settings', path: '/settings', show: !!user },
   ].filter(item => item.show);
 

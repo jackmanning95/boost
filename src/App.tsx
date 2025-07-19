@@ -17,7 +17,6 @@ import CampaignBuilderPage from './pages/CampaignBuilderPage';
 import RequestsPage from './pages/RequestsPage';
 import SettingsPage from './pages/SettingsPage';
 import NotificationsPage from './pages/NotificationsPage';
-import AdminDashboard from './pages/AdminDashboard';
 
 // Components
 import PrivateRoute from './components/auth/PrivateRoute';
@@ -83,14 +82,6 @@ const App: React.FC = () => {
                       element={
                         <PrivateRoute>
                           <RequestsPage />
-                        </PrivateRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/admin" 
-                      element={
-                        <PrivateRoute>
-                          <AdminDashboard />
                         </PrivateRoute>
                       } 
                     />
