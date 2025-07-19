@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, MessageSquare } from 'lucide-react';
+import { Settings, Save, MessageSquare, Crown } from 'lucide-react';
 import { Campaign } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -26,13 +26,14 @@ const AdminStatusUpdater: React.FC<AdminStatusUpdaterProps> = ({
   campaign,
   onStatusUpdate
 }) => {
-  const { isAdmin, user } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const [selectedStatus, setSelectedStatus] = useState(campaign.status);
   const [notes, setNotes] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [notifyClient, setNotifyClient] = useState(true);
 
-  if (!isAdmin) return null;
+  // Only allow Boost staff (super admins) to update campaign status
+  if (!isSuperAdmin) return null;
 
   const handleStatusUpdate = async () => {
     if (selectedStatus === campaign.status && !notes.trim()) return;
@@ -92,11 +93,24 @@ const AdminStatusUpdater: React.FC<AdminStatusUpdaterProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Boost Staff Indicator */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-blue-600">
+            <Crown size={20} />
+            <span className="font-medium">Boost Staff Controls</span>
+          </div>
+          <p className="text-sm text-gray-600 mt-1">
+            Only Boost team members can update campaign status and send client notifications.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Status Updater */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <div className="flex items-center space-x-2 mb-6">
           <Settings size={20} className="text-blue-600" />
-          <h3 className="text-lg font-medium text-gray-900">Update Campaign Status</h3>
+          <h3 className="text-lg font-medium text-gray-900">Update Campaign Status (Boost Staff Only)</h3>
         </div>
 
         <div className="space-y-4">
@@ -161,11 +175,11 @@ const AdminStatusUpdater: React.FC<AdminStatusUpdaterProps> = ({
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <div className="flex items-center space-x-2 mb-4">
           <MessageSquare size={20} className="text-blue-600" />
-          <h3 className="text-lg font-medium text-gray-900">Quick Updates</h3>
+          <h3 className="text-lg font-medium text-gray-900">Quick Client Updates</h3>
         </div>
         
         <p className="text-sm text-gray-600 mb-4">
-          Send quick status updates to the client without changing the campaign status.
+          Send quick status updates to the client without changing the campaign status. These will appear as notifications and comments.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
