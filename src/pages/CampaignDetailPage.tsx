@@ -6,7 +6,6 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import CampaignStatusTracker from '../components/campaigns/CampaignStatusTracker';
 import CampaignComments from '../components/campaigns/CampaignComments';
-import CampaignComments from '../components/campaigns/CampaignComments';
 import CampaignWorkflowHistory from '../components/campaigns/CampaignWorkflowHistory';
 import CampaignActivityTimeline from '../components/campaigns/CampaignActivityTimeline';
 import AdminStatusUpdater from '../components/campaigns/AdminStatusUpdater';
