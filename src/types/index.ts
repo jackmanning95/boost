@@ -41,6 +41,7 @@ export interface CompanyUser {
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
+  companyName?: string; // For Super Admin view
 }
 
 export interface UserInvitation {
@@ -61,6 +62,9 @@ export interface AdvertiserAccount {
   advertiserName: string;
   advertiserId: string;
   createdAt: string;
+  userId?: string; // For Super Admin tracking
+  userName?: string; // For Super Admin view
+  companyName?: string; // For Super Admin view
 }
 
 export interface AudienceSegment {

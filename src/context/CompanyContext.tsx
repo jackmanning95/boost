@@ -38,6 +38,8 @@ interface CompanyContextType {
   fetchCompanies: () => Promise<void>;
   fetchCompanyUsers: (companyId?: string) => Promise<void>;
   fetchUserInvitations: (companyId?: string) => Promise<void>;
+  fetchAllUsers: () => Promise<void>; // For Super Admin
+  fetchAllAdvertiserAccounts: () => Promise<void>; // For Super Admin
   
   // Utilities
   refreshData: () => Promise<void>;
@@ -115,21 +117,49 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchCompanyUsers = async (companyId?: string) => {
     if (!user) return;
 
-    const targetCompanyId = companyId || user.companyId;
-    if (!targetCompanyId) return;
+    // SUPER ADMIN ACCESS: Allow fetching all users or users for specific company
+    let targetCompanyId = companyId;
+    
+    if (!isSuperAdmin) {
+      // Regular users can only see their own company
+      targetCompanyId = targetCompanyId || user.companyId;
+      if (!targetCompanyId) return;
+    }
 
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('users')
-        .select('*')
-        .eq('company_id', targetCompanyId)
+        .select(`
+          *,
+          companies!users_company_id_fkey (
+            id,
+            name,
+            account_id
+          )
+        `)
         .order('created_at', { ascending: false });
+      
+      // SUPER ADMIN ACCESS: Only filter by company if specified
+      if (targetCompanyId) {
+        query = query.eq('company_id', targetCompanyId);
+        console.log('[CompanyContext] 🔓 SUPER ADMIN - Fetching users for company:', targetCompanyId);
+      } else if (isSuperAdmin) {
+        console.log('[CompanyContext] 🔓 SUPER ADMIN - Fetching ALL users from ALL companies');
+      }
+      
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
+      console.log('[CompanyContext] 📊 SUPER ADMIN DATA - Fetched users:', {
+        totalUsers: data?.length || 0,
+        uniqueCompanies: new Set(data?.map(u => u.companies?.name).filter(Boolean)).size || 0,
+        targetCompanyId: targetCompanyId || 'ALL',
+        isSuperAdmin: isSuperAdmin
+      });
       const transformedUsers: CompanyUser[] = (data || []).map(user => ({
         id: user.id,
         email: user.email,
@@ -137,7 +167,8 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         role: user.role,
         companyId: user.company_id,
         createdAt: user.created_at,
-        updatedAt: user.updated_at
+        updatedAt: user.updated_at,
+        companyName: user.companies?.name // Add company name for Super Admin view
       }));
 
       setCompanyUsers(transformedUsers);
@@ -227,7 +258,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   // Fetch advertiser accounts for the current user
-  const fetchAdvertiserAccounts = async (userId?: string) => {
+  const fetchAdvertiserAccounts = async (userId?: string, companyId?: string) => {
     if (!user) {
       console.log('[CompanyContext] fetchAdvertiserAccounts: No user, skipping fetch');
       // Skip fetch if no user
@@ -236,8 +267,25 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    const targetUserId = userId || user.id;
-    if (!targetUserId) {
+    // SUPER ADMIN ACCESS: Allow fetching by userId, companyId, or all accounts
+    let targetUserId = userId;
+    let targetCompanyId = companyId;
+    
+    if (!isSuperAdmin) {
+      // Regular users can only see their own accounts
+      targetUserId = targetUserId || user.id;
+      if (!targetUserId) {
+        console.warn('[CompanyContext] No user ID available for advertiser accounts fetch');
+        setAdvertiserAccounts([]);
+        setLoading(false);
+        return;
+      }
+    } else if (!targetUserId && !targetCompanyId) {
+      // Super admin with no specific filters - fetch all accounts
+      console.log('[CompanyContext] 🔓 SUPER ADMIN - Fetching ALL advertiser accounts from ALL users');
+    }
+
+    if (!targetUserId && !targetCompanyId && !isSuperAdmin) {
       console.warn('[CompanyContext] No user ID available for advertiser accounts fetch');
       setAdvertiserAccounts([]);
       setLoading(false);
@@ -249,7 +297,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(true);
       setError(null);
 
-      console.log(`[CompanyContext] Fetching advertiser accounts for user: ${targetUserId}`);
+      if (targetUserId) {
+        console.log(`[CompanyContext] 🔓 SUPER ADMIN - Fetching advertiser accounts for user: ${targetUserId}`);
+      } else if (targetCompanyId) {
+        console.log(`[CompanyContext] 🔓 SUPER ADMIN - Fetching advertiser accounts for company: ${targetCompanyId}`);
+      } else {
+        console.log(`[CompanyContext] 🔓 SUPER ADMIN - Fetching ALL advertiser accounts`);
+      }
       
       try {
         // Check if supabase client is initialized properly
@@ -262,12 +316,38 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setTimeout(() => reject(new Error('Request timeout')), 30000)
         );
         
-        // Race the fetch against the timeout
-        const fetchPromise = supabase
+        // Build query based on Super Admin access
+        let query = supabase
           .from('advertiser_accounts')
-          .select('*')
-          .eq('user_id', targetUserId)
+          .select(`
+            *,
+            users!advertiser_accounts_user_id_fkey (
+              id,
+              name,
+              email,
+              company_id,
+              companies!users_company_id_fkey (
+                id,
+                name,
+                account_id
+              )
+            )
+          `)
           .order('created_at', { ascending: false });
+        
+        // SUPER ADMIN ACCESS: Apply filters only if specified
+        if (targetUserId) {
+          query = query.eq('user_id', targetUserId);
+        } else if (targetCompanyId) {
+          query = query.eq('company_id', targetCompanyId);
+        } else if (!isSuperAdmin) {
+          // Fallback for regular users
+          query = query.eq('user_id', user.id);
+        }
+        // If Super Admin with no filters, fetch all accounts
+        
+        // Race the fetch against the timeout
+        const fetchPromise = query;
           
         const { data, error: fetchError } = await Promise.race([
           fetchPromise,
@@ -275,32 +355,40 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ]) as any;
 
         // Log response for debugging
-        console.log(`[CompanyContext] Supabase response for advertiser_accounts:`, {
+        console.log(`[CompanyContext] 📊 SUPER ADMIN DATA - Supabase response for advertiser_accounts:`, {
           data: data || [],
           error: fetchError,
-          targetUserId
+          targetUserId: targetUserId || 'ALL',
+          targetCompanyId: targetCompanyId || 'ALL',
+          isSuperAdmin: isSuperAdmin
         });
 
         if (fetchError) {
           throw fetchError;
         } else {
           // Process the data
-          console.log(`[CompanyContext] Raw data from Supabase:`, data || []);
-          console.log(`[CompanyContext] Number of records found:`, data?.length || 0);
+          console.log(`[CompanyContext] 📊 SUPER ADMIN DATA - Raw advertiser accounts:`, {
+            totalAccounts: data?.length || 0,
+            uniqueUsers: new Set(data?.map(a => a.user_id)).size || 0,
+            uniqueCompanies: new Set(data?.map(a => a.users?.companies?.name).filter(Boolean)).size || 0
+          });
           
           const transformedAccounts: AdvertiserAccount[] = (data || []).map(account => ({
               id: account.id,
               platform: account.platform,
               advertiserName: account.advertiser_name,
               advertiserId: account.advertiser_id,
-              createdAt: account.created_at
+              createdAt: account.created_at,
+              userId: account.user_id, // Add for Super Admin tracking
+              userName: account.users?.name, // Add for Super Admin view
+              companyName: account.users?.companies?.name // Add for Super Admin view
           }));
           
-          console.log(`[CompanyContext] Transformed advertiser accounts:`, transformedAccounts);
+          console.log(`[CompanyContext] 🎯 SUPER ADMIN - Transformed advertiser accounts:`, transformedAccounts.length);
           setAdvertiserAccounts(transformedAccounts);
           
           if (transformedAccounts.length === 0) {
-            console.log(`[CompanyContext] No advertiser accounts found.`);
+            console.log(`[CompanyContext] 📭 SUPER ADMIN - No advertiser accounts found for current filters`);
           }
         }
       } catch (fetchError) {

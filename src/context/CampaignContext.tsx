@@ -130,12 +130,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         emailEndsWithBoostdata: user.email?.endsWith('@boostdata.io')
       });
 
-      // CRITICAL FIX: Only filter by client_id for non-super admins
+      // SUPER ADMIN ACCESS: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL campaigns (no filters applied)');
+        console.log('[CampaignContext] 🔓 SUPER ADMIN ACCESS - fetching ALL campaigns from ALL clients (no filters applied)');
       }
 
       const { data, error: fetchError } = await query;
@@ -145,9 +145,16 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw fetchError;
       }
 
-      console.log('[CampaignContext] Raw data from Supabase:', {
+      console.log('[CampaignContext] 📊 SUPER ADMIN DATA - Raw campaigns from Supabase:', {
         campaignCount: data?.length || 0,
-        campaigns: data?.map(c => ({ id: c.id, name: c.name, client_id: c.client_id })) || []
+        campaigns: data?.map(c => ({ 
+          id: c.id, 
+          name: c.name, 
+          client_id: c.client_id,
+          client_name: c.users?.name,
+          company_name: c.users?.companies?.name 
+        })) || [],
+        isSuperAdmin: isSuperAdmin
       });
 
       const transformedCampaigns: Campaign[] = (data || []).map(campaign => ({
@@ -171,7 +178,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }));
 
       setCampaigns(transformedCampaigns);
-      console.log('[CampaignContext] Set campaigns in state:', transformedCampaigns.length);
+      console.log('[CampaignContext] 🎯 SUPER ADMIN - Set campaigns in state:', {
+        totalCampaigns: transformedCampaigns.length,
+        uniqueClients: new Set(transformedCampaigns.map(c => c.clientId)).size,
+        uniqueCompanies: new Set(transformedCampaigns.map(c => c.users?.companies?.name).filter(Boolean)).size
+      });
       setError(null);
 
     } catch (err) {
@@ -195,12 +206,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .select('*')
         .order('created_at', { ascending: false });
 
-      // CRITICAL FIX: Only filter by client_id for non-super admins
+      // SUPER ADMIN ACCESS: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering requests by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL requests');
+        console.log('[CampaignContext] 🔓 SUPER ADMIN ACCESS - fetching ALL requests from ALL clients');
       }
 
       const { data, error: fetchError } = await query;
@@ -210,7 +221,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw fetchError;
       }
 
-      console.log('[CampaignContext] Fetched requests:', data?.length || 0);
+      console.log('[CampaignContext] 📊 SUPER ADMIN DATA - Fetched requests:', {
+        totalRequests: data?.length || 0,
+        uniqueClients: new Set(data?.map(r => r.client_id)).size || 0,
+        isSuperAdmin: isSuperAdmin
+      });
 
       const transformedRequests: AudienceRequest[] = (data || []).map(request => ({
         id: request.id,
@@ -253,12 +268,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .eq('archived', false)
         .order('created_at', { ascending: false });
 
-      // CRITICAL FIX: Only filter by client_id for non-super admins
+      // SUPER ADMIN ACCESS: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering pending requests by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL pending requests');
+        console.log('[CampaignContext] 🔓 SUPER ADMIN ACCESS - fetching ALL pending requests from ALL clients');
       }
 
       const { data, error: fetchError } = await query;
@@ -308,12 +323,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .eq('archived', false)
         .order('created_at', { ascending: false });
 
-      // CRITICAL FIX: Only filter by client_id for non-super admins
+      // SUPER ADMIN ACCESS: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering rejected requests by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL rejected requests');
+        console.log('[CampaignContext] 🔓 SUPER ADMIN ACCESS - fetching ALL rejected requests from ALL clients');
       }
 
       const { data, error: fetchError } = await query;
@@ -362,12 +377,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .eq('archived', true)
         .order('created_at', { ascending: false });
 
-      // CRITICAL FIX: Only filter by client_id for non-super admins
+      // SUPER ADMIN ACCESS: Only filter by client_id for non-super admins
       if (!isSuperAdmin) {
         query = query.eq('client_id', user.id);
         console.log('[CampaignContext] Regular user - filtering archived requests by client_id:', user.id);
       } else {
-        console.log('[CampaignContext] Super Admin - fetching ALL archived requests');
+        console.log('[CampaignContext] 🔓 SUPER ADMIN ACCESS - fetching ALL archived requests from ALL clients');
       }
 
       const { data, error: fetchError } = await query;
