@@ -38,8 +38,6 @@ interface CompanyContextType {
   fetchCompanies: () => Promise<void>;
   fetchCompanyUsers: (companyId?: string) => Promise<void>;
   fetchUserInvitations: (companyId?: string) => Promise<void>;
-  fetchAllUsers: () => Promise<void>; // For Super Admin
-  fetchAllAdvertiserAccounts: () => Promise<void>; // For Super Admin
   
   // Utilities
   refreshData: () => Promise<void>;
@@ -960,8 +958,6 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fetchCompanies,
       fetchCompanyUsers,
       fetchUserInvitations,
-      fetchAllUsers,
-      fetchAllAdvertiserAccounts,
       refreshData
     }}>
       {children}
