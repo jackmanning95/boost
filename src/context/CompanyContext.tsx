@@ -960,6 +960,8 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fetchCompanies,
       fetchCompanyUsers,
       fetchUserInvitations,
+      fetchAllUsers,
+      fetchAllAdvertiserAccounts,
       refreshData
     }}>
       {children}
