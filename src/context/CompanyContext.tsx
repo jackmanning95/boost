@@ -319,12 +319,12 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .from('advertiser_accounts')
           .select(`
             *,
-            users!advertiser_accounts_user_id_fkey (
+            users (
               id,
               name,
               email,
               company_id,
-              companies!users_company_id_fkey (
+              companies (
                 id,
                 name,
                 account_id
